@@ -168,8 +168,8 @@ song intro:8 verse:16 build:4 chorus:16 verse:8 build:4 chorus:16 intro:8
   {
     id: 'gdchip', name: 'Neon Steps (GD style)',
     head: {
-      ko: '// Neon Steps — 138 BPM 칩 하우스. Geometry Dash 같은 리듬 게임 음악 스타일로 새로 쓴 곡이에요 (원곡 없음)\n// 사각파 아르페지오, 오프비트 베이스, 사이드체인 슈퍼소 훅. 마지막 드롭에선 사각파가 한 옥타브 위에서 훅을 겹쳐요',
-      en: '// Neon Steps — 138 BPM chip house. An original in the style of rhythm-game music like Geometry Dash (not based on any song)\n// Square-wave arpeggio, offbeat bass, a sidechained supersaw hook. In the last drop a square wave doubles the hook an octave up',
+      ko: '// Neon Steps — 138 BPM 칩 하우스. Geometry Dash 같은 리듬 게임 음악 스타일로 새로 쓴 곡이에요 (원곡 없음)\n// 사각파 아르페지오, 오프비트 베이스, 사이드체인 슈퍼소 훅. 마지막 드롭에선 사각파가 한 옥타브 위에서 훅을 겹쳐요\n// auto 줄은 FX 시퀀스예요: 패드를 패턴대로 자동으로 눌러요 (스터터, 에코 아웃)',
+      en: '// Neon Steps — 138 BPM chip house. An original in the style of rhythm-game music like Geometry Dash (not based on any song)\n// Square-wave arpeggio, offbeat bass, a sidechained supersaw hook. In the last drop a square wave doubles the hook an octave up\n// The auto lines are FX sequences: they press pads from a pattern (a stutter, an echo out)',
     },
     body: `bpm 138
 key F major
@@ -186,20 +186,22 @@ chip   [0 2 4 7 4 2 0' 2]*2             | square oct 5 cut 5000 gain .17 duck .5
 pad    0^                               | gain .3 duck .9 verb .5
 lead   <[4 . 4 . 2 4 . 7] [6 _ 4 . 1 _ 4 .] [5 . 5 . 2 5 . 7] [8 _ 7 . 5 _ 3 _]> | supersaw fixed oct 4 gain .62 duck .4 verb .3 delay .2
 lead2  <[4 . 4 . 2 4 . 7] [6 _ 4 . 1 _ 4 .] [5 . 5 . 2 5 . 7] [8 _ 7 . 5 _ 3 _]> | square fixed oct 5 gain .16 cut 6000 delay .3
+auto stut <. . . [. . . x]>       | repeat 16      // FX sequence: a stutter on the last beat of every 4 bars
+auto out  <. . . [. . x _]>       | echo           // echo out at the end of each 4 bars of the break
 
 scene intro chip pad hat
 scene build chip pad clap hat riser | chip.cut 600>6000
-scene drop  kick clap hat ohat crash bass chip pad lead
-scene break pad lead chip filter
-scene last  all
+scene drop  kick clap hat ohat crash bass chip pad lead stut
+scene break pad lead chip out filter
+scene last  all -out
 song intro:8 build:4 drop:16 break:8 build:4 last:16
 `,
   },
   {
     id: 'gddnb', name: 'Hyperdrive (GD style)',
     head: {
-      ko: '// Hyperdrive — 174 BPM 드럼앤베이스. Geometry Dash 같은 리듬 게임 음악 스타일로 새로 쓴 곡이에요 (원곡 없음)\n// 리스 베이스 + 사인 서브, 사각파 훅, 빠른 플럭 아르페지오. k1 리스 필터, k2 훅 필터',
-      en: '// Hyperdrive — 174 BPM drum & bass. An original in the style of rhythm-game music like Geometry Dash (not based on any song)\n// Reese bass over a sine sub, a square-wave hook, a fast pluck arpeggio. k1 opens the reese, k2 the hook',
+      ko: '// Hyperdrive — 174 BPM 드럼앤베이스. Geometry Dash 같은 리듬 게임 음악 스타일로 새로 쓴 곡이에요 (원곡 없음)\n// 리스 베이스 + 사인 서브, 사각파 훅, 빠른 플럭 아르페지오. k1 리스 필터, k2 훅 필터. auto 줄이 4마디마다 리피트, 8마디마다 저음을 빼요',
+      en: '// Hyperdrive — 174 BPM drum & bass. An original in the style of rhythm-game music like Geometry Dash (not based on any song)\n// Reese bass over a sine sub, a square-wave hook, a fast pluck arpeggio. k1 opens the reese, k2 the hook. The auto lines repeat every 4 bars and cut the lows every 8',
     },
     body: `bpm 174
 key D minor
@@ -215,11 +217,13 @@ sub    0 _ . 0 _ . . . 0 _ . . <2 4> _ . . | sine oct 1 gain .36 duck .5
 hook   <[0 . 2 . 4 . 7 . 6 . 4 . 2 _ . .] [4 . 2 . 0 . 2 . 4 _ . . -1 _ . .]> | square oct 5 cut k2(1500,7000) gain .28 delay .25 duck .3
 arp    [0 4 7 4]*4                      | pluck oct 4 gain .3 cut 3500 delay .3 duck .4
 pad    0^7                              | gain .22 atk 1 rel 2 verb .6 duck .3
+auto rep  <. . . [. . x x]>       | repeat 8       // FX sequence: an eighth-note repeat closing every 4 bars
+auto kill <. . . . . . . [. . . x]> | kill low    // the lows drop out for the last beat of 8 bars
 
 scene intro pad arp hat
 scene build hat snare arp pad riser
 scene drop  all pause
-scene roll  kick snare ghost hat reese sub hook fill
+scene roll  kick snare ghost hat reese sub hook rep fill
 scene break pad hook arp filter down
 song intro:8 build:8 drop:16 roll:8 break:8 build:4 drop:16
 `,
@@ -227,8 +231,8 @@ song intro:8 build:8 drop:16 roll:8 break:8 build:4 drop:16
   {
     id: 'gdstep', name: 'Gravity Flip (GD style)',
     head: {
-      ko: '// Gravity Flip — 150 BPM 하프타임 덥스텝. Geometry Dash 같은 리듬 게임 음악 스타일로 새로 쓴 곡이에요 (원곡 없음)\n// 워블 베이스는 16분음표마다 필터 값을 바꿔서 만들어요 (cut [250 1800 600 3200]*4). 스네어는 3박에 한 번',
-      en: '// Gravity Flip — 150 BPM half-time dubstep. An original in the style of rhythm-game music like Geometry Dash (not based on any song)\n// The wobble bass changes its filter on every sixteenth (cut [250 1800 600 3200]*4). The snare lands once, on beat 3',
+      ko: '// Gravity Flip — 150 BPM 하프타임 덥스텝. Geometry Dash 같은 리듬 게임 음악 스타일로 새로 쓴 곡이에요 (원곡 없음)\n// 워블 베이스는 16분음표마다 필터 값을 바꿔서 만들어요 (cut [250 1800 600 3200]*4). 스네어는 3박에 한 번. auto 줄이 드롭을 게이트로 썰고 필터로 가라앉혀요',
+      en: '// Gravity Flip — 150 BPM half-time dubstep. An original in the style of rhythm-game music like Geometry Dash (not based on any song)\n// The wobble bass changes its filter on every sixteenth (cut [250 1800 600 3200]*4). The snare lands once, on beat 3. The auto lines gate the drop and sink it under a filter',
     },
     body: `bpm 150
 key G minor
@@ -244,10 +248,12 @@ sub    0 _ _ _ _ _ . 0 _ _ . . <3 5> _ . .  | sine oct 1 gain .55 duck .6
 chip   <[7 . 4 . 7 . 9 . 7 . 4 . 2 . 4 .] [7 . 4 . 7 . 9 . 11 _ 9 _ 7 _ . .]> | square oct 4 cut 4500 gain .3 delay .25 duck .3
 arp    [0 2 4 2]*4                      | pluck oct 4 gain .15 cut 3000 delay .35
 pad    0^                               | gain .26 atk .8 rel 2 verb .6 duck .4
+auto chop <. [. . . . . . x x] . [. . x _]> | gate 16   // FX sequence: the drop is gated in sixteenths here and there
+auto dive <. . . . . . . [. . . x]> | lp 600>150 in .25 // and dives under a closing filter before the next 8
 
 scene intro pad arp
 scene build arp chip hat snare riser
-scene drop  kick snare clap hat wob sub chip pad
+scene drop  kick snare clap hat wob sub chip pad chop dive
 scene break pad arp chip filter down
 song intro:8 build:4 drop:16 break:8 build:4 drop:16
 `,

@@ -56,6 +56,8 @@ function evaluate(mode = 'bar', opts = {}) {
   if (r.scale) key = { root: key.root, scale: r.scale, src: `${NOTE_NAMES[key.root]} ${r.scale}` };
   if (key.root !== S.root || key.scale !== S.scale) structural = true;
   if (r.progSrc !== S.progSrc) structural = true;
+  const autoSig = [...r.autos.values()].map(a => a.name + ' ' + a.src).join('\n');
+  if (autoSig !== (S.autoSig || '')) structural = true;
   if (r.arrSrc !== S.arrSrc || opts.resetSong) structural = true;
   const newBpm = r.bpm && r.bpm !== S.bpm ? r.bpm : null;
   const deferBpm = newBpm && S.playing && structural && mode === 'phrase';
@@ -66,7 +68,7 @@ function evaluate(mode = 'bar', opts = {}) {
   { const sp = r.space || 'hall-default'; if (sp !== (S.space || 'hall-default')) { S.space = sp; if (S.ctx) applySpace(sp); } }
   // backdrops: a changed viz line takes over again from any button pressed before
   { const sig = r.viz ? r.viz.list.join(' ') + '/' + r.viz.per : ''; if (sig !== S.vizSig) { S.vizSig = sig; S.vizManual = false; } S.vizCode = r.viz; S.shaders = r.shaders; }
-  const state = { tracks, order, key, prog: r.prog, progSrc: r.progSrc, bpm: deferBpm ? newBpm : null, scenes: r.scenes, song: r.song, arrSrc: r.arrSrc, resetSong: !!opts.resetSong };
+  const state = { tracks, order, autos: r.autos, autoSig, key, prog: r.prog, progSrc: r.progSrc, bpm: deferBpm ? newBpm : null, scenes: r.scenes, song: r.song, arrSrc: r.arrSrc, resetSong: !!opts.resetSong };
   if (S.playing && structural) {
     const applyAt = mode === 'phrase' ? Math.ceil(S.lastC / 4 - 1e-6) * 4 : Math.ceil(S.lastC - 1e-6);
     S.pending = { applyAt, state, mode };
@@ -338,7 +340,7 @@ function acItems(pre, word) {
   const before = pre.slice(0, pre.length - word.length);
   const hm = /^\s*([a-zA-Z]\w*)/.exec(pre), head = hm && hm[1];
   if (/^\s*$/.test(before)) {
-    const g = ['bpm', 'key', 'scale', 'swing', 'prog', 'scene', 'song', 'master', 'seed', 'fx', 'bus', 'space', 'viz', 'shader'].map(n => ({ label: n, ins: n + ' ', desc: t('ac_' + n) }));
+    const g = ['bpm', 'key', 'scale', 'swing', 'prog', 'scene', 'song', 'master', 'seed', 'fx', 'auto', 'bus', 'space', 'viz', 'shader'].map(n => ({ label: n, ins: n + ' ', desc: t('ac_' + n) }));
     const tr = AC_TRACKS.map(n => ({ label: n, ins: n.padEnd(7) + ' ', desc: instForName(n) }));
     return [...tr, ...g];
   }

@@ -22,7 +22,7 @@ Tactus was built live in conversation with an AI coding agent (Claude). The auth
 
 | Part | Where | What it does |
 |---|---|---|
-| Pattern language | `src/js/engine.js` | Mini-notation, chords and scales, scenes and song form, parameters that move (LFOs, ramps, knobs, patterns) |
+| Pattern language | `src/js/engine.js` | Mini-notation, chords and scales, scenes and song form, parameters that move (LFOs, ramps, knobs, patterns), FX sequences that play the performance pads (`auto`) |
 | Composition | `src/js/gen.js` | Seeded generators for beats, bass lines, melodies, chord progressions and whole songs |
 | Audio engine | `src/js/audio.js`, `src/js/musical.js` | Scheduler with 120 ms look-ahead, drum and synth voices, voice leading, fills and transitions, performance pads |
 | Mix | `src/js/mix.js` | Buses and sends, insert effects, compressors, built-in returns and the master chain, all set from code |

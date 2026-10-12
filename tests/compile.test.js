@@ -14,7 +14,10 @@ for (const lang of ['ko', 'en']) {
   assert.deepStrictEqual(bad, [], `presets with errors (${lang}): ${JSON.stringify(bad)}`);
   n += run('PRESETS.length');
 }
-const broken = ['bus 3x | chorus .5', 'master warm | chorus 1', 'kick x | fb .5', 'viz nothing', 'space kitchen', 'kick x | gain'];
+const broken = ['bus 3x | chorus .5', 'master warm | chorus 1', 'kick x | fb .5', 'viz nothing', 'space kitchen', 'kick x | gain',
+  'auto nothing x', 'auto echo', 'auto st x | wobble', 'kick x\nauto kick x'];
+for (const line of ['auto echo <. . . x>', 'auto st . . . [x x] | repeat 16', 'kick x\nauto cut . x | mute kick', 'fx wob | lp 300\nauto wob x _ . .'])
+  assert.strictEqual(run(`compile(${JSON.stringify(line)}).errors.size`), 0, 'should compile: ' + line);
 for (const line of broken) assert.ok(run(`compile(${JSON.stringify(line)}).errors.size`) > 0, 'should be an error: ' + line);
 // Pattern time follows the song start: a written-out piece loaded at bar 12 plays its first bar there.
 const first = run(`(() => { const d = compile('rh <c4 d4 e4>').tracks.get('rh'); const at = c => cycleEvents(d, c).map(e => e.v + '@' + e.s).join(' ');

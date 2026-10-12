@@ -328,7 +328,7 @@ const RETURN_ONLY = ['time', 'fb', 'pre', 'limit'];
 // names of the code's own buses: each also works as a send parameter on track lines (set while compiling)
 let BUS_NAMES = new Set();
 const EXP_PARAMS = new Set(['cut', 'hpf', 'lpf', 'midf']);
-const GLOBALS = new Set(['bpm', 'key', 'scale', 'swing', 'prog', 'scene', 'song', 'master', 'seed', 'fx', 'space', 'viz', 'shader', 'bus']);
+const GLOBALS = new Set(['bpm', 'key', 'scale', 'swing', 'prog', 'scene', 'song', 'master', 'seed', 'fx', 'auto', 'space', 'viz', 'shader', 'bus']);
 // generator parameters shape the notes, so they are part of the pattern rather than the sound
 const GEN_PARAMS = ['seed', 'dens', 'evolve', 'bars'];
 let GEN_SEED = 0;
@@ -560,6 +560,17 @@ function parseLine(text) {
     return { type: 'prog', pat: parseMini(rest, restBase), src: rest.trim() };
   }
   if (name === 'fx') return { type: 'pad', pad: parsePad(rest, restBase) };
+  // auto echo <. . . x>   ·   auto stut . . . [. x] | repeat 16
+  // A pad that plays itself: every hit presses the pad and holds it for the hit's length. Without actions it
+  // plays the pad of that name (built-in or an fx line); with actions after | it is a pad of its own.
+  if (name === 'auto') {
+    const bar = rest.indexOf('|'), head = bar >= 0 ? rest.slice(0, bar) : rest;
+    const nm = /^(\s*)([a-zA-Z]\w*)/.exec(head);
+    if (!nm || !head.slice(nm[0].length).trim()) throw new PErr(t('autoLine'), restBase);
+    const patSrc = head.slice(nm[0].length), pat = parseMini(patSrc, restBase + nm[0].length);
+    const pad = bar >= 0 ? parsePad(nm[0] + ' '.repeat(patSrc.length) + rest.slice(bar), restBase) : null;
+    return { type: 'auto', name: nm[2], pat, pad, src: rest.replace(/\s+/g, ' ').trim(), col: restBase + nm[1].length };
+  }
   if (name === 'scale') {
     let sc = rest.trim().toLowerCase(); sc = SCALE_ALIAS[sc] || sc;
     if (!SCALES[sc]) throw new PErr(t('noScale', { s: rest.trim(), list: Object.keys(SCALES).join(' ') }), restBase);
@@ -678,7 +689,7 @@ const DEFAULT_PADS = DEFAULT_PAD_SRC.map(l => { const r = parseLine(l); r.pad.bu
 function compile(text) {
   { const sm = /^\s*seed\s+(-?\d+)\s*(?:\/\/.*)?$/m.exec(text); GEN_SEED = sm ? +sm[1] : 0; }
   const lines = text.split('\n');
-  const out = { pads: new Map(), seed: GEN_SEED, master: null, bpm: null, key: null, scale: null, swing: null, prog: null, progSrc: '', scenes: new Map(), song: null, arrSrc: '', tracks: new Map(), order: [], errors: new Map(), lineNames: new Map(), space: null, viz: null, shaders: new Map(), buses: new Map(), masterParams: {} };
+  const out = { pads: new Map(), autos: new Map(), seed: GEN_SEED, master: null, bpm: null, key: null, scale: null, swing: null, prog: null, progSrc: '', scenes: new Map(), song: null, arrSrc: '', tracks: new Map(), order: [], errors: new Map(), lineNames: new Map(), space: null, viz: null, shaders: new Map(), buses: new Map(), masterParams: {} };
   // bus names first, so track lines anywhere in the code can send to them
   BUS_NAMES = new Set();
   for (const ln of lines) { const m = /^\s*bus\s+([a-zA-Z]\w*)/.exec(stripComment(ln)); if (m && m[1] !== 'verb' && m[1] !== 'delay' && !PARAMS.includes(m[1])) BUS_NAMES.add(m[1]); }
@@ -698,6 +709,7 @@ function compile(text) {
       else if (r.type === 'shader') { if (out.shaders.has(r.name)) throw new PErr(t('dup', { n: r.name }), 0); r.line = i; out.shaders.set(r.name, r); }
       else if (r.type === 'seed') out.seed = r.v;
       else if (r.type === 'pad') { r.pad.line = i; if (out.pads.has(r.pad.name)) throw new PErr(t('dup', { n: r.pad.name }), 0); out.pads.set(r.pad.name, r.pad); }
+      else if (r.type === 'auto') { if (out.autos.has(r.name)) throw new PErr(t('dup', { n: r.name }), 0); r.line = i; r.cache = new Map(); out.autos.set(r.name, r); }
       else if (r.type === 'swing') out.swing = r.v;
       else if (r.type === 'key') out.key = r;
       else if (r.type === 'prog') { out.prog = r.pat; out.progSrc = r.src; out.progGen = r.gen || null; }
@@ -717,7 +729,7 @@ function compile(text) {
     }
   });
   // cross-checks once every line is known
-  const known = n => out.tracks.has(n) || LOOPS.includes(n);
+  const known = n => out.tracks.has(n) || LOOPS.includes(n) || out.autos.has(n);
   for (const sc of sceneLines) {
     const bad = sc.refs.find(c => !known(c.s.replace(/^-/, '')));
     if (bad && !out.errors.has(sc.line)) out.errors.set(sc.line, { msg: t('noTrack', { n: bad.s.replace(/^-/, '') }), col: bad.c0, keep: true });
@@ -733,6 +745,14 @@ function compile(text) {
     pads.set(n, p);
   }
   out.pads = pads;
+  // an auto line plays its own actions or the pad of its name; it can't share a name with a track
+  for (const [n, au] of out.autos) {
+    let err = null;
+    if (out.tracks.has(n)) err = t('dup', { n });
+    else if (!au.pad && !pads.has(n)) err = t('noPad', { n });
+    else if (au.pad) { const bad = au.pad.refs.find(c => !known(c.s)); if (bad) err = t('noTrack', { n: bad.s }); }
+    if (err) { if (!out.errors.has(au.line)) out.errors.set(au.line, { msg: err, col: au.col }); out.autos.delete(n); }
+  }
   if (out.viz) {
     const bad = out.viz.list.find(n => !VIZ_BUILTIN.includes(n) && !out.shaders.has(n));
     if (bad) { out.errors.set(out.viz.line, { msg: t('vizUnknown', { n: bad, list: VIZ_BUILTIN.join(' ') }), col: out.viz.col }); out.viz = null; }

@@ -7,7 +7,7 @@ const S = {
   errors: new Map(), lineNames: new Map(),
   muted: new Set(), solo: new Set(),
   knobs: [0.5, 0.5, 0.5, 0.5],
-  pads: new Map(), padMute: [], padSet: [], padGate: null, padPitch: 0, padFills: new Set(),
+  pads: new Map(), padMute: [], padSet: [], padGate: null, padPitch: 0, padFills: new Set(), autos: new Map(), autoOff: [],
   stutter: null, breakdown: null, build: null,
   rt: new Map(), vis: [], dirty: true,
   scenes: new Map(), song: null, arrSrc: '', songMode: true, songStart: 0, songFrom: 0, songJump: null, songCue: 0, liveScene: null, nextScene: null,
@@ -663,6 +663,7 @@ function playRoll(a, b) {
   }
 }
 function scheduleRange(a, b) {
+  S.schedTo = b;
   sceneFx(a, b);
   padGateSched(a, b);
   sceneLook(a, b);
@@ -676,6 +677,7 @@ function scheduleRange(a, b) {
   scheduleRange2(a, b);
 }
 function scheduleRange2(a, b) {
+  autoSched(a, b);
   for (const [pa, pb, off] of mapSpan(a, b))
   {
     for (const name of S.order) { const def = S.tracks.get(name); if (def) playEvents(def, pa, pb, off); }
@@ -706,6 +708,7 @@ function tick() {
 // ---------- program state ----------
 function applyState(st) {
   S.tracks = st.tracks; S.order = st.order;
+  if (st.autos) { S.autos = st.autos; S.autoSig = st.autoSig; }
   if (st.key) { S.root = st.key.root; S.scale = st.key.scale; S.keySrc = st.key.src; }
   S.prog = st.prog; S.progSrc = st.progSrc;
   setTimeout(gpuPrewarm, 0);
@@ -771,7 +774,7 @@ function resetFx(now) {
   A.crush.curve = null;
   if (typeof FRZ !== 'undefined' && (FRZ.on || FRZ.srcs.length)) freezeStop();
   if (A.riser) { try { A.riser.src.stop(now + 0.1); } catch (e) { } A.riser = null; }
-  S.padMute = []; S.padSet = []; S.padGate = null; S.padPitch = 0; S.padFills = new Set();
+  S.padMute = []; S.padSet = []; S.padGate = null; S.padPitch = 0; S.padFills = new Set(); S.autoOff = [];
   G.held.clear(); G.act.clear();
 }
 function hold(p, now) { p.cancelScheduledValues(now); p.setValueAtTime(p.value, now); }
@@ -814,16 +817,22 @@ function padGateSched(a, b) {
   const gt = S.padGate; if (!gt) return;
   const n = gt.g.length, gg = A.fxGate.gain, now = S.ctx.currentTime;
   for (let k = Math.ceil(a * n - EPS); k < b * n - EPS; k++) {
-    const c = k / n; if (c < gt.startC - EPS) continue;
+    const c = k / n; if (c < gt.startC - EPS || c >= (gt.endC ?? Infinity) - EPS) continue;
     const t = Math.max(now, timeOf(c)), on = gt.g[mod(k, n)];
     gg.setTargetAtTime(on ? 1 : 0.0001, t, 0.004);
   }
 }
-function padOn(name) {
-  const pad = S.pads && S.pads.get(name); if (!pad) return;
-  const now = S.ctx.currentTime, bar = 1 / S.cps, beat = bar / 4, dur = padIn(pad) * bar, c = S.lastC;
+function padOn(name) { const pad = S.pads && S.pads.get(name); if (pad) padStart(name, pad, S.lastC, false); }
+function padOff(name) { padStop(name, S.lastC, false); }
+// run fn when the audio clock reaches t (for changes that can't be scheduled on an AudioParam)
+function atTime(t, fn) { const ms = (t - S.ctx.currentTime) * 1000; if (ms < 4) fn(); else setTimeout(fn, ms); }
+// Start a pad's actions at bar position c. A live press (seq false) acts now and lines its release up with the
+// beat or bar; an auto line (seq true) is scheduled ahead, so everything happens exactly at c and at the release.
+function padStart(key, pad, c, seq) {
+  const now = Math.max(S.ctx.currentTime, seq ? timeOf(c) : 0), bar = 1 / S.cps, beat = bar / 4, dur = padIn(pad) * bar;
+  if (G.act.has(key)) padStop(key, c, seq);
   const st = { undo: [] };
-  G.act.set(name, st);
+  G.act.set(key, st);
   for (const a of pad.acts) {
     switch (a.op) {
       case 'lp': padSweep(A.lp.frequency, a.v, 20000, now, dur); st.undo.push(n => { hold(A.lp.frequency, n); A.lp.frequency.setTargetAtTime(20000, n, 0.12); }); break;
@@ -831,13 +840,13 @@ function padOn(name) {
       case 'res': hold(A.lp.Q, now); A.lp.Q.setTargetAtTime(Math.max(0.1, a.n), now, 0.2); st.undo.push(n => { hold(A.lp.Q, n); A.lp.Q.setTargetAtTime(0.7, n, 0.1); }); break;
       case 'repeat': {
         const len = 1 / Math.max(1, a.n), T0 = Math.ceil(c / len - 1e-6) * len;
-        S.stutter = { T0, L: T0, len, end: Infinity }; stutterCut(T0);
-        st.undo.push(() => { if (S.stutter) S.stutter.end = Math.max(S.lastC, S.stutter.T0); });
+        const sx = S.stutter = { T0, L: T0, len, end: Infinity }; stutterCut(T0);
+        st.undo.push((n, cEnd) => { if (S.stutter === sx) sx.end = Math.max(cEnd, sx.T0); });
         break;
       }
       case 'mute': case 'only': {
         const m = { list: a.list, only: a.op === 'only', startC: c, endC: Infinity };
-        S.padMute.push(m); st.undo.push(() => { m.endC = Math.ceil(S.lastC - 1e-6); });
+        S.padMute.push(m); st.undo.push((n, cEnd) => { m.endC = seq ? cEnd : Math.ceil(cEnd - 1e-6); });
         break;
       }
       case 'throw': {
@@ -853,37 +862,59 @@ function padOn(name) {
         hold(A.throw.gain, now); A.throw.gain.setTargetAtTime(0.9, now, 0.01); A.throw.gain.setTargetAtTime(0, t1, 0.02);
         hold(A.dFb.gain, now); A.dFb.gain.setTargetAtTime(0.8, now, 0.03);
         for (const p of [A.dryG.gain, A.rIn.gain, A.dIn.gain]) { hold(p, now); p.setTargetAtTime(0, t1, 0.03); }
-        st.undo.push(n => {
-          const tb = Math.max(n, timeOf(Math.ceil(S.lastC * 4 - 1e-6) / 4));
+        st.undo.push((n, cEnd) => {
+          const tb = seq ? n : Math.max(n, timeOf(Math.ceil(cEnd * 4 - 1e-6) / 4));
           for (const p of [A.dryG.gain, A.rIn.gain, A.dIn.gain]) { hold(p, n); p.setValueAtTime(p.value, tb); p.setTargetAtTime(1, tb, 0.01); }
           hold(A.throw.gain, n); A.throw.gain.setTargetAtTime(0, n, 0.02); hold(A.dFb.gain, n); A.dFb.gain.setTargetAtTime(S.dlFb ?? 0.42, tb + 0.3, 0.6);
         });
         break;
       }
       case 'verb': hold(A.vthrow.gain, now); A.vthrow.gain.setTargetAtTime(a.n ?? 0.8, now, 0.08); st.undo.push(n => { hold(A.vthrow.gain, n); A.vthrow.gain.setTargetAtTime(0, n, 0.15); }); break;
-      case 'gate': S.padGate = { g: a.g, startC: c }; padGateSched(c, S.lastC); st.undo.push(n => { S.padGate = null; hold(A.fxGate.gain, n); A.fxGate.gain.setTargetAtTime(1, n, 0.01); }); break;
-      case 'crush': A.crush.curve = crushCurve(a.n); st.undo.push(() => { A.crush.curve = null; }); break;
+      case 'gate': {
+        const gt = S.padGate = { g: a.g, startC: c, endC: Infinity };
+        padGateSched(c, Math.max(S.lastC, S.schedTo || 0));
+        st.undo.push((n, cEnd) => { gt.endC = cEnd; if (!seq && S.padGate === gt) S.padGate = null; hold(A.fxGate.gain, n); A.fxGate.gain.setTargetAtTime(1, n, 0.01); });
+        break;
+      }
+      case 'crush': atTime(now, () => { A.crush.curve = crushCurve(a.n); }); st.undo.push(n => atTime(n, () => { A.crush.curve = null; })); break;
       case 'kill': for (const w of a.list) { const p = (w === 'low' ? A.eqL : w === 'mid' ? A.eqM : A.eqH).gain; hold(p, now); p.setTargetAtTime(w === 'mid' ? -28 : -40, now, 0.012); st.undo.push(n => { hold(p, n); p.setTargetAtTime(0, n, 0.012); }); } break;
       case 'pitch': S.padPitch += a.n; st.undo.push(() => { S.padPitch -= a.n; }); break;
-      case 'riser': startBuildAt(c, a.n ?? 4); st.undo.push(() => dropBuildAt(Math.ceil(S.lastC - 1e-6))); break;
-      case 'set': { const x = { track: a.track, param: a.param, v: a.v, startC: c, endC: Infinity, dur: padIn(pad) }; S.padSet.push(x); st.undo.push(() => { x.endC = S.lastC; }); break; }
+      case 'riser': startBuildAt(c, a.n ?? 4); st.undo.push((n, cEnd) => dropBuildAt(seq ? cEnd : Math.ceil(cEnd - 1e-6))); break;
+      case 'set': { const x = { track: a.track, param: a.param, v: a.v, startC: c, endC: Infinity, dur: padIn(pad) }; S.padSet.push(x); st.undo.push((n, cEnd) => { x.endC = cEnd; }); break; }
       case 'scene':
         if (a.w === 'next' || a.w === 'prev') { if (S.song && S.songMode) skipPart(a.w === 'next' ? 1 : -1); else { const names = [...S.scenes.keys()]; if (names.length) { const cur = names.indexOf((sceneNameAt(S.lastC) || {}).name); launchScene(names[mod(cur + (a.w === 'next' ? 1 : -1), names.length)], 'bar'); } } }
         else if (S.scenes.has(a.w)) launchScene(a.w, 'bar');
         break;
       case 'fill': { const n = Math.ceil(c + 0.5 - 1e-6); S.padFills.add(n); break; }
-      case 'impact': impact(Math.max(now, timeOf(Math.ceil(c * 4 - 1e-6) / 4))); break;
+      case 'impact': impact(seq ? now : Math.max(now, timeOf(Math.ceil(c * 4 - 1e-6) / 4))); break;
       case 'swell': { const n = Math.ceil(c - 1e-6) + (c % 1 > 0.6 ? 1 : 0); playSwell(now + 0.01, timeOf(n)); break; }
-      case 'freeze': freezeStart(); st.undo.push(() => freezeStop()); break;
-      case 'down': playDown(Math.max(now, timeOf(Math.ceil(c * 4 - 1e-6) / 4)), 2 * bar); break;
+      case 'freeze': atTime(now, freezeStart); st.undo.push(n => atTime(n, freezeStop)); break;
+      case 'down': playDown(seq ? now : Math.max(now, timeOf(Math.ceil(c * 4 - 1e-6) / 4)), 2 * bar); break;
     }
   }
 }
-function padOff(name) {
-  const st = G.act.get(name); if (!st) return;
-  G.act.delete(name);
-  const now = S.ctx.currentTime;
-  for (const u of st.undo) u(now);
+function padStop(key, cEnd, seq) {
+  const st = G.act.get(key); if (!st) return;
+  G.act.delete(key);
+  const n = Math.max(S.ctx.currentTime, seq ? timeOf(cEnd) : 0);
+  for (const u of st.undo) u(n, cEnd);
+}
+// auto lines: each hit presses its pad at the hit and releases it when the hit ends, in the scenes that have it
+function autoSched(a, b) {
+  const evs = [], keep = [];
+  for (const o of S.autoOff) (o.c < b - EPS ? evs : keep).push(o);
+  S.autoOff = keep;
+  for (const [name, au] of S.autos || []) {
+    const pad = au.pad || (S.pads && S.pads.get(name)); if (!pad) continue;
+    for (const e of eventsIn(au, a, b)) {
+      if (!activeIn(sceneAt(e.s), name) || inPause(e.s)) continue;
+      const key = 'auto:' + name, off = { key, c: e.s + e.d, on: false };
+      evs.push({ key, c: e.s, on: true, pad });
+      (off.c < b - EPS ? evs : S.autoOff).push(off);
+    }
+  }
+  evs.sort((x, y) => x.c - y.c || (x.on - y.on));   // a release before a press at the same moment
+  for (const ev of evs) ev.on ? padStart(ev.key, ev.pad, ev.c, true) : padStop(ev.key, Math.max(a, ev.c), true);
 }
 // hold pads act while held; latch pads toggle on each press
 function gestureOn(g) {
