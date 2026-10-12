@@ -7,7 +7,7 @@ You are working on Tactus, a browser live-coding music instrument. Read this bef
 - `src/app.html` is the app page: markup, all CSS, and `/*NAME*/` placeholders where `build.py` inlines the scripts.
 - `src/landing.html` is the landing page.
 - `src/js/` holds the scripts, loaded in this order (later files use names from earlier ones; there are no modules):
-  `i18n, kit, engine, gen, presets, audio, mix, dsp_wasm, synth, samples, musical, nsax_net, gpu, loops, hand, ui, viz`.
+  `i18n, kit, engine, gen, presets, audio, mix, dsp_wasm, synth, samples, musical, nsax_net, gpu, loops, preview, hand, ui, viz`.
 - `engine.js` is pure: parsing, patterns and `compile(text)`. It has no audio, and the tests load it in Node.
 - The audio-thread code is the `SYN_CODE` string inside `synth.js`. The Rust version of the same voices is in `dsp/src/lib.rs`, and the two must produce the same output (`node dsp/bench/bench.js`).
 - WebGPU is optional everywhere. Every GPU feature has a CPU fallback, and the app must work with `?gpu=off`.

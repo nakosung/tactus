@@ -341,7 +341,7 @@ function acItems(pre, word) {
   const hm = /^\s*([a-zA-Z]\w*)/.exec(pre), head = hm && hm[1];
   if (/^\s*$/.test(before)) {
     const g = ['bpm', 'key', 'scale', 'swing', 'prog', 'scene', 'song', 'master', 'seed', 'fx', 'auto', 'bus', 'space', 'viz', 'shader'].map(n => ({ label: n, ins: n + ' ', desc: t('ac_' + n) }));
-    const tr = AC_TRACKS.map(n => ({ label: n, ins: n.padEnd(7) + ' ', desc: instForName(n) }));
+    const tr = AC_TRACKS.map(n => ({ label: n, ins: n.padEnd(7) + ' ', desc: instForName(n), inst: LOOPS.includes(n) ? null : instForName(n) }));
     return [...tr, ...g];
   }
   if (head === 'key') return /^\s*key\s+\S+\s+$/.test(before) ? Object.keys(SCALES).concat(['pyeongjo', 'gyemyeonjo']).map(s => ({ label: s, ins: s, desc: t('ac_scaleName') })) : [];
@@ -391,7 +391,7 @@ function acItems(pre, word) {
     }
     return PARAMS.filter(n => !RETURN_ONLY.includes(n)).map(n => ({ label: n, ins: n + ' ', desc: t('p_' + n) }))
       .concat(docNames(/^\s*bus\s+([a-zA-Z]\w*)/).filter(n => n !== 'verb' && n !== 'delay').map(n => ({ label: n, ins: n + ' ', desc: t('ac_send') })))
-      .concat([...SYNTHS, ...DRUMS, ...LOOPS].map(n => ({ label: n, ins: n + ' ', desc: t('ac_inst') })))
+      .concat([...SYNTHS, ...DRUMS].map(n => ({ label: n, ins: n + ' ', desc: t('ac_inst'), inst: n })), LOOPS.map(n => ({ label: n, ins: n + ' ', desc: t('ac_inst') })))
       .concat(['fixed', 'fast', 'slow', 'every'].map(n => ({ label: n, ins: n + ' ', desc: t('ac_' + n) })))
       .concat(VOICINGS.map(n => ({ label: n, ins: n + ' ', desc: t('ac_voicing') })))
       .concat(ARPS.map(n => ({ label: n, ins: n + ' ', desc: t('ac_arp') })));
@@ -409,7 +409,7 @@ function acUpdate(force) {
   const items = acItems(pre, word).filter(it => it.label.startsWith(word) && it.label !== word).slice(0, 30);
   if (!items.length) return acClose();
   ac.items = items; ac.sel = 0; ac.nav = false; ac.start = pos - word.length; ac.end = pos;
-  acEl.innerHTML = items.map((it, i) => `<div class="ac-i${i ? '' : ' sel'}" role="option" data-i="${i}"><code>${esc(it.label)}</code><span>${esc(it.desc || '')}</span></div>`).join('');
+  acEl.innerHTML = items.map((it, i) => `<div class="ac-i${i ? '' : ' sel'}" role="option" data-i="${i}"><code>${esc(it.label)}</code><span>${esc(it.desc || '')}</span>${it.inst ? `<b class="pv" title="${esc(t('pvClick'))}">▶ ${esc(t('pvAc'))}</b>` : ''}</div>`).join('');
   const cs = getComputedStyle(srcEl), line = v.slice(0, ls).split('\n').length - 1, col = pre.length - word.length;
   const left = parseFloat(cs.paddingLeft) + col * charW - srcEl.scrollLeft;
   const top = parseFloat(cs.paddingTop) + (line + 1) * lineH - srcEl.scrollTop + 2;
@@ -418,11 +418,14 @@ function acUpdate(force) {
   acEl.style.left = Math.max(4, Math.min(left, maxLeft)) + 'px';
   acEl.style.top = (top + acEl.offsetHeight > srcEl.clientHeight ? top - lineH - acEl.offsetHeight - 4 : top) + 'px';
 }
-function acClose() { acEl.hidden = true; ac.items = []; }
+function acClose() { acEl.hidden = true; ac.items = []; pvHide(); }
 function acMove(d) {
   ac.sel = mod(ac.sel + d, ac.items.length);
   acEl.querySelectorAll('.ac-i').forEach((el, i) => el.classList.toggle('sel', i === ac.sel));
   const el = acEl.children[ac.sel]; if (el) el.scrollIntoView({ block: 'nearest' });
+  // stepping through instruments with the arrows plays each one
+  const it = ac.items[ac.sel];
+  if (it && it.inst && el) { previewInst(it.inst); pvShow(it.inst, el); } else pvHide();
 }
 function acAccept(i = ac.sel) {
   const it = ac.items[i]; if (!it) return;
@@ -430,7 +433,14 @@ function acAccept(i = ac.sel) {
   acClose(); render(); scheduleEval();
   if (/[: ]$/.test(it.ins)) acUpdate(true);
 }
-acEl.addEventListener('mousedown', e => { const r = e.target.closest('.ac-i'); if (!r) return; e.preventDefault(); acAccept(+r.dataset.i); });
+acEl.addEventListener('mousedown', e => {
+  const r = e.target.closest('.ac-i'); if (!r) return; e.preventDefault();
+  const it = ac.items[+r.dataset.i];
+  if (e.target.closest('.pv') && it && it.inst) { previewInst(it.inst, e.shiftKey); return; }
+  acAccept(+r.dataset.i);
+});
+acEl.addEventListener('pointerover', e => { const r = e.target.closest('.ac-i'), it = r && ac.items[+r.dataset.i]; if (it && it.inst) pvShow(it.inst, r); });
+acEl.addEventListener('pointerleave', pvHide);
 srcEl.addEventListener('blur', () => setTimeout(acClose, 100));
 srcEl.addEventListener('click', acClose);
 srcEl.addEventListener('scroll', acClose);
@@ -1013,6 +1023,7 @@ buildArr();
 syncHandsUI();
 evaluate('bar');
 renderPads();
+pvInit();
 (document.fonts ? document.fonts.ready : Promise.resolve()).then(measure);
 measure();
 requestAnimationFrame(frame);

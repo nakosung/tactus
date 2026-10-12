@@ -15,7 +15,7 @@ SRC = os.path.join(ROOT, 'src')
 REPO = 'https://github.com/nakosung/tactus'
 # order matters: later scripts use what earlier ones define
 APP_JS = ['i18n', 'kit', 'engine', 'gen', 'presets', 'audio', 'mix', 'dsp_wasm', 'synth', 'samples', 'musical',
-          'nsax_net', 'gpu', 'loops', 'hand', 'ui', 'viz']
+          'nsax_net', 'gpu', 'loops', 'preview', 'hand', 'ui', 'viz']
 PLACEHOLDER = {'dsp_wasm': 'DSPWASM', 'nsax_net': 'NSAXNET'}
 
 
