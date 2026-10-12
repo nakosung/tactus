@@ -766,7 +766,7 @@ function stop() {
 
 // ---------- performance pads ----------
 // Every pad, built-in or written in code, is a list of actions from the fx language (see engine.js).
-const G = { held: new Set(), act: new Map() };
+const G = { held: new Set(), act: new Map(), auto: new Set() };   // auto: pads an auto line is holding right now (lit on screen)
 function resetFx(now) {
   for (const [p, v] of [[A.lp.frequency, 20000], [A.hp.frequency, 20], [A.lp.Q, 0.7], [A.throw.gain, 0], [A.dFb.gain, S.dlFb ?? 0.42], [A.vthrow.gain, 0], [A.dryG.gain, 1], [A.rIn.gain, 1], [A.dIn.gain, 1], [A.fxGate.gain, 1], [A.eqL.gain, 0], [A.eqM.gain, 0], [A.eqH.gain, 0]]) {
     p.cancelScheduledValues(now); p.setTargetAtTime(v, now, 0.05);
@@ -775,7 +775,7 @@ function resetFx(now) {
   if (typeof FRZ !== 'undefined' && (FRZ.on || FRZ.srcs.length)) freezeStop();
   if (A.riser) { try { A.riser.src.stop(now + 0.1); } catch (e) { } A.riser = null; }
   S.padMute = []; S.padSet = []; S.padGate = null; S.padPitch = 0; S.padFills = new Set(); S.autoOff = [];
-  G.held.clear(); G.act.clear();
+  G.held.clear(); G.act.clear(); G.auto.clear(); S.dirty = true;
 }
 function hold(p, now) { p.cancelScheduledValues(now); p.setValueAtTime(p.value, now); }
 const crushCurve = bits => { const n = 4096, c = new Float32Array(n), q = Math.pow(2, Math.max(1, bits) - 1); for (let i = 0; i < n; i++) { const x = i / (n - 1) * 2 - 1; c[i] = Math.round(x * q) / q; } return c; };
@@ -833,6 +833,7 @@ function padStart(key, pad, c, seq) {
   if (G.act.has(key)) padStop(key, c, seq);
   const st = { undo: [] };
   G.act.set(key, st);
+  if (seq) { const g = key.slice(5); atTime(now, () => { G.auto.add(g); S.dirty = true; }); st.undo.push(n => atTime(n, () => { G.auto.delete(g); S.dirty = true; })); }
   for (const a of pad.acts) {
     switch (a.op) {
       case 'lp': padSweep(A.lp.frequency, a.v, 20000, now, dur); st.undo.push(n => { hold(A.lp.frequency, n); A.lp.frequency.setTargetAtTime(20000, n, 0.12); }); break;

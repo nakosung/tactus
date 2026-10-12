@@ -30,7 +30,7 @@ function evaluate(mode = 'bar', opts = {}) {
   const r = compile(srcEl.value);
   S.errors = r.errors; S.lineNames = r.lineNames;
   S.progGen = r.progGen;
-  { const sig = [...r.pads.values()].map(p => p.name + p.key + p.latch + p.src).join('|'); S.pads = r.pads; if (sig !== padSig) { padSig = sig; renderPads(); } }
+  { const sig = [...r.pads.values()].map(p => p.name + p.key + p.latch + p.src + r.autos.has(p.name)).join('|'); S.pads = r.pads; S.autoNames = new Set(r.autos.keys()); if (sig !== padSig) { padSig = sig; renderPads(); } }
   // a broken line keeps playing its last good version
   const entries = r.order.map(n => [r.tracks.get(n).line, n, r.tracks.get(n)]);
   for (const [line, err] of r.errors) {
@@ -528,7 +528,8 @@ function renderPads() {
   padsEl.innerHTML = list.map(p => {
     const k = p.builtin && PAD_I18N[p.name];
     const first = p.acts.find(a => a.op !== 'in');
-    return `<button class="pad" data-g="${esc(p.name)}" data-cat="${first ? PAD_CAT[first.op] : 'tone'}" title="fx ${esc(p.name)} | ${esc(p.src)}"><i class="lamp"></i>${p.key ? `<kbd>${esc(p.key)}</kbd>` : ''}${p.latch ? `<em class="latch">${esc(t('latch'))}</em>` : ''}<b>${esc(k ? t(k) : p.name)}</b><span>${esc(k ? t(k + 'D') : p.src)}</span></button>`;
+    const auto = S.autoNames && S.autoNames.has(p.name);
+    return `<button class="pad" data-g="${esc(p.name)}" data-cat="${first ? PAD_CAT[first.op] : 'tone'}" title="${auto ? esc(t('padAuto')) + '\n' : ''}fx ${esc(p.name)} | ${esc(p.src)}"><i class="lamp"></i>${auto ? '<em class="autob">auto</em>' : ''}${p.key ? `<kbd>${esc(p.key)}</kbd>` : ''}${p.latch ? `<em class="latch">${esc(t('latch'))}</em>` : ''}<b>${esc(k ? t(k) : p.name)}</b><span>${esc(k ? t(k + 'D') : p.src)}</span></button>`;
   }).join('');
   S.dirty = true;
 }
@@ -963,7 +964,7 @@ function frame() {
     { const on = WK.dsp === 'wasm'; $('#dspTag').classList.toggle('on', on); $('#build').title = on ? 'Synth voices run in Rust compiled to WebAssembly' : 'build'; }
     $('#keyo').textContent = S.keySrc;
     renderLoops(); syncGpu();
-    document.querySelectorAll('.pad').forEach(p => p.classList.toggle('on', G.held.has(p.dataset.g)));
+    document.querySelectorAll('.pad').forEach(p => p.classList.toggle('on', G.held.has(p.dataset.g) || G.auto.has(p.dataset.g)));
   }
   // scope
   const w = scope.clientWidth * devicePixelRatio, h = scope.clientHeight * devicePixelRatio;

@@ -188,6 +188,8 @@ body.recording .editor { border-color: var(--c-err); }
 .pad.on { background: var(--kc); border-color: var(--kc); transform: scale(.97); box-shadow: 0 0 18px color-mix(in srgb, var(--kc) 45%, transparent); }
 .pad.on b, .pad.on span, .pad.on kbd, .pad.on .latch { color: var(--on-key); background: transparent; border-color: color-mix(in srgb, var(--on-key) 35%, transparent); }
 .pad.on .lamp { background: var(--on-key); }
+.pad .autob { position: absolute; top: 5px; left: 18px; font: 600 9px/1 var(--f-code); font-style: normal; letter-spacing: .04em; color: color-mix(in srgb, var(--kc) 80%, var(--dim)); }
+.pad.on .autob { color: var(--on-key); }
 .row-btns { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .knobs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
 .knob { display: grid; justify-items: center; gap: 2px; cursor: ns-resize; touch-action: none; border-radius: 10px; padding: 6px 0 4px; background: var(--panel); border: 1px solid var(--line); }

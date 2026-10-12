@@ -750,8 +750,11 @@ function compile(text) {
     let err = null;
     if (out.tracks.has(n)) err = t('dup', { n });
     else if (!au.pad && !pads.has(n)) err = t('noPad', { n });
+    else if (au.pad && pads.has(n) && !pads.get(n).builtin) err = t('dup', { n });
     else if (au.pad) { const bad = au.pad.refs.find(c => !known(c.s)); if (bad) err = t('noTrack', { n: bad.s }); }
-    if (err) { if (!out.errors.has(au.line)) out.errors.set(au.line, { msg: err, col: au.col }); out.autos.delete(n); }
+    if (err) { if (!out.errors.has(au.line)) out.errors.set(au.line, { msg: err, col: au.col }); out.autos.delete(n); continue; }
+    // its own actions become a pad too, so it shows with the pads and can also be pressed by hand
+    if (au.pad) pads.set(n, { ...au.pad, line: au.line, key: au.pad.key || (pads.get(n) || {}).key || null });
   }
   if (out.viz) {
     const bad = out.viz.list.find(n => !VIZ_BUILTIN.includes(n) && !out.shaders.has(n));
