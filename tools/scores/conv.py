@@ -72,3 +72,19 @@ def join(cs):
     return cs[0] if len(cs) == 1 else '<' + ' '.join(cs) + '>'
 def line(notes, cycles, st, flt=None, tr=0):
     return join(cycles_of(notes, cycles, st, flt, tr))
+
+
+def phrases(tracks, min_len=12):
+    """Name the bars that repeat, so a written-out piece reads as phrases.
+    tracks: {track name: [one string per bar]}. Returns (let lines, {track: <...> line})."""
+    lets, out = [], {}
+    for name, cs in tracks.items():
+        count = {}
+        for c in cs: count[c] = count.get(c, 0) + 1
+        names = {}
+        for c in cs:
+            if count[c] > 1 and len(c) >= min_len and c not in names:
+                names[c] = f'{name}{len(names) + 1}'
+                lets.append(f'let {names[c]} = {c}')
+        out[name] = join([('$' + names[c]) if c in names else c for c in cs])
+    return lets, out

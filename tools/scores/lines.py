@@ -2,7 +2,8 @@
 
 The arrangement around these lines (instruments, drums, scenes) is written by hand in src/js/presets.js."""
 import conv
-from conv import load, line
+from conv import load, line, cycles_of
+BARS = {}   # piece -> track -> one string per bar, for naming the repeated bars (phrased.json)
 SHARP = ['c', 'c#', 'd', 'd#', 'e', 'f', 'f#', 'g', 'g#', 'a', 'a#', 'b']
 FLAT = ['c', 'c#', 'd', 'eb', 'e', 'f', 'f#', 'g', 'ab', 'a', 'bb', 'b']
 out = {}
@@ -13,7 +14,8 @@ tpb, T = load('fur_Elise_WoO59_u.midi')
 M = lambda k: 192 + (k - 1) * 576
 cyc = [[(M(2 * c + 1), 6), (M(2 * c + 2) if c < 21 else M(8), 6)] for c in range(22)]
 bassN = [(s, 6 * 96, p, v) for s, d, p, v in T[2] if p < 50 and (s - 192) % 576 == 0]
-out['elise'] = dict(rh=line(T[1], cyc, 96), lh=line(T[2], cyc, 96), bass=line(bassN, cyc, 96))
+BARS['elise'] = dict(rh=cycles_of(T[1], cyc, 96), lh=cycles_of(T[2], cyc, 96), bass=cycles_of(bassN, cyc, 96))
+out['elise'] = {k: conv.join(v) for k, v in BARS['elise'].items()}
 
 # ---- Gymnopédie No. 1: one 3/4 bar per cycle (6 eighths), bars 1-39, split into melody, chords and bass
 tpb, T = load('gymnopedie_1_u.midi')
@@ -26,8 +28,8 @@ chordOn = {k for (k, d), c in cnt.items() if c >= 2}
 role = lambda s, d, p: 'bass' if p < 48 else ('chord' if cnt[(q(s), q(d))] >= 2 or (p < 69 and q(s) in chordOn) else 'mel')
 cyc = [[((k - 1) * 1152, 6)] for k in range(1, 40)]
 g = {r: conv.cycles_of(allN, cyc, 192, lambda s, d, p, r=r: role(s, d, p) == r) for r in ('mel', 'chord', 'bass')}
-print('gym mel 9-12 before', g['mel'][8:12], g['chord'][8:12])
 g['mel'][8:12] = ['f#4', '.', '.', '.']   # bars 9-12: one F# tied over four bars, as in the score
+BARS['gymno'] = g
 out['gymno'] = {r: conv.join(v) for r, v in g.items()}
 
 # ---- The Entertainer: two 2/4 bars per cycle (16 sixteenths); A strain (2nd ending into B), B strain (2nd ending back to A)
@@ -42,7 +44,8 @@ for s, d, p, v in T[2]:
     if s % 384 == 0: groups.setdefault(s, []).append((s, d, p, v))
 oom = [min(g, key=lambda n: n[2]) for g in groups.values()]
 oom = [n for n in oom if n[2] < 52]
-out['rag'] = dict(rh=line(T[1], cyc, 96), lh=line(T[2], cyc, 96), bass=line(oom, cyc, 96))
+BARS['rag'] = dict(rh=cycles_of(T[1], cyc, 96), lh=cycles_of(T[2], cyc, 96), bass=cycles_of(oom, cyc, 96))
+out['rag'] = {k: conv.join(v) for k, v in BARS['rag'].items()}
 
 # ---- In the Hall of the Mountain King: the 16-bar theme (B minor twice, then F#), one bar per cycle in eighths
 conv.NN = SHARP
@@ -56,7 +59,17 @@ out['mountain'] = dict(theme=line(T[1], th, 192, lambda s, d, p: p >= 45), lead=
 # ---- Canon in D: one bar per cycle (16 sixteenths), bars 1-18
 tpb, T = load('canon3.midi')
 cyc = [[((k - 1) * 1536, 16)] for k in range(1, 19)]
-out['canon'] = dict(v1=line(T[1], cyc, 96), v2=line(T[2], cyc, 96), v3=line(T[3], cyc, 96), cello=line(T[4], cyc, 96))
+BARS['canon'] = dict(v1=cycles_of(T[1], cyc, 96), v2=cycles_of(T[2], cyc, 96), v3=cycles_of(T[3], cyc, 96), cello=cycles_of(T[4], cyc, 96))
+out['canon'] = {k: conv.join(v) for k, v in BARS['canon'].items()}
 import json; json.dump(out, open('lines.json', 'w'), indent=1)   # read by hand when updating presets.js
 for k, v in out.items():
     for n, l in v.items(): print(k, n, len(l), l[:160])
+
+
+# the same pieces with the bars that repeat named as phrases (let lines), as the example songs use them
+phr = {}
+for k, v in BARS.items():
+    lets, lines = conv.phrases(v)
+    phr[k] = {'lets': lets, 'lines': lines}
+json.dump(phr, open('phrased.json', 'w'), indent=1)
+for k, v in phr.items(): print(k, 'phrases', len(v['lets']), 'chars', sum(map(len, v['lets'])) + sum(map(len, v['lines'].values())), 'was', sum(map(len, out[k].values())))

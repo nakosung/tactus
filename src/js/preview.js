@@ -39,7 +39,8 @@ function pvEvents(def, k, play) {
 function pvPlayEvent(def, e, time, cps, c, r, out) {
   const P = evalParams(def, e.s);
   if (r) stripAt(r, P, time);
-  const vel = accentOf(e.v) * (P.vel ?? 1), dur = e.d / cps * P.len;
+  if (e.pan !== undefined) P.pan = e.pan;
+  const vel = accentOf(e.v) * (P.vel ?? 1) * (e.amp ?? 1), dur = e.d / cps * P.len;
   if (def.kind === 'drum') {
     const raw = e.v.replace(/'+$/, ''), v0 = raw === 'X' ? 1.3 : /^[\d.]+$/.test(raw) ? +raw : 1;
     playDrum(def.inst, time, v0 * vel, P, out);

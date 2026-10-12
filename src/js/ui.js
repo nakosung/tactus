@@ -86,7 +86,7 @@ function scheduleEval() {
 }
 
 // ---------- highlighting ----------
-const INST_SET = new Set([...DRUMS, ...SYNTHS, ...LOOPS, ...Object.keys(SCALES), ...Object.keys(SCALE_ALIAS), 'fixed', 'fast', 'slow', ...VOICINGS, ...ARPS, ...MASTERS, 'every', 'rev', 'inv', 'skip', 'ply', 'r']);
+const INST_SET = new Set([...DRUMS, ...SYNTHS, ...LOOPS, ...Object.keys(SCALES), ...Object.keys(SCALE_ALIAS), 'fixed', 'fast', 'slow', ...VOICINGS, ...ARPS, ...MASTERS, 'every', 'rev', 'inv', 'skip', 'ply', 'r', ...TF_WORDS]);
 function hlPattern(text, base, line) {
   let toks;
   try { toks = tokenize(text, base); } catch (e) { return esc(text); }
@@ -99,6 +99,7 @@ function hlPattern(text, base, line) {
     if (tk.t === 'atom') out += `<span class="at${gen ? ' gen' : ''}" id="a${line}_${tk.c0}">${s}</span>`;
     else if (prevTilde && /^[a-z]/.test(text[tk.c1 - base] || '')) out += `<span class="at gen">~</span>`;
     else if (tk.t === 'rest') out += `<span class="rs">${s}</span>`;
+    else if (tk.t === 'var') out += `<span class="nmn">${s}</span>`;
     else if ('[]<>'.includes(tk.t)) out += `<span class="br">${s}</span>`;
     else out += `<span class="op">${s}</span>`;
     pos = tk.c1;
@@ -142,7 +143,9 @@ function hlLine(text, i) {
     out = esc(m[1]);
     if (GLOBALS.has(name)) {
       out += `<span class="gl">${esc(m[0].slice(m[1].length))}</span>`;
-      out += name === 'prog' ? hlPattern(rest, base, i) : name === 'scene' || name === 'song' ? hlArr(rest, name) : name === 'fx' ? hlFx(rest) : hlParams(rest);
+      const lm = name === 'let' && /^(\s*[a-zA-Z_]\w*\s*=\s*)/.exec(rest);
+      if (lm) out += `<span class="nmn">${esc(lm[1])}</span>` + hlPattern(rest.slice(lm[1].length), base + lm[1].length, i);
+      else out += name === 'prog' ? hlPattern(rest, base, i) : name === 'scene' || name === 'song' ? hlArr(rest, name) : name === 'fx' ? hlFx(rest) : hlParams(rest);
     } else {
       out += `<span class="nmn">${esc(m[0].slice(m[1].length))}</span>`;
       const bar = rest.indexOf('|');
@@ -340,10 +343,11 @@ function acItems(pre, word) {
   const before = pre.slice(0, pre.length - word.length);
   const hm = /^\s*([a-zA-Z]\w*)/.exec(pre), head = hm && hm[1];
   if (/^\s*$/.test(before)) {
-    const g = ['bpm', 'key', 'scale', 'swing', 'prog', 'scene', 'song', 'master', 'seed', 'fx', 'auto', 'bus', 'space', 'viz', 'shader'].map(n => ({ label: n, ins: n + ' ', desc: t('ac_' + n) }));
+    const g = ['bpm', 'key', 'scale', 'swing', 'prog', 'scene', 'song', 'master', 'seed', 'fx', 'auto', 'let', 'bus', 'space', 'viz', 'shader'].map(n => ({ label: n, ins: n + ' ', desc: t('ac_' + n) }));
     const tr = AC_TRACKS.map(n => ({ label: n, ins: n.padEnd(7) + ' ', desc: instForName(n), inst: LOOPS.includes(n) ? null : instForName(n) }));
     return [...tr, ...g];
   }
+  if (word.startsWith('$')) return docNames(/^\s*let\s+([a-zA-Z_]\w*)/).map(n => ({ label: '$' + n, ins: '$' + n + ' ', desc: t('ac_var') }));
   if (head === 'key') return /^\s*key\s+\S+\s+$/.test(before) ? Object.keys(SCALES).concat(['pyeongjo', 'gyemyeonjo']).map(s => ({ label: s, ins: s, desc: t('ac_scaleName') })) : [];
   if (head === 'fx') {
     if (!before.includes('|')) return [];
@@ -387,12 +391,13 @@ function acItems(pre, word) {
     if (PARAMS.includes(prev)) {
       const [lo, hi] = AC_RANGES[prev] || [0, 1];
       return [1, 2, 3, 4].map(k => ({ label: `k${k}(${lo},${hi})`, ins: `k${k}(${lo},${hi}) `, desc: t('ac_knob', { k }) }))
-        .concat([{ label: `${lo}~${hi}/8`, ins: `${lo}~${hi}/8 `, desc: t('ac_lfo') }]);
+        .concat([{ label: `${lo}~${hi}/8`, ins: `${lo}~${hi}/8 `, desc: t('ac_lfo') }, { label: `rand(${lo},${hi})`, ins: `rand(${lo},${hi}) `, desc: t('ac_rand') }, { label: `perlin(${lo},${hi},2)`, ins: `perlin(${lo},${hi},2) `, desc: t('ac_perlin') }]);
     }
     return PARAMS.filter(n => !RETURN_ONLY.includes(n)).map(n => ({ label: n, ins: n + ' ', desc: t('p_' + n) }))
       .concat(docNames(/^\s*bus\s+([a-zA-Z]\w*)/).filter(n => n !== 'verb' && n !== 'delay').map(n => ({ label: n, ins: n + ' ', desc: t('ac_send') })))
       .concat([...SYNTHS, ...DRUMS].map(n => ({ label: n, ins: n + ' ', desc: t('ac_inst'), inst: n })), LOOPS.map(n => ({ label: n, ins: n + ' ', desc: t('ac_inst') })))
       .concat(['fixed', 'fast', 'slow', 'every'].map(n => ({ label: n, ins: n + ' ', desc: t('ac_' + n) })))
+      .concat(TF_WORDS.map(n => ({ label: n, ins: n + ' ', desc: t('tf_' + n) })))
       .concat(VOICINGS.map(n => ({ label: n, ins: n + ' ', desc: t('ac_voicing') })))
       .concat(ARPS.map(n => ({ label: n, ins: n + ' ', desc: t('ac_arp') })));
   }
@@ -403,7 +408,7 @@ function acUpdate(force) {
   if (pos !== srcEl.selectionEnd) return acClose();
   const ls = v.lastIndexOf('\n', pos - 1) + 1, pre = v.slice(ls, pos);
   if (pre.includes('//')) return acClose();
-  const wm = /~[a-z]*$/.exec(pre) || /-?[A-Za-z_][\w#]*$/.exec(pre) || /-$/.exec(pre);
+  const wm = /\$\w*$/.exec(pre) || /~[a-z]*$/.exec(pre) || /-?[A-Za-z_][\w#]*$/.exec(pre) || /-$/.exec(pre);
   const word = wm ? wm[0] : '';
   if (!word && !force) return acClose();
   const items = acItems(pre, word).filter(it => it.label.startsWith(word) && it.label !== word).slice(0, 30);

@@ -95,6 +95,44 @@ function rev(p) {
   });
 }
 const mapEv = (p, f) => pat((b, e) => p.q(b, e).map(f));
+
+// ---------- transformations, written after | like Strudel's chained functions ----------
+// later by t bars
+const late = (p, t) => pat((b, e) => p.q(b - t, e - t).map(ev => ({ ...ev, s: ev.s + t })));
+// each whole bar of p, cut to [b, e) after a change of its event times
+function perBar(p, f) {
+  return pat((b, e) => {
+    const out = [];
+    for (let c = Math.floor(b); c < e; c++) for (const ev of f(p.q(c, c + 1).filter(x => x.s >= c - EPS && x.s < c + 1 - EPS), c)) if (ev.s >= b - EPS && ev.s < e - EPS) out.push(ev);
+    return out;
+  });
+}
+const pick01 = (ev, seed) => hash01(ev.s * 13.37 + seed * 0.731);
+const TF = {
+  // a copy, later by t and changed by fn (off 1/8 +7)
+  off: (p, t, fn) => stack([p, late(fn(p), t)]),
+  // n copies in all, t apart, each quieter by fb (echo 3 1/8 .5)
+  echo: (p, n, t, fb) => stack(Array.from({ length: Math.max(1, Math.round(n)) }, (_, k) => k ? mapEv(late(p, k * t), ev => ({ ...ev, amp: (ev.amp ?? 1) * Math.pow(fb, k) })) : p)),
+  // the pattern on the left, a changed copy on the right (jux rev)
+  jux: (p, fn) => stack([mapEv(p, ev => ({ ...ev, pan: -0.7 })), mapEv(fn(p), ev => ({ ...ev, pan: 0.7 }))]),
+  superimpose: (p, fn) => stack([p, fn(p)]),
+  // change about prob of the events (each event decides by its time, so a bar repeats the same way)
+  sometimes: (p, prob, fn, seed) => stack([pat((b, e) => p.q(b, e).filter(ev => pick01(ev, seed) >= prob)), fn(pat((b, e) => p.q(b, e).filter(ev => pick01(ev, seed) < prob)))]),
+  // each bar, change one of n parts, moving on a part per bar
+  chunk: (p, n, fn) => { const q = fn(p); return pat((b, e) => { const out = []; for (let c = Math.floor(b); c < e; c++) { const j = mod(c, n), w0 = c + j / n, w1 = c + (j + 1) / n, qb = Math.max(b, c), qe = Math.min(e, c + 1); for (const ev of p.q(qb, qe)) if (ev.s < w0 - EPS || ev.s >= w1 - EPS) out.push(ev); for (const ev of q.q(Math.max(qb, w0), Math.min(qe, w1))) out.push(ev); } return out; }); },
+  // start each bar 1/n later in the pattern than the last
+  iter: (p, n) => perBar(p, (evs, c) => evs.map(ev => ({ ...ev, s: c + mod(ev.s - c - mod(c, n) / n, 1) }))),
+  // the rhythm of steps (x and .), each hit taking the note that sounds there
+  struct: (p, g) => perBar(p, (evs, c) => g.flatMap((on, k) => { if (!on) return []; const t0 = c + k / g.length; let hit = null; for (const ev of evs) if (ev.s <= t0 + EPS && t0 < ev.s + ev.d - EPS) hit = ev; return hit ? [{ ...hit, s: t0, d: 1 / g.length }] : []; })),
+  // only the events that start on an x step
+  mask: (p, g) => perBar(p, (evs, c) => evs.filter(ev => g[Math.min(g.length - 1, Math.floor((ev.s - c) * g.length + EPS))])),
+  // cut each bar into n parts and play them in a random order: scramble may repeat parts, shuffle plays each once
+  scramble: (p, n, seed, perm) => perBar(p, (evs, c) => {
+    const order = perm ? Array.from({ length: n }, (_, j) => j).sort((x, y) => hash01(c * 7.1 + x * 1.3 + seed) - hash01(c * 7.1 + y * 1.3 + seed)) : Array.from({ length: n }, (_, j) => Math.floor(hash01(c * 5.3 + j * 0.77 + seed) * n));
+    return order.flatMap((src, j) => evs.filter(ev => Math.floor((ev.s - c) * n + EPS) === src).map(ev => ({ ...ev, s: ev.s + (j - src) / n })));
+  }),
+};
+const TF_WORDS = ['off', 'echo', 'jux', 'superimpose', 'sometimes', 'often', 'rarely', 'degrade', 'chunk', 'iter', 'palindrome', 'struct', 'mask', 'scramble', 'shuffle'];
 // polymeter: each layer walks its own items at `steps` per bar, so lengths drift against the bar
 function polymeter(layers, steps) {
   return stack(layers.filter(l => l.length).map(items => {
@@ -138,6 +176,11 @@ function tokenize(src, base) {
     if ((ch === '.' || ch === '~') && !/[0-9]/.test(src[i + 1] || '')) { toks.push({ t: 'rest', c0: base + i, c1: base + i + 1 }); i++; continue; }
     if (ch === '-' && !/[0-9.]/.test(src[i + 1] || '')) { toks.push({ t: 'rest', c0: base + i, c1: base + i + 1 }); i++; continue; }
     const rest = src.slice(i);
+    if (ch === '$') {
+      const vm = /^\$([a-zA-Z_]\w*)/.exec(rest);
+      if (!vm) throw new PErr(t('letFmt'), base + i);
+      toks.push({ t: 'var', v: vm[1], c0: base + i, c1: base + i + vm[0].length }); i += vm[0].length; continue;
+    }
     const m = NUM_RE.exec(rest) || WORD_RE.exec(rest);
     if (m) { toks.push({ t: 'atom', v: m[0], c0: base + i, c1: base + i + m[0].length }); i += m[0].length; continue; }
     throw new PErr(t('badSym', { c: ch }), base + i);
@@ -146,7 +189,21 @@ function tokenize(src, base) {
 }
 
 // ---------- mini-notation parser ----------
-function parseMini(src, base = 0) {
+// phrases from let lines: name -> { src, base, line }. Filled by compile before any line is parsed.
+let VARS = new Map(), VAR_USED = null;
+const VAR_STACK = [];
+function varPattern(tk) {
+  const v = VARS.get(tk.v);
+  if (!v) throw new PErr(t('noVar', { n: tk.v }), tk.c0);
+  if (VAR_STACK.includes(tk.v)) throw new PErr(t('varLoop', { n: tk.v }), tk.c0);
+  if (VAR_USED) VAR_USED.add(tk.v);
+  VAR_STACK.push(tk.v);
+  // the phrase's notes point at the let line, so that line lights up as the phrase plays
+  try { return parseMini(v.src, v.base, v.line); }
+  catch (e) { if (e instanceof PErr) e.col = tk.c0; throw e; }
+  finally { VAR_STACK.pop(); }
+}
+function parseMini(src, base = 0, line) {
   const toks = tokenize(src, base);
   let p = 0;
   const endCol = base + src.length;
@@ -176,7 +233,8 @@ function parseMini(src, base = 0) {
   function term() {
     const tk = next();
     let pt;
-    if (tk.t === 'atom') pt = atom(tk.v, { c0: tk.c0, c1: tk.c1 });
+    if (tk.t === 'atom') pt = atom(tk.v, line === undefined ? { c0: tk.c0, c1: tk.c1 } : { c0: tk.c0, c1: tk.c1, line });
+    else if (tk.t === 'var') pt = varPattern(tk);
     else if (tk.t === 'rest') pt = silence;
     else if (tk.t === '[') pt = stack(body(']').map(seq));
     else if (tk.t === '<') pt = stack(body('>').map(items => alt(items.map(i => i.p))));
@@ -328,7 +386,7 @@ const RETURN_ONLY = ['time', 'fb', 'pre', 'limit'];
 // names of the code's own buses: each also works as a send parameter on track lines (set while compiling)
 let BUS_NAMES = new Set();
 const EXP_PARAMS = new Set(['cut', 'hpf', 'lpf', 'midf']);
-const GLOBALS = new Set(['bpm', 'key', 'scale', 'swing', 'prog', 'scene', 'song', 'master', 'seed', 'fx', 'auto', 'space', 'viz', 'shader', 'bus']);
+const GLOBALS = new Set(['bpm', 'key', 'scale', 'swing', 'prog', 'scene', 'song', 'master', 'seed', 'fx', 'auto', 'let', 'space', 'viz', 'shader', 'bus']);
 // generator parameters shape the notes, so they are part of the pattern rather than the sound
 const GEN_PARAMS = ['seed', 'dens', 'evolve', 'bars'];
 let GEN_SEED = 0;
@@ -403,6 +461,8 @@ function parseValue(ch) {
   m = RE_KNOB.exec(s);
   if (m) return { k: 'knob', i: +m[1] - 1, a: m[2] !== undefined ? +m[2] : 0, b: m[3] !== undefined ? +m[3] : 1 };
   if (s[0] === '<' || s[0] === '[') return { k: 'pat', p: parseMini(s, ch.c0) };
+  m = new RegExp(`^(rand|perlin)\\((${NUM}),(${NUM})(?:,(${NUM}))?\\)$`).exec(s);
+  if (m) return { k: m[1], a: +m[2], b: +m[3], per: m[4] ? Math.max(+m[4], 0.01) : 1 };
   return null;
 }
 
@@ -429,7 +489,7 @@ function parseParams(src, base) {
   const chunks = splitChunks(src, base);
   const params = {};
   let inst = null, fixed = false, speed = 1, voicing = null, arp = null;
-  const every = [];
+  const every = [], tf = [];
   for (let i = 0; i < chunks.length; i++) {
     const w = chunks[i].s;
     if (DRUMS.includes(w) || SYNTHS.includes(w) || LOOPS.includes(w)) { inst = w; continue; }
@@ -438,24 +498,15 @@ function parseParams(src, base) {
     if (ARPS.includes(w)) { arp = w; continue; }
     if (w === 'every') {
       // every N <rev|inv|skip|fast K|slow K|ply K|+K|-K>
-      const nC = chunks[++i], tC = chunks[++i];
+      const nC = chunks[++i];
       if (!nC || !/^\d+$/.test(nC.s) || +nC.s < 1) throw new PErr(t('everyFmt'), nC ? nC.c0 : chunks[i - 1].c0);
-      if (!tC) throw new PErr(t('everyFmt'), nC.c0);
-      const n = +nC.s, tw = tC.s;
-      let fn;
-      if (tw === 'rev') fn = rev;
-      else if (tw === 'inv') fn = p => mapEv(p, ev => ({ ...ev, inv: !ev.inv }));
-      else if (tw === 'skip') fn = () => silence;
-      else if (tw === 'fast' || tw === 'slow' || tw === 'ply') {
-        const kC = chunks[++i];
-        if (!kC || !RE_NUM.test(kC.s) || +kC.s <= 0) throw new PErr(t('posNum', { w: tw }), kC ? kC.c0 : tC.c0);
-        const k = +kC.s;
-        fn = tw === 'fast' ? p => fast(p, k) : tw === 'slow' ? p => fast(p, 1 / k) : p => ply(p, k);
-      } else if (/^[+-]\d+$/.test(tw)) { const k = +tw; fn = p => mapEv(p, ev => ({ ...ev, tr: (ev.tr || 0) + k })); }
-      else throw new PErr(t('everyFmt'), tC.c0);
-      every.push({ n, fn, src: chunks.slice(i - (['fast', 'slow', 'ply'].includes(tw) ? 3 : 2), i + 1).map(c => c.s).join(' ') });
+      if (!chunks[i + 1]) throw new PErr(t('everyFmt'), nC.c0);
+      const at = i - 1, f = fnAt(chunks, i + 1, 'everyFmt');
+      i = f.i;
+      every.push({ n: +nC.s, fn: f.fn, src: chunks.slice(at, i + 1).map(c => c.s).join(' ') });
       continue;
     }
+    if (TF_WORDS.includes(w)) { const r = tfAt(chunks, i); tf.push(r); i = r.i; continue; }
     if (w === 'fast' || w === 'slow') {
       const c = chunks[++i];
       if (!c || !RE_NUM.test(c.s) || +c.s <= 0) throw new PErr(t('posNum', { w }), c ? c.c0 : chunks[i - 1].c0);
@@ -472,7 +523,71 @@ function parseParams(src, base) {
     }
     throw new PErr(t('unknownParam', { w }), chunks[i].c0);
   }
-  return { params, inst, fixed, speed, voicing, arp, every };
+  return { params, inst, fixed, speed, voicing, arp, every, tf };
+}
+// a change to a pattern, as every, jux, sometimes, chunk and superimpose take it: rev inv skip fast K slow K ply K +K -K
+function fnAt(chunks, i, errKey) {
+  const tC = chunks[i]; if (!tC) throw new PErr(t(errKey), chunks[i - 1].c0);
+  const tw = tC.s;
+  if (tw === 'rev') return { fn: rev, i };
+  if (tw === 'inv') return { fn: p => mapEv(p, ev => ({ ...ev, inv: !ev.inv })), i };
+  if (tw === 'skip') return { fn: () => silence, i };
+  if (tw === 'fast' || tw === 'slow' || tw === 'ply') {
+    const kC = chunks[i + 1];
+    if (!kC || !RE_NUM.test(kC.s) || +kC.s <= 0) throw new PErr(t('posNum', { w: tw }), kC ? kC.c0 : tC.c0);
+    const k = +kC.s;
+    return { fn: tw === 'fast' ? p => fast(p, k) : tw === 'slow' ? p => fast(p, 1 / k) : p => ply(p, k), i: i + 1 };
+  }
+  if (/^[+-]\d+$/.test(tw)) { const k = +tw; return { fn: p => mapEv(p, ev => ({ ...ev, tr: (ev.tr || 0) + k })), i }; }
+  throw new PErr(t(errKey), tC.c0);
+}
+// a time in bars: 1/8, .125, 3/16
+function barsOf(c) {
+  const m = c && /^(\d+)\/(\d+)$/.exec(c.s);
+  if (m && +m[2] > 0) return +m[1] / +m[2];
+  return c && RE_NUM.test(c.s) && +c.s >= 0 ? +c.s : null;
+}
+const stepsOf = c => (c && /^[x.]+$/.test(c.s) ? c.s.split('').map(ch => ch === 'x') : null);
+// one transformation and its arguments, from chunks[i] on
+function tfAt(chunks, i) {
+  const w = chunks[i].s, c0 = chunks[i].c0, at = i, seed = c0;
+  const bad = () => new PErr(t('tfFmt', { w }), c0);
+  const num = j => (chunks[j] && RE_NUM.test(chunks[j].s) ? +chunks[j].s : null);
+  let fn;
+  if (w === 'off') {
+    const tt = barsOf(chunks[i + 1]); if (tt === null) throw bad(); i++;
+    let g = p => p;
+    if (chunks[i + 1] && (/^[+-]\d+$/.test(chunks[i + 1].s) || ['rev', 'inv', 'fast', 'slow', 'ply'].includes(chunks[i + 1].s))) { const f = fnAt(chunks, i + 1, 'tfFmt'); g = f.fn; i = f.i; }
+    fn = p => TF.off(p, tt, g);
+  } else if (w === 'echo') {
+    const n = num(i + 1), tt = barsOf(chunks[i + 2]), fb = num(i + 3);
+    if (!(n >= 1) || tt === null) throw bad();
+    i += fb === null ? 2 : 3;
+    fn = p => TF.echo(p, n, tt, fb ?? 0.6);
+  } else if (w === 'jux' || w === 'superimpose') {
+    const f = fnAt(chunks, i + 1, 'tfFmt'); i = f.i;
+    fn = p => TF[w](p, f.fn);
+  } else if (w === 'sometimes' || w === 'often' || w === 'rarely') {
+    let prob = { sometimes: 0.5, often: 0.75, rarely: 0.25 }[w];
+    if (num(i + 1) !== null) { prob = num(i + 1); i++; }
+    const f = fnAt(chunks, i + 1, 'tfFmt'); i = f.i;
+    fn = p => TF.sometimes(p, prob, f.fn, seed);
+  } else if (w === 'degrade') {
+    const prob = num(i + 1) ?? 0.5; if (num(i + 1) !== null) i++;
+    fn = p => degrade(p, prob, seed);
+  } else if (w === 'chunk') {
+    const n = num(i + 1); if (!(n >= 1)) throw bad();
+    const f = fnAt(chunks, i + 2, 'tfFmt'); i = f.i;
+    fn = p => TF.chunk(p, Math.round(n), f.fn);
+  } else if (w === 'iter' || w === 'scramble' || w === 'shuffle') {
+    const n = num(i + 1); if (!(n >= 1)) throw bad(); i++;
+    fn = w === 'iter' ? p => TF.iter(p, Math.round(n)) : p => TF.scramble(p, Math.round(n), seed, w === 'shuffle');
+  } else if (w === 'palindrome') fn = p => everyWrap(p, 2, rev);
+  else if (w === 'struct' || w === 'mask') {
+    const g = stepsOf(chunks[i + 1]); if (!g) throw bad(); i++;
+    fn = p => TF[w](p, g);
+  }
+  return { fn, i, src: chunks.slice(at, i + 1).map(c => c.s).join(' ') };
 }
 
 function stripComment(text) {
@@ -503,7 +618,7 @@ function parseLine(text) {
     const bar = rest.indexOf('|'), nm = (bar >= 0 ? rest.slice(0, bar) : rest).trim();
     if (!/^[a-zA-Z]\w*$/.test(nm)) throw new PErr(t('busFmt'), restBase);
     const allowed = nm === 'verb' ? VERB_PARAMS : nm === 'delay' ? DELAY_PARAMS : BUS_PARAMS;
-    if (nm !== 'verb' && nm !== 'delay' && (PARAMS.includes(nm) || GLOBALS.has(nm))) throw new PErr(t('busName', { n: nm }), restBase);
+    if (nm !== 'verb' && nm !== 'delay' && (PARAMS.includes(nm) || GLOBALS.has(nm) || TF_WORDS.includes(nm))) throw new PErr(t('busName', { n: nm }), restBase);
     const params = bar >= 0 ? mixParams(rest.slice(bar + 1), restBase + bar + 1, allowed) : {};
     return { type: 'bus', name: nm, params };
   }
@@ -560,6 +675,14 @@ function parseLine(text) {
     return { type: 'prog', pat: parseMini(rest, restBase), src: rest.trim() };
   }
   if (name === 'fx') return { type: 'pad', pad: parsePad(rest, restBase) };
+  // let A = e5 d#5 e5 b4   ·   then $A anywhere a pattern goes: lead <$A $A $B>
+  if (name === 'let') {
+    const lm = /^(\s*)([a-zA-Z_]\w*)\s*=\s*/.exec(rest);
+    if (!lm || !rest.slice(lm[0].length).trim()) throw new PErr(t('letFmt'), restBase);
+    VAR_STACK.push(lm[2]);
+    try { parseMini(rest.slice(lm[0].length), restBase + lm[0].length); } finally { VAR_STACK.pop(); }
+    return { type: 'let', name: lm[2] };
+  }
   // auto echo <. . . x>   ·   auto stut . . . [. x] | repeat 16
   // A pad that plays itself: every hit presses the pad and holds it for the hit's length. Without actions it
   // plays the pad of that name (built-in or an fx line); with actions after | it is a pad of its own.
@@ -622,19 +745,20 @@ function parseLine(text) {
   const pr = parseParams(parSrc, restBase + bar + 1);
   for (const k of RETURN_ONLY) if (pr.params[k]) throw new PErr(t('returnOnly', { w: k }), restBase + bar + 1 + parSrc.indexOf(k));
   for (const k of GEN_PARAMS) if (pr.params[k] && pr.params[k].k !== 'num') throw new PErr(t('needNum', { a: k }), restBase + bar + 1);
-  let spec = null;
+  let spec = null, varsUsed = [];
   try { spec = genSpec(patSrc, name, pr.inst || instForName(name), pr.params, GEN_SEED); } catch (e) { if (e instanceof PErr) e.col = restBase + patSrc.search(/\S/); throw e; }
   let p;
   if (spec) { const w = restBase + patSrc.indexOf('~') + 1; p = genPattern(spec, { c0: w, c1: w + spec.kind.length }); }
-  else p = parseMini(patSrc, restBase);
+  else { VAR_USED = new Set(); try { p = parseMini(patSrc, restBase); } finally { varsUsed = [...VAR_USED]; VAR_USED = null; } }
   if (pr.speed !== 1) p = fast(p, pr.speed);
+  for (const x of pr.tf) p = x.fn(p);
   for (const ev of pr.every) p = everyWrap(p, ev.n, ev.fn);
   const inst = pr.inst || instForName(name);
   return {
     type: 'track', name, pat: p, params: pr.params, inst, fixed: pr.fixed, opts: { voicing: pr.voicing, arp: pr.arp }, gen: spec,
     kind: DRUMS.includes(inst) ? 'drum' : LOOPS.includes(inst) ? 'loop' : 'synth',
     chop: patSrc.trim() !== '',
-    patKey: inst + '|' + patSrc.replace(/\s+/g, ' ').trim() + '|' + pr.speed + '|' + pr.every.map(x => x.src).join(',') + (spec ? `|g${spec.seed},${spec.dens},${spec.bars},${spec.evolve},${spec.range}` : ''),
+    patKey: inst + '|' + patSrc.replace(/\s+/g, ' ').trim() + '|' + pr.speed + '|' + pr.every.map(x => x.src).join(',') + '|' + pr.tf.map(x => x.src).join(',') + varsUsed.map(n => '|$' + n + '=' + VARS.get(n).src).join('') + (spec ? `|g${spec.seed},${spec.dens},${spec.bars},${spec.evolve},${spec.range}` : ''),
   };
 }
 
@@ -692,7 +816,9 @@ function compile(text) {
   const out = { pads: new Map(), autos: new Map(), seed: GEN_SEED, master: null, bpm: null, key: null, scale: null, swing: null, prog: null, progSrc: '', scenes: new Map(), song: null, arrSrc: '', tracks: new Map(), order: [], errors: new Map(), lineNames: new Map(), space: null, viz: null, shaders: new Map(), buses: new Map(), masterParams: {} };
   // bus names first, so track lines anywhere in the code can send to them
   BUS_NAMES = new Set();
-  for (const ln of lines) { const m = /^\s*bus\s+([a-zA-Z]\w*)/.exec(stripComment(ln)); if (m && m[1] !== 'verb' && m[1] !== 'delay' && !PARAMS.includes(m[1])) BUS_NAMES.add(m[1]); }
+  VARS = new Map();
+  lines.forEach((ln, i) => { const m = /^(\s*let\s+([a-zA-Z_]\w*)\s*=\s*)(.*)$/.exec(stripComment(ln)); if (m && !VARS.has(m[2]) && m[3].trim()) VARS.set(m[2], { src: m[3], base: m[1].length, line: i }); });
+  for (const ln of lines) { const m = /^\s*bus\s+([a-zA-Z]\w*)/.exec(stripComment(ln)); if (m && m[1] !== 'verb' && m[1] !== 'delay' && !PARAMS.includes(m[1]) && !TF_WORDS.includes(m[1])) BUS_NAMES.add(m[1]); }
   const sceneLines = [];
   lines.forEach((ln, i) => {
     const hm = HEAD_RE.exec(stripComment(ln));
@@ -709,6 +835,7 @@ function compile(text) {
       else if (r.type === 'shader') { if (out.shaders.has(r.name)) throw new PErr(t('dup', { n: r.name }), 0); r.line = i; out.shaders.set(r.name, r); }
       else if (r.type === 'seed') out.seed = r.v;
       else if (r.type === 'pad') { r.pad.line = i; if (out.pads.has(r.pad.name)) throw new PErr(t('dup', { n: r.pad.name }), 0); out.pads.set(r.pad.name, r.pad); }
+      else if (r.type === 'let') { if (VARS.get(r.name).line !== i) throw new PErr(t('dup', { n: r.name }), 0); }
       else if (r.type === 'auto') { if (out.autos.has(r.name)) throw new PErr(t('dup', { n: r.name }), 0); r.line = i; r.cache = new Map(); out.autos.set(r.name, r); }
       else if (r.type === 'swing') out.swing = r.v;
       else if (r.type === 'key') out.key = r;

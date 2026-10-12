@@ -441,16 +441,29 @@ song piano:11 cembalo:11
   {
     id: 'elise', name: 'Für Elise (Lo-fi)',
     head: {
-      ko: '// 베토벤, 엘리제를 위하여 WoO 59 (1810, 퍼블릭 도메인) 첫 부분 44마디를 음 하나하나 옮겼어요. 3/8박자 두 마디가 한 칸(16분음표 12칸)\n// 처음 8칸은 피아노만, 그다음은 6/8 로파이 비트와 업라이트 베이스가 들어와요. 악보: Mutopia Project (퍼블릭 도메인 판)',
-      en: '// Beethoven, Für Elise WoO 59 (1810, public domain): the first 44 bars, note for note. Each step of <> is two 3/8 bars (twelve sixteenths)\n// Piano alone for 8 steps, then a 6/8 lo-fi beat and upright bass. Score: Mutopia Project (public domain edition)',
+      ko: '// 베토벤, 엘리제를 위하여 WoO 59 (1810, 퍼블릭 도메인) 첫 부분 44마디를 음 하나하나 옮겼어요. 3/8박자 두 마디가 한 칸(16분음표 12칸)\n// 처음 8칸은 피아노만, 그다음은 6/8 로파이 비트와 업라이트 베이스가 들어와요. 악보: Mutopia Project (퍼블릭 도메인 판)\n// let 줄은 두 마디짜리 프레이즈예요. rh, lh 줄이 그 순서를 적어요 ($rh1 $rh2 …)',
+      en: '// Beethoven, Für Elise WoO 59 (1810, public domain): the first 44 bars, note for note. Each step of <> is two 3/8 bars (twelve sixteenths)\n// Piano alone for 8 steps, then a 6/8 lo-fi beat and upright bass. Score: Mutopia Project (public domain edition)\n// Each let line is a two-bar phrase; the rh and lh lines put them in order ($rh1 $rh2 …)',
     },
     body: `bpm 90
 key A minor
 master warm
 space room
 
-rh     <[e5 d#5 e5 b4 d5 c5 a4 _ . c4 e4 a4] [b4 _ . e4 g#4 b4 c5 _ . e4 e5 d#5] [e5 d#5 e5 b4 d5 c5 a4 _ . c4 e4 a4] [b4 _ . e4 c5 b4 a4@4 e5 d#5] [e5 d#5 e5 b4 d5 c5 a4 _ . c4 e4 a4] [b4 _ . e4 g#4 b4 c5 _ . e4 e5 d#5] [e5 d#5 e5 b4 d5 c5 a4 _ . c4 e4 a4] [b4 _ . e4 c5 b4 a4 _ . b4 c5 d5] [e5@3 g4 f5 e5 d5@3 f4 e5 d5] [c5@3 e4 d5 c5 b4 _ . e4 e5 .] [. e5 e6 . . d#5 e5 _ . d#5 e5 d#5] [e5 d#5 e5 b4 d5 c5 a4 _ . c4 e4 a4] [b4 _ . e4 g#4 b4 c5 _ . e4 e5 d#5] [e5 d#5 e5 b4 d5 c5 a4 _ . c4 e4 a4] [b4 _ . e4 c5 b4 a4 _ . b4 c5 d5] [e5@3 g4 f5 e5 d5@3 f4 e5 d5] [c5@3 e4 d5 c5 b4 _ . e4 e5 .] [. e5 e6 . . d#5 e5 _ . d#5 e5 d#5] [e5 d#5 e5 b4 d5 c5 a4 _ . c4 e4 a4] [b4 _ . e4 g#4 b4 c5 _ . e4 e5 d#5] [e5 d#5 e5 b4 d5 c5 a4 _ . c4 e4 a4] [b4 _ . e4 c5 b4 a4@4 e5 d#5]> | piano gain .6 len 1.6 rel .8 verb .2 human .15
-lh     <[.@6 a2 e3 a3 .@3] [e2 e3 g#3 .@3 a2 e3 a3 .@3] [.@6 a2 e3 a3 .@3] [e2 e3 g#3 .@3 a2 e3 a3 .@3] [.@6 a2 e3 a3 .@3] [e2 e3 g#3 .@3 a2 e3 a3 .@3] [.@6 a2 e3 a3 .@3] [e2 e3 g#3 .@3 a2 e3 a3 .@3] [c3 g3 c4 .@3 g2 g3 b3 .@3] [a2 e3 a3 .@3 e2 e3 e4 . . e4] [e5 . . d#5 e5 . . d#5 e5 .@3] [.@6 a2 e3 a3 .@3] [e2 e3 g#3 .@3 a2 e3 a3 .@3] [.@6 a2 e3 a3 .@3] [e2 e3 g#3 .@3 a2 e3 a3 .@3] [c3 g3 c4 .@3 g2 g3 b3 .@3] [a2 e3 a3 .@3 e2 e3 e4 . . e4] [e5 . . d#5 e5 . . d#5 e5 .@3] [.@6 a2 e3 a3 .@3] [e2 e3 g#3 .@3 a2 e3 a3 .@3] [.@6 a2 e3 a3 .@3] [e2 e3 g#3 .@3 a2 e3 a3 .@3]> | piano gain .42 len 2.5 rel 1 pan -.15 human .15
+let rh1 = [e5 d#5 e5 b4 d5 c5 a4 _ . c4 e4 a4]
+let rh2 = [b4 _ . e4 g#4 b4 c5 _ . e4 e5 d#5]
+let rh3 = [b4 _ . e4 c5 b4 a4@4 e5 d#5]
+let rh4 = [b4 _ . e4 c5 b4 a4 _ . b4 c5 d5]
+let rh5 = [e5@3 g4 f5 e5 d5@3 f4 e5 d5]
+let rh6 = [c5@3 e4 d5 c5 b4 _ . e4 e5 .]
+let rh7 = [. e5 e6 . . d#5 e5 _ . d#5 e5 d#5]
+let lh1 = [.@6 a2 e3 a3 .@3]
+let lh2 = [e2 e3 g#3 .@3 a2 e3 a3 .@3]
+let lh3 = [c3 g3 c4 .@3 g2 g3 b3 .@3]
+let lh4 = [a2 e3 a3 .@3 e2 e3 e4 . . e4]
+let lh5 = [e5 . . d#5 e5 . . d#5 e5 .@3]
+
+rh     <$rh1 $rh2 $rh1 $rh3 $rh1 $rh2 $rh1 $rh4 $rh5 $rh6 $rh7 $rh1 $rh2 $rh1 $rh4 $rh5 $rh6 $rh7 $rh1 $rh2 $rh1 $rh3> | piano gain .6 len 1.6 rel .8 verb .2 human .15
+lh     <$lh1 $lh2 $lh1 $lh2 $lh1 $lh2 $lh1 $lh2 $lh3 $lh4 $lh5 $lh1 $lh2 $lh1 $lh2 $lh3 $lh4 $lh5 $lh1 $lh2 $lh1 $lh2> | piano gain .42 len 2.5 rel 1 pan -.15 human .15
 bass   <[. a2] [e2 a2] [. a2] [e2 a2] [. a2] [e2 a2] [. a2] [e2 a2] [c3 g2] [a2 e2] . [. a2] [e2 a2] [. a2] [e2 a2] [c3 g2] [a2 e2] . [. a2] [e2 a2] [. a2] [e2 a2]> | upright gain .75 human .1
 kick   x . . . . . . . . x . .    | gain .8 tune .85 dec .9
 snare  . . . . . . x . . . . .    | asnare gain .45 nudge 12 human .2
@@ -487,17 +500,25 @@ song piano:18 air:21
   {
     id: 'rag', name: 'The Entertainer',
     head: {
-      ko: '// 스콧 조플린, 디 엔터테이너 (1902, 퍼블릭 도메인)의 A·B 스트레인 32마디. 2/4박자 두 마디가 한 칸(16분음표 16칸)\n// A는 피아노 솔로, B에서 업라이트 베이스와 브러시 스네어가 들어와 래그타임 밴드가 돼요. 악보: Mutopia Project (퍼블릭 도메인 판)',
-      en: '// Scott Joplin, The Entertainer (1902, public domain): the A and B strains, 32 bars. Each step of <> is two 2/4 bars (sixteen sixteenths)\n// Solo piano for A; in B an upright bass and a brushed snare turn it into a ragtime band. Score: Mutopia Project (public domain edition)',
+      ko: '// 스콧 조플린, 디 엔터테이너 (1902, 퍼블릭 도메인)의 A·B 스트레인 32마디. 2/4박자 두 마디가 한 칸(16분음표 16칸)\n// A는 피아노 솔로, B에서 업라이트 베이스와 브러시 스네어가 들어와 래그타임 밴드가 돼요. 악보: Mutopia Project (퍼블릭 도메인 판)\n// 되풀이되는 두 마디는 let 프레이즈로 이름을 붙였어요',
+      en: '// Scott Joplin, The Entertainer (1902, public domain): the A and B strains, 32 bars. Each step of <> is two 2/4 bars (sixteen sixteenths)\n// Solo piano for A; in B an upright bass and a brushed snare turn it into a ragtime band. Score: Mutopia Project (public domain edition)\n// The two-bar phrases that repeat are named with let',
     },
     body: `bpm 76
 key C major
 master warm
 space room
 
-rh     <[e4 c5 _ e4 c5 _ e4 c5@6 [c5,e5,c6] [d5,f5,d6] [d#5,f#5,d#6]] [[e5,g5,e6] [c5,e5,c6] [d5,f5,d6] [e5,g5,e6] _ [b4,d5,b5] [d5,f5,d6] _ [c5,e5,c6]@6 d4 d#4] [e4 c5 _ e4 c5 _ e4 c5@7 [a4,c5,a5] [g4,c5,g5]] [[f#4,c5,f#5] [a4,a5] [c5,c6] [e5,e6] _ [d5,d6] [c5,c6] [a4,a5] [d5,f5,d6]@6 d4 d#4] [e4 c5 _ e4 c5 _ e4 c5@6 [c5,e5,c6] [d5,f5,d6] [d#5,f#5,d#6]] [[e5,g5,e6] [c5,e5,c6] [d5,f5,d6] [e5,g5,e6] _ [b4,d5,b5] [d5,f5,d6] _ [c5,e5,c6]@6 [c5,c6] [d5,d6]] [[e5,e6] [c5,c6] [d5,d6] [e5,e6] _ [c5,c6] [d5,d6] [c5,c6] [e5,e6] [c5,c6] [d5,d6] [e5,e6] _ [c5,c6] [d5,d6] [c5,c6]] [[e5,g5,e6] [c5,e5,c6] [d5,f5,d6] [e5,g5,e6] _ [b4,d5,b5] [d5,f5,d6] _ [c5,e5,c6]@5 [e4,c5,e5] [f4,d5,f5] [f#4,d#5,f#5]] [[g4,e5,g5] _ [a4,e5,a5] [g4,e5,g5] _ [e4,c5,e5] [f4,d5,f5] [f#4,d#5,f#5] [g4,e5,g5] _ [a4,e5,a5] [g4,e5,g5] _ e5 c5 g4] [a4 b4 c5 d5 e5 d5 c5 d5 g4 e5 f5 g5 a5 g5 e5 f5] [[g4,e5,g5] _ [a4,e5,a5] [g4,e5,g5] _ [e4,c5,e5] [f4,d5,f5] [f#4,d#5,f#5] [g4,e5,g5] _ [a4,e5,a5] [g4,e5,g5] _ g5 a5 bb5] [[d5,g5,b5] [d5,g5,b5] _ [c5,f#5,b5] _ a5 [c5,f#5] d5 [b4,g5]@5 [e4,c5,e5] [f4,d5,f5] [f#4,d#5,f#5]] [[g4,e5,g5] _ [a4,e5,a5] [g4,e5,g5] _ [e4,c5,e5] [f4,d5,f5] [f#4,d#5,f#5] [g4,e5,g5] _ [a4,e5,a5] [g4,e5,g5] _ e5 c5 g4] [a4 b4 c5 d5 e5 d5 c5 d5 c5@5 g4 f#4 g4] [c5 _ a4 c5 _ a4 c5 a4 g4 c5 e5 g5 _ e5 c5 g4] [[f#4,a4] _ [f#4,c5] _ [f4,e5] [f4,d5] _ [e4,c5]@7 d4 d#4]> | piano gain .5 len 1.2 rel .35 human .1
-lh     <[c3 [e3,g3,c4] [g2,g3] [g3,bb3,c4] [f2,f3] [a3,c4] [e2,e3] [g3,c4]] [g2 [e3,g3,c4] g2 [f3,g3,b3] c3 [e3,g3,c4] [e3,g3,c4] [g3,b3]] [c3 [e3,g3,c4] [g2,g3] [g3,bb3,c4] [f2,f3] [a3,c4] [e2,e3] [d#2,d#3]] [[d2,d3] [d3,f#3,a3,c4] d3 [f#3,a3,c4] [g3,b3] [g2,g3] [a2,a3] [b2,b3]] [c3 [e3,g3,c4] [g2,g3] [g3,bb3,c4] [f2,f3] [a3,c4] [e2,e3] [g3,c4]] [g2 [e3,g3,c4] g2 [f3,g3,b3] c3 [e3,g3,c4] [g3,c4,e4] .] [[c3,c4] [g3,c4,e4] [bb2,bb3] [g3,c4,e4] [a2,a3] [a3,c4,f4] [ab2,ab3] [ab3,c4,f4]] [[g2,g3] [g3,c4,e4] g2 [g3,b3] [c3,g3,c4] [g2,g3] [c2,c3] .] [[c2,c3] [g3,c4,e4] g2 [g3,c4,e4] c3 [g3,c4,e4] g2 [g3,c4,e4]] [f2 [a3,c4,f4] f3 [ab3,c4,f4] e3 [g3,c4,e4] g2 [g3,c4,e4]] [c3 [g3,c4,e4] g2 [g3,c4,e4] c3 [g3,c4,e4] e3 d#3] [d3 [g3,b3,d4] d3 [a3,c4,d4] [g3,b3,d4] [f2,f3] [e2,e3] [d2,d3]] [[c2,c3] [g3,c4,e4] g2 [g3,c4,e4] c3 [g3,c4,e4] g2 [g3,c4,e4]] [f2 [a3,c4,f4] f3 [ab3,c4,f4] e3 [g3,c4,e4] c3 [bb3,c4,e4]] [[f3,a3,c4,f4] [f3,a3,c4,f4] [f#3,a3,c4,d#4] [f#3,a3,c4,d#4] [g3,c4,e4] [g3,c4,e4] [g3,c4,e4] [g3,c4,e4]] [[d3,c4] [d3,a3] [g3,b3] [g3,b3] [c3,c4] [g2,g3] [c2,c3] .]> | piano gain .42 len 1.1 rel .3 pan -.1 human .1
-bass   <[c3 . g2 . f2 . e2 .] [g2 . g2 . c3 .@3] [c3 . g2 . f2 . e2 .] [d2 . d3 .@3 a2 .] [c3 . g2 . f2 . e2 .] [g2 . g2 . c3 .@3] [c3 . bb2 . a2 . ab2 .] [g2 . g2 . c3 . c2 .] [c2 . g2 . c3 . g2 .] [f2 .@5 g2 .] [c3 . g2 . c3 .@3] [d3 . d3 .@3 e2 .] [c2 . g2 . c3 . g2 .] [f2 .@5 c3 .] . [d3 .@3 c3 . c2 .]> | upright gain .7 human .1
+let rh1 = [e4 c5 _ e4 c5 _ e4 c5@6 [c5,e5,c6] [d5,f5,d6] [d#5,f#5,d#6]]
+let rh2 = [[g4,e5,g5] _ [a4,e5,a5] [g4,e5,g5] _ [e4,c5,e5] [f4,d5,f5] [f#4,d#5,f#5] [g4,e5,g5] _ [a4,e5,a5] [g4,e5,g5] _ e5 c5 g4]
+let lh1 = [c3 [e3,g3,c4] [g2,g3] [g3,bb3,c4] [f2,f3] [a3,c4] [e2,e3] [g3,c4]]
+let lh2 = [[c2,c3] [g3,c4,e4] g2 [g3,c4,e4] c3 [g3,c4,e4] g2 [g3,c4,e4]]
+let bass1 = [c3 . g2 . f2 . e2 .]
+let bass2 = [g2 . g2 . c3 .@3]
+let bass3 = [c2 . g2 . c3 . g2 .]
+
+rh     <$rh1 [[e5,g5,e6] [c5,e5,c6] [d5,f5,d6] [e5,g5,e6] _ [b4,d5,b5] [d5,f5,d6] _ [c5,e5,c6]@6 d4 d#4] [e4 c5 _ e4 c5 _ e4 c5@7 [a4,c5,a5] [g4,c5,g5]] [[f#4,c5,f#5] [a4,a5] [c5,c6] [e5,e6] _ [d5,d6] [c5,c6] [a4,a5] [d5,f5,d6]@6 d4 d#4] $rh1 [[e5,g5,e6] [c5,e5,c6] [d5,f5,d6] [e5,g5,e6] _ [b4,d5,b5] [d5,f5,d6] _ [c5,e5,c6]@6 [c5,c6] [d5,d6]] [[e5,e6] [c5,c6] [d5,d6] [e5,e6] _ [c5,c6] [d5,d6] [c5,c6] [e5,e6] [c5,c6] [d5,d6] [e5,e6] _ [c5,c6] [d5,d6] [c5,c6]] [[e5,g5,e6] [c5,e5,c6] [d5,f5,d6] [e5,g5,e6] _ [b4,d5,b5] [d5,f5,d6] _ [c5,e5,c6]@5 [e4,c5,e5] [f4,d5,f5] [f#4,d#5,f#5]] $rh2 [a4 b4 c5 d5 e5 d5 c5 d5 g4 e5 f5 g5 a5 g5 e5 f5] [[g4,e5,g5] _ [a4,e5,a5] [g4,e5,g5] _ [e4,c5,e5] [f4,d5,f5] [f#4,d#5,f#5] [g4,e5,g5] _ [a4,e5,a5] [g4,e5,g5] _ g5 a5 bb5] [[d5,g5,b5] [d5,g5,b5] _ [c5,f#5,b5] _ a5 [c5,f#5] d5 [b4,g5]@5 [e4,c5,e5] [f4,d5,f5] [f#4,d#5,f#5]] $rh2 [a4 b4 c5 d5 e5 d5 c5 d5 c5@5 g4 f#4 g4] [c5 _ a4 c5 _ a4 c5 a4 g4 c5 e5 g5 _ e5 c5 g4] [[f#4,a4] _ [f#4,c5] _ [f4,e5] [f4,d5] _ [e4,c5]@7 d4 d#4]> | piano gain .5 len 1.2 rel .35 human .1
+lh     <$lh1 [g2 [e3,g3,c4] g2 [f3,g3,b3] c3 [e3,g3,c4] [e3,g3,c4] [g3,b3]] [c3 [e3,g3,c4] [g2,g3] [g3,bb3,c4] [f2,f3] [a3,c4] [e2,e3] [d#2,d#3]] [[d2,d3] [d3,f#3,a3,c4] d3 [f#3,a3,c4] [g3,b3] [g2,g3] [a2,a3] [b2,b3]] $lh1 [g2 [e3,g3,c4] g2 [f3,g3,b3] c3 [e3,g3,c4] [g3,c4,e4] .] [[c3,c4] [g3,c4,e4] [bb2,bb3] [g3,c4,e4] [a2,a3] [a3,c4,f4] [ab2,ab3] [ab3,c4,f4]] [[g2,g3] [g3,c4,e4] g2 [g3,b3] [c3,g3,c4] [g2,g3] [c2,c3] .] $lh2 [f2 [a3,c4,f4] f3 [ab3,c4,f4] e3 [g3,c4,e4] g2 [g3,c4,e4]] [c3 [g3,c4,e4] g2 [g3,c4,e4] c3 [g3,c4,e4] e3 d#3] [d3 [g3,b3,d4] d3 [a3,c4,d4] [g3,b3,d4] [f2,f3] [e2,e3] [d2,d3]] $lh2 [f2 [a3,c4,f4] f3 [ab3,c4,f4] e3 [g3,c4,e4] c3 [bb3,c4,e4]] [[f3,a3,c4,f4] [f3,a3,c4,f4] [f#3,a3,c4,d#4] [f#3,a3,c4,d#4] [g3,c4,e4] [g3,c4,e4] [g3,c4,e4] [g3,c4,e4]] [[d3,c4] [d3,a3] [g3,b3] [g3,b3] [c3,c4] [g2,g3] [c2,c3] .]> | piano gain .42 len 1.1 rel .3 pan -.1 human .1
+bass   <$bass1 $bass2 $bass1 [d2 . d3 .@3 a2 .] $bass1 $bass2 [c3 . bb2 . a2 . ab2 .] [g2 . g2 . c3 . c2 .] $bass3 [f2 .@5 g2 .] [c3 . g2 . c3 .@3] [d3 . d3 .@3 e2 .] $bass3 [f2 .@5 c3 .] . [d3 .@3 c3 . c2 .]> | upright gain .7 human .1
 kick   x . . . . . . . x . . . . . . .   | gain .45 tune .9 dec .6
 brush  . . . . x . . . . . . . x . . .   | asnare gain .32 human .3 verb .15
 
@@ -683,6 +704,34 @@ bass   0 _ . . 0 . . .                       | sine oct 2 gain .6
 scene open  timp choir
 scene full  all
 song open:8 full:16
+`,
+  },
+  {
+    id: 'lab', name: 'Pattern Lab',
+    head: {
+      ko: '// Pattern Lab — 프레이즈(let)와 패턴 변형을 한곳에 모았어요. 줄마다 하나씩 바꿔 보세요\n// off 1/8 +2: 8분음표 늦게 2도 위로 한 겹 더 · jux rev: 오른쪽은 거꾸로 · echo 3 3/16 .5: 메아리 · iter 4: 마디마다 시작점 밀기\n// sometimes .25 ply 2: 가끔 두 번 치기 · degrade .2: 가끔 빼기 · struct x..x..x...x.x...: 이 리듬으로 · chunk 4 +2: 한 조각씩 돌아가며 2도 위\n// 값 자리에 perlin(300,1800,4): 4마디에 걸쳐 떠도는 필터 · rand(-.6,.6): 음마다 다른 위치',
+      en: '// Pattern Lab — phrases (let) and pattern changes in one place. Change one line at a time\n// off 1/8 +2: one more layer, an eighth late and a step up · jux rev: reversed on the right · echo 3 3/16 .5: echoes · iter 4: start each bar further in\n// sometimes .25 ply 2: now and then a double hit · degrade .2: drop some · struct x..x..x...x.x...: replay on this rhythm · chunk 4 +2: a step up, one part per bar\n// In place of a value, perlin(300,1800,4) drifts the filter over 4 bars · rand(-.6,.6) places each note somewhere new',
+    },
+    body: `bpm 124
+key D dorian
+prog <0 3>              // Dm7 G7
+master default
+
+let motif  = 0 2 4 [7 6]
+let answer = 4 . 2 [0 -1]
+
+lead   <$motif $answer>                 | pluck oct 4 off 1/8 +2 jux rev gain .75 delay .3
+bell   <$motif $answer>                 | bell oct 5 echo 3 3/16 .5 iter 4 gain .24 verb .4
+kick   x . . . x . . . x . . . x . . .  | gain 1
+hat    x*16                             | sometimes .25 ply 2 gain [.35 .15 .25 .15]*4 pan .2
+clap   . x . x                          | degrade .2 gain .5 verb .2
+bass   0 _ . 0 . . 4 .                  | bass oct 2 cut perlin(300,1800,4) res 6 duck .6 gain .75
+stab   0^7*16                           | epiano oct 3 struct x..x..x...x.x... chunk 4 +2 gain .15 pan rand(-.6,.6) verb .2
+pad    0^7                              | gain .18 verb .6 duck .7
+
+scene a lead bass kick hat pad
+scene b all
+song a:8 b:16
 `,
   },
   {

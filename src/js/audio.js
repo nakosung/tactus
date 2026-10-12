@@ -296,6 +296,9 @@ function valueAt(v, s, key) {
       return v.a + (v.b - v.a) * x;
     }
     case 'pat': { const r = patValueAt(v.p, s); return r === null || isNaN(r) ? null : r; }
+    // rand(a,b): a new value for every note; perlin(a,b,bars): a smooth random walk
+    case 'rand': s -= patOrigin(s); return v.a + (v.b - v.a) * hash01(s * 91.7 + 3.1);
+    case 'perlin': { s -= patOrigin(s); const x = s / v.per, i = Math.floor(x), f = x - i, u = f * f * (3 - 2 * f), h0 = hash01(i * 1.731 + 0.5), h1 = hash01((i + 1) * 1.731 + 0.5); return v.a + (v.b - v.a) * (h0 + (h1 - h0) * u); }
   }
   return null;
 }
@@ -615,11 +618,12 @@ function playEvents(def, pa, pb, off) {
     if (def.kind === 'drum' && def.inst !== 'kick' && inFillHalf(c)) continue;
     if (inPause(c)) continue;
     const P = def.kind === 'loop' ? loopParams(def, ev.s) : evalParams(def, ev.s);
+    if (ev.pan !== undefined) P.pan = ev.pan;   // jux
     // groove: swing on a chosen grid (track swing overrides the global one), nudge, humanize
     const sw = def.params.swing ? P.swing : S.swing, grid = P.sgrid || 16;
     if (sw) { const x = ev.s * grid, rr = Math.round(x); if (Math.abs(x - rr) < 1e-6 && mod(rr, 2) === 1) c += sw / grid; }
     let time = timeOf(c) + (P.nudge || 0) / 1000;
-    let vel = accentOf(ev.v) * (P.vel ?? 1);
+    let vel = accentOf(ev.v) * (P.vel ?? 1) * (ev.amp ?? 1);   // amp: echo's quieter copies
     if (P.human > 0) { time += (Math.random() + Math.random() - 1) * 0.012 * P.human; vel *= 1 + (Math.random() - 0.5) * 0.35 * P.human; }
     if (time < now - 0.02) continue;
     if (time < now) time = now + 0.002;
@@ -644,7 +648,7 @@ function playEvents(def, pa, pb, off) {
       if (def.opts && def.opts.arp && notes.length > 1) playArp(def, notes, c, ev.d, P, vel, r);
       else playNotes(def, notes, time, dur, P, vel, r);
     }
-    S.vis.push({ time, id: `a${def.line}_${ev.loc.c0}`, line: def.line });
+    S.vis.push({ time, id: `a${ev.loc.line ?? def.line}_${ev.loc.c0}`, line: def.line });
   }
 }
 function playRoll(a, b) {
