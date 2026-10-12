@@ -1,0 +1,650 @@
+<title>Tactus</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' rx='15' fill='%2317191e'/><path d='M11 13h34v10H33v28H23V23H11z' fill='%23eceef2'/><circle cx='45' cy='44' r='7.5' fill='%23ff7a3c'/></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wdth,wght@75..100,400..700&family=Spline+Sans+Mono:wght@400;500;700&family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: the wordmark is the instrument. Six letters, six tracks: while the demo plays each letter swells when its track hits.
+   Under it, the real code of the song lights up note by note; below, four verbs (write, perform, compose, conduct) in one row, then the facts and the way in. */
+:root {
+  --body: #15171c; --panel: #1d2026; --raised: #272b33; --line: #333843; --fg: #eceef2; --dim: #9aa1ae; --faint: #646b78;
+  --k-orange: #ff7a3c; --k-blue: #4f8cff; --k-green: #34c58b; --k-yellow: #f2c443; --k-pink: #ff5d8f; --k-violet: #a48bff;
+  --on-key: #14161a; --shadow: 0 1px 0 rgba(255,255,255,.04) inset, 0 1px 2px rgba(0,0,0,.4);
+  --scr: #0d0f12; --scr-2: #13161a; --scr-line: #242830; --scr-fg: #e6e8ec; --scr-dim: #8a91a0; --scr-faint: #4f5562;
+  --c-name: #b8a6ff; --c-glob: #6fb6ff; --c-num: #5fd6a4; --c-op: #ffb054; --c-inst: #7cc8ff; --c-gen: #f2c443;
+  --f-display: "Instrument Sans", "IBM Plex Sans KR", system-ui, sans-serif;
+  --f-body: "IBM Plex Sans KR", "Instrument Sans", "Apple SD Gothic Neo", system-ui, sans-serif;
+  --f-code: "Spline Sans Mono", ui-monospace, Menlo, Consolas, monospace;
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) {
+  --body: #e4e5e8; --panel: #eff0f2; --raised: #fafbfc; --line: #c8cbd2; --fg: #17191e; --dim: #535a66; --faint: #858c98;
+  --k-orange: #ee5a24; --k-blue: #2d6ce6; --k-green: #129d68; --k-yellow: #d9a514; --k-pink: #e23d70; --k-violet: #7356ec;
+  --on-key: #ffffff; --shadow: 0 1px 0 rgba(255,255,255,.9) inset, 0 1px 2px rgba(20,24,32,.14);
+  color-scheme: light;
+} }
+:root[data-theme="light"] {
+  --body: #e4e5e8; --panel: #eff0f2; --raised: #fafbfc; --line: #c8cbd2; --fg: #17191e; --dim: #535a66; --faint: #858c98;
+  --k-orange: #ee5a24; --k-blue: #2d6ce6; --k-green: #129d68; --k-yellow: #d9a514; --k-pink: #e23d70; --k-violet: #7356ec;
+  --on-key: #ffffff; --shadow: 0 1px 0 rgba(255,255,255,.9) inset, 0 1px 2px rgba(20,24,32,.14);
+  color-scheme: light;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body { background: var(--body); color: var(--fg); font-family: var(--f-body); font-size: 16px; line-height: 1.6; padding-inline: 20px; padding-block: 0; }
+a { color: inherit; }
+html[lang=ko] body { word-break: keep-all; }
+:focus-visible { outline: 2px solid var(--k-blue); outline-offset: 3px; }
+.wrap { max-width: 1180px; margin: 0 auto; }
+
+/* nav */
+.nav { display: flex; align-items: center; gap: 14px; padding-block: 18px; }
+.mark { font-family: var(--f-display); font-weight: 700; font-stretch: 75%; letter-spacing: .16em; font-size: 18px; text-decoration: none; }
+.nav .spacer { flex: 1; }
+.home { font-size: 13px; color: var(--dim); text-decoration: none; border-left: 1px solid var(--line); padding-left: 14px; }
+.home:hover { color: var(--fg); }
+.btn { display: inline-flex; align-items: center; gap: 10px; font: 600 15px/1 var(--f-body); border: 1px solid var(--line); background: var(--raised); color: var(--fg); border-radius: 999px; padding: 12px 20px; cursor: pointer; text-decoration: none; box-shadow: var(--shadow); white-space: nowrap; }
+.btn:hover { border-color: color-mix(in srgb, var(--fg) 35%, var(--line)); }
+.btn.key { background: var(--k-orange); border-color: var(--k-orange); color: var(--on-key); box-shadow: 0 0 0 5px color-mix(in srgb, var(--k-orange) 18%, transparent); }
+.btn.small { padding: 8px 14px; font-size: 13.5px; }
+.lang { font: 500 13px/1 var(--f-code); background: transparent; border: 1px solid var(--line); color: var(--dim); border-radius: 999px; padding: 8px 12px; cursor: pointer; }
+.ext::after { content: "↗"; font-family: var(--f-code); font-weight: 500; font-size: .95em; line-height: 1; }
+
+/* hero: the wordmark */
+.hero { padding-block: 10px 28px; }
+.word { display: flex; justify-content: space-between; align-items: flex-end; font-family: var(--f-display); font-size: clamp(76px, 19.5vw, 252px); line-height: .82; font-weight: 700; margin: 0; user-select: none; }
+.word .L { display: inline-flex; flex-direction: column; align-items: center; gap: 10px; }
+.word .ch { display: block; text-align: center; font-variation-settings: "wght" 560, "wdth" 82; transition: color .2s; animation: arrive 1.4s cubic-bezier(.2,.8,.2,1) both; }
+.word .L:nth-child(2) .ch { animation-delay: .07s; } .word .L:nth-child(3) .ch { animation-delay: .14s; } .word .L:nth-child(4) .ch { animation-delay: .21s; } .word .L:nth-child(5) .ch { animation-delay: .28s; } .word .L:nth-child(6) .ch { animation-delay: .35s; }
+@keyframes arrive { from { font-variation-settings: "wght" 400, "wdth" 75; } 55% { font-variation-settings: "wght" 700, "wdth" 100; } to { font-variation-settings: "wght" 560, "wdth" 82; } }
+.word .tn { font: 500 clamp(9px, 1vw, 12px)/1 var(--f-code); color: var(--faint); letter-spacing: 0; height: 1em; transition: color .15s; }
+.word .L.hot .tn { color: var(--fg); }
+.lede { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); gap: 36px; align-items: start; margin-top: 34px; }
+.lede h2 { font-family: var(--f-body); font-weight: 700; font-size: clamp(26px, 3.1vw, 40px); line-height: 1.25; letter-spacing: -.01em; margin: 0 0 16px; text-wrap: balance; }
+.lede p { color: var(--dim); margin: 0 0 22px; max-width: 34em; }
+.ctas { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.playbtn .ico { width: 0; height: 0; border-left: 11px solid currentColor; border-top: 7px solid transparent; border-bottom: 7px solid transparent; }
+.playbtn.on .ico { border: 0; width: 11px; height: 11px; background: currentColor; border-radius: 2px; }
+.tracks { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 18px; }
+.trk { display: grid; gap: 1px; text-align: left; border: 1px solid var(--line); background: transparent; color: var(--fg); border-radius: 12px; padding: 8px 12px; cursor: pointer; font: inherit; }
+.trk b { font-size: 13.5px; }
+.trk small { font-size: 11.5px; color: var(--faint); }
+.trk[aria-pressed="true"] { background: var(--raised); border-color: color-mix(in srgb, var(--k-orange) 60%, var(--line)); box-shadow: var(--shadow); }
+.trk[aria-pressed="true"] small { color: var(--dim); }
+
+/* the code screen */
+.codewrap { position: relative; }
+#scene { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; transition: opacity .6s; }
+.code { position: relative; z-index: 1; }
+.scnbar { display: flex; align-items: center; gap: 4px; padding: 6px 10px; border-top: 1px solid var(--scr-line); background: var(--scr-2); font: 500 11px/1 var(--f-code); color: var(--scr-faint); }
+.scnbar span { margin-right: 6px; }
+.scnbar button { font: inherit; color: var(--scr-dim); background: none; border: 1px solid transparent; border-radius: 6px; padding: 4px 8px; cursor: pointer; }
+.scnbar button:hover { color: var(--scr-fg); }
+.scnbar button[aria-pressed="true"] { color: var(--scr-fg); border-color: var(--scr-line); background: var(--scr); }
+.scnbar button.cur { color: var(--k-orange); }
+.screen { background: var(--scr); border: 1px solid var(--scr-line); border-radius: 16px; overflow: hidden; box-shadow: 0 0 0 5px color-mix(in srgb, var(--body) 55%, var(--panel)), 0 0 0 6px var(--line), 0 30px 60px -30px rgba(0,0,0,.6); min-width: 0; }
+.scr-top { display: flex; align-items: center; gap: 12px; padding: 10px 14px; border-bottom: 1px solid var(--scr-line); color: var(--scr-dim); font: 500 12px/1 var(--f-code); }
+.scr-top .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--scr-line); }
+.scr-top .dot.on { background: var(--k-orange); box-shadow: 0 0 8px var(--k-orange); }
+.scr-top .sp { flex: 1; }
+.scr-top output { color: var(--scr-fg); font-variant-numeric: tabular-nums; }
+.code { margin: 0; padding: 14px 16px; font: 12.5px/20px var(--f-code); color: var(--scr-fg); white-space: pre; overflow: auto; height: 380px; font-variant-ligatures: none; }
+.code .cm { color: var(--scr-faint); font-style: italic; }
+.code .gl { color: var(--c-glob); font-weight: 700; }
+.code .nmn { color: var(--c-name); font-weight: 700; }
+.code .rs { color: var(--scr-faint); }
+.code .br { color: var(--scr-dim); }
+.code .op { color: var(--c-op); }
+.code .nm { color: var(--c-num); }
+.code .pr { color: var(--scr-dim); }
+.code .in { color: var(--c-inst); }
+.code .gen { color: var(--c-gen); font-weight: 700; }
+.code .at { border-radius: 3px; }
+.code .at.hit { animation: hit .3s ease-out; }
+.code .ln.off { opacity: .35; }
+@keyframes hit { from { background: var(--c-op); color: var(--scr); box-shadow: 0 0 0 2px var(--c-op); } to { background: transparent; box-shadow: 0 0 0 2px transparent; } }
+#spec { display: block; width: 100%; height: 56px; border-top: 1px solid var(--scr-line); background: var(--scr-2); }
+
+/* verbs */
+.verbs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border-top: 1px solid var(--line); margin-top: 64px; }
+.verb { padding: 30px 24px 34px 0; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.verb + .verb { padding-left: 24px; border-left: 1px solid var(--line); }
+.verb h2 { margin: 0; font-family: var(--f-display); font-weight: 700; font-stretch: 80%; font-size: 30px; line-height: 1.05; letter-spacing: .01em; }
+.verb h2 .ko { font-family: var(--f-body); font-stretch: 100%; font-size: 21px; letter-spacing: -.01em; }
+.verb p { margin: 0; color: var(--dim); font-size: 14.5px; }
+.snip { font: 12px/1.6 var(--f-code); background: var(--scr); color: var(--scr-fg); border: 1px solid var(--scr-line); border-radius: 10px; padding: 10px 12px; margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.snip .k { color: var(--c-name); font-weight: 700; } .snip .n { color: var(--c-num); } .snip .i { color: var(--c-inst); } .snip .g { color: var(--c-gen); font-weight: 700; } .snip .c { color: var(--scr-faint); }
+.minipads { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 5px; }
+.mp { --kc: var(--k-blue); position: relative; border: 1px solid var(--line); background: var(--raised); border-radius: 8px; padding: 6px 6px 5px; font: 600 11.5px/1.2 var(--f-body); text-align: left; cursor: pointer; color: var(--fg); box-shadow: var(--shadow); min-height: 44px; display: grid; align-content: space-between; }
+.mp kbd { font: 500 10px/1 var(--f-code); color: var(--faint); }
+.mp[data-cat="rhythm"] { --kc: var(--k-yellow); } .mp[data-cat="struct"] { --kc: var(--k-orange); } .mp[data-cat="space"] { --kc: var(--k-green); } .mp[data-cat="mod"] { --kc: var(--k-violet); }
+.mp[aria-pressed="true"], .mp.flash { background: var(--kc); border-color: var(--kc); color: var(--on-key); }
+.mp[aria-pressed="true"] kbd, .mp.flash kbd { color: var(--on-key); }
+.chips { display: flex; flex-wrap: wrap; gap: 5px; }
+.chip { border: 1px solid var(--line); background: transparent; color: var(--fg); border-radius: 999px; padding: 5px 11px; font: 600 12.5px/1.2 var(--f-body); cursor: pointer; }
+.chip[aria-pressed="true"] { background: var(--k-yellow); border-color: var(--k-yellow); color: #1c1606; }
+.seed { display: flex; gap: 6px; align-items: center; }
+.seed output { font: 700 22px/1 var(--f-code); font-variant-numeric: tabular-nums; min-width: 4.5ch; }
+.seed span { font: 600 11px/1 var(--f-code); color: var(--faint); letter-spacing: .06em; }
+.gout { min-height: 9.6em; white-space: pre; overflow-x: auto; }
+.hands { display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; margin: 0; font-size: 13.5px; }
+.hands dt { font: 600 12px/1.5 var(--f-code); color: var(--fg); white-space: nowrap; }
+.hands dd { margin: 0; color: var(--dim); }
+
+/* facts */
+.facts { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); margin-top: 18px; }
+.fact { padding: 22px 16px 22px 0; min-width: 0; }
+.fact + .fact { padding-left: 16px; border-left: 1px solid var(--line); }
+.fact b { display: block; font-family: var(--f-display); font-stretch: 75%; font-weight: 700; font-size: 46px; line-height: 1; font-variant-numeric: tabular-nums; }
+.fact span { display: block; margin-top: 8px; font-size: 13.5px; color: var(--dim); line-height: 1.45; }
+
+/* name + end */
+.name { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); gap: 40px; padding-block: 80px 30px; align-items: start; }
+.name h2 { margin: 0; font-family: var(--f-display); font-weight: 700; font-stretch: 80%; font-size: clamp(36px, 5vw, 64px); line-height: 1; }
+.name h2 em { display: block; font-style: normal; font-family: var(--f-code); font-weight: 500; font-size: .42em; color: var(--k-orange); margin-top: 12px; letter-spacing: 0; }
+.name p { margin: 0 0 14px; color: var(--dim); max-width: 36em; }
+.end { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 18px; padding-block: 44px 64px; border-top: 1px solid var(--line); margin-top: 40px; }
+.end h2 { margin: 0; font-size: clamp(24px, 3vw, 34px); line-height: 1.3; text-wrap: balance; max-width: 22em; }
+.nav .gh { color: var(--dim); font-size: 14px; text-decoration: none; }
+.nav .gh:hover { color: var(--fg); }
+.end .oss { flex-basis: 100%; margin: 0; color: var(--faint); font-size: 13.5px; }
+.end .oss a { color: var(--dim); text-underline-offset: 3px; }
+.end small { display: block; color: var(--faint); font-size: 13px; margin-top: 6px; font-weight: 400; }
+
+
+/* built live */
+.built { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); gap: 48px; padding-block: 84px 20px; align-items: start; }
+.built h2 { margin: 0 0 18px; font-size: clamp(28px, 3.4vw, 44px); line-height: 1.2; letter-spacing: -.01em; text-wrap: balance; }
+.built p { margin: 0 0 14px; color: var(--dim); max-width: 36em; }
+.built p a { color: var(--fg); text-underline-offset: 3px; }
+.built .next { margin-top: 22px; padding: 18px; border: 1px solid var(--line); border-radius: 14px; background: var(--panel); display: grid; gap: 12px; }
+.built .next p { margin: 0; color: var(--fg); }
+.built .next small { color: var(--faint); font-size: 12.5px; line-height: 1.5; }
+.built .next a { font-size: 13.5px; color: var(--fg); text-underline-offset: 3px; }
+.bench { display: grid; gap: 7px; }
+.bench .br { display: grid; grid-template-columns: 7.5em minmax(0, 1fr) 3em; align-items: center; gap: 10px; font-size: 13px; color: var(--dim); }
+.bench i { display: block; height: 12px; width: var(--w); border-radius: 3px; background: var(--line); }
+.bench .rust i { background: var(--k-orange); }
+.bench b { font: 600 13px/1 var(--f-code); color: var(--fg); text-align: right; font-variant-numeric: tabular-nums; }
+.steps { list-style: none; margin: 0; padding: 0; counter-reset: s; border-left: 2px solid var(--line); }
+.steps li { counter-increment: s; position: relative; padding: 0 0 18px 26px; }
+.steps li::before { content: counter(s); position: absolute; left: -13px; top: 1px; width: 24px; height: 24px; border-radius: 50%; background: var(--body); border: 2px solid var(--line); font: 600 11px/20px var(--f-code); text-align: center; color: var(--dim); }
+.steps li:last-child::before { border-color: var(--k-orange); color: var(--k-orange); }
+.steps b { display: block; font-size: 15px; }
+.steps span { display: block; color: var(--dim); font-size: 14px; line-height: 1.5; }
+
+/* webgpu */
+.gpu { padding-block: 72px 10px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); gap: 48px; align-items: start; }
+.gpu h2 { margin: 0 0 16px; font-size: clamp(28px, 3.4vw, 44px); line-height: 1.2; text-wrap: balance; }
+.gpu-head p { margin: 0 0 18px; color: var(--dim); max-width: 36em; }
+.gbench .btn { justify-self: start; }
+.gbench .bench .br { grid-template-columns: 6.5em minmax(0, 1fr) 6em; }
+.gbench { display: grid; gap: 12px; padding: 18px; border: 1px solid var(--line); border-radius: 14px; background: var(--panel); }
+.gres { font-size: 13.5px; color: var(--dim); }
+.gres b { color: var(--fg); font-family: var(--f-code); }
+.glist { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0; border-top: 1px solid var(--line); }
+.gi { padding: 18px 18px 20px 0; border-bottom: 1px solid var(--line); min-width: 0; }
+.gi:nth-child(even) { padding-left: 18px; border-left: 1px solid var(--line); }
+.gi b { display: block; font-size: 16px; margin: 8px 0 6px; }
+.gi p { margin: 0; color: var(--dim); font-size: 14px; line-height: 1.55; }
+.gi .gc { display: inline-block; font: 12px/1.4 var(--f-code); color: var(--fg); background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 2px 7px; margin: 0 0 8px; overflow-wrap: anywhere; }
+.gi .st { font: 600 11px/1 var(--f-code); padding: 4px 8px; border-radius: 999px; border: 1px solid var(--line); color: var(--faint); }
+.gi.done .st { color: var(--on-key); background: var(--k-green); border-color: var(--k-green); }
+.gsrc { grid-column: 1 / -1; margin: 0; font-size: 12.5px; color: var(--faint); }
+.gsrc a { color: var(--dim); text-underline-offset: 3px; }
+@media (max-width: 980px) { .gpu { grid-template-columns: minmax(0, 1fr); gap: 24px; } }
+@media (max-width: 600px) { .glist { grid-template-columns: minmax(0, 1fr); } .gi:nth-child(even) { padding-left: 0; border-left: 0; } }
+@media (max-width: 980px) { .built { grid-template-columns: minmax(0, 1fr); gap: 28px; } }
+@media (max-width: 980px) {
+  .lede { grid-template-columns: minmax(0, 1fr); }
+  .verbs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .verb:nth-child(3) { padding-left: 0; border-left: 0; }
+  .verb:nth-child(n+3) { border-top: 1px solid var(--line); }
+  .facts { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .fact:nth-child(4) { padding-left: 0; border-left: 0; }
+  .fact:nth-child(n+4) { border-top: 1px solid var(--line); }
+  .name { grid-template-columns: minmax(0, 1fr); gap: 20px; }
+}
+@media (max-width: 600px) {
+  body { padding-inline: 16px; }
+  .verbs { grid-template-columns: minmax(0, 1fr); }
+  .verb, .verb + .verb { padding-left: 0; border-left: 0; }
+  .verb + .verb { border-top: 1px solid var(--line); }
+  .facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .fact:nth-child(odd) { padding-left: 0; border-left: 0; }
+  .fact:nth-child(even) { padding-left: 16px; border-left: 1px solid var(--line); }
+  .fact:nth-child(n+3) { border-top: 1px solid var(--line); }
+  .code { height: 300px; font-size: 11.5px; line-height: 18px; }
+  .nav .btn { display: none; }
+}
+@media (prefers-reduced-motion: reduce) { .word .ch { animation: none; } .code .at.hit { animation-duration: .01s; } html { scroll-behavior: auto; } }
+</style>
+
+<div class="wrap">
+  <nav class="nav">
+    <a class="mark" href="#top">TACTUS</a>/*HOME*/
+    <div class="spacer"></div>
+    <a class="gh" href="/*REPO*/" target="_blank" rel="noopener">GitHub</a>
+    <button class="lang" id="lang" type="button">EN</button>
+    <a class="btn small ext" href="/*APP_URL*/" target="_blank" rel="noopener" data-ko="Tactus 열기" data-en="Open Tactus">Tactus 열기</a>
+  </nav>
+
+  <header class="hero" id="top">
+    <h1 class="word" aria-label="Tactus">
+      <span class="L" aria-hidden="true"><span class="ch">T</span><span class="tn"></span></span><span class="L" aria-hidden="true"><span class="ch">A</span><span class="tn"></span></span><span class="L" aria-hidden="true"><span class="ch">C</span><span class="tn"></span></span><span class="L" aria-hidden="true"><span class="ch">T</span><span class="tn"></span></span><span class="L" aria-hidden="true"><span class="ch">U</span><span class="tn"></span></span><span class="L" aria-hidden="true"><span class="ch">S</span><span class="tn"></span></span>
+    </h1>
+
+    <div class="lede">
+      <div>
+        <h2 data-ko="느낌이 오는 속도로, 코드로 연주하는 음악" data-en="Music you play in code, as fast as you feel it">느낌이 오는 속도로, 코드로 연주하는 음악</h2>
+        <p data-ko="Tactus는 브라우저에서 바로 여는 라이브 코딩 악기예요. 한 줄이 한 트랙이고, 고치면 다음 마디에 바로 들려요. 패드로 연주하고, 시드 하나로 곡 전체를 만들고, 카메라 앞에서 손으로 지휘해요. 데모를 틀면 위의 글자 여섯 개가 각자 한 트랙씩 맡아 박자에 맞춰 숨을 쉬어요." data-en="Tactus is a live-coding instrument that opens right in your browser. One line is one track, and every edit is heard on the next bar. Play it with pads, write a whole piece from one seed, and conduct it with your hands in front of a camera. Start the demo and each of the six letters above takes a track and breathes with it.">Tactus는 브라우저에서 바로 여는 라이브 코딩 악기예요. 한 줄이 한 트랙이고, 고치면 다음 마디에 바로 들려요. 패드로 연주하고, 시드 하나로 곡 전체를 만들고, 카메라 앞에서 손으로 지휘해요. 데모를 틀면 위의 글자 여섯 개가 각자 한 트랙씩 맡아 박자에 맞춰 숨을 쉬어요.</p>
+        <div class="ctas">
+          <button class="btn key playbtn" id="play" type="button"><i class="ico"></i><span data-ko="데모 듣기" data-en="Play the demo">데모 듣기</span></button>
+          <a class="btn ext" href="/*APP_URL*/" target="_blank" rel="noopener" data-ko="Tactus 열기" data-en="Open Tactus">Tactus 열기</a>
+        </div>
+        <div class="tracks" id="tracks" role="group" aria-label="Demo"></div>
+      </div>
+      <div class="screen">
+        <div class="scr-top"><i class="dot" id="dot"></i><span id="fname">trance</span><span class="sp"></span><span><output id="bpm">138</output> BPM</span><span>BAR <output id="bar">1.1</output></span></div>
+        <div class="codewrap"><pre class="code" id="code"></pre><canvas id="scene" aria-hidden="true" hidden></canvas></div>
+        <div class="scnbar" id="scnbar" role="group" aria-label="WebGPU backdrop" hidden><span>WebGPU</span><button type="button" data-v="auto" aria-pressed="true" data-ko="자동" data-en="auto">자동</button><button type="button" data-v="terrain">terrain</button><button type="button" data-v="contour">contour</button><button type="button" data-v="dots">dots</button><button type="button" data-v="demo">demo</button><button type="button" data-v="off" data-ko="끄기" data-en="off">끄기</button></div>
+        <canvas id="spec" aria-hidden="true"></canvas>
+      </div>
+    </div>
+  </header>
+
+  <section class="verbs" aria-label="Tactus">
+    <article class="verb">
+      <h2>Write <span class="ko" data-ko="· 쓰면 들려요" data-en="">· 쓰면 들려요</span></h2>
+      <p data-ko="kick x x x x 처럼 한 줄이 한 트랙이에요. 리듬과 음은 다음 마디 경계에서, 소리는 즉시 바뀌어 박을 놓치지 않아요. 숫자 위에서 Alt+↑↓를 누르면 연주 중에 값을 굴려요." data-en="One line is one track, like kick x x x x. Rhythm and notes change on the next bar, sound changes at once, so you never drop the beat. Press Alt+↑↓ on any number to roll it while it plays.">kick x x x x 처럼 한 줄이 한 트랙이에요. 리듬과 음은 다음 마디 경계에서, 소리는 즉시 바뀌어 박을 놓치지 않아요. 숫자 위에서 Alt+↑↓를 누르면 연주 중에 값을 굴려요.</p>
+      <pre class="snip"><span class="k">hat</span>  [. x]*4 <span class="c">|</span> gain <span class="n">.45</span> every <span class="n">8</span> ply <span class="n">2</span>
+<span class="k">bass</span> [. 0 0 0]*4 <span class="c">|</span> cut <span class="n">k1(300,2000)</span>
+<span class="k">pad</span>  <span class="n">0^7</span> <span class="c">|</span> <span class="i">drop2</span> verb <span class="n">.6</span></pre>
+    </article>
+    <article class="verb">
+      <h2>Perform <span class="ko" data-ko="· 패드도 코드" data-en="">· 패드도 코드</span></h2>
+      <p data-ko="빌드업, 비트 리피트, 게이트, 에코 아웃 같은 DJ 동작 12개가 키보드에 붙어 있어요. 패드를 눌러 보면 그 패드를 만든 한 줄이 보여요. 고치거나 새로 쓰면 그대로 패드가 돼요." data-en="Twelve DJ moves sit on your keyboard: build-up, beat repeat, gate, echo out and more. Press a pad to see the one line that defines it. Edit it or write your own and it becomes a pad.">빌드업, 비트 리피트, 게이트, 에코 아웃 같은 DJ 동작 12개가 키보드에 붙어 있어요. 패드를 눌러 보면 그 패드를 만든 한 줄이 보여요. 고치거나 새로 쓰면 그대로 패드가 돼요.</p>
+      <div class="minipads" id="minipads"></div>
+      <pre class="snip" id="padline"></pre>
+    </article>
+    <article class="verb">
+      <h2>Compose <span class="ko" data-ko="· 시드 하나로" data-en="">· 시드 하나로</span></h2>
+      <p data-ko="스타일과 시드를 고르면 코드 진행, 비트, 베이스, 멜로디까지 코드로 써 줘요. 주사위를 굴려 보세요. 아래 줄은 이 페이지가 지금 실제로 만든 결과예요." data-en="Pick a style and a seed and it writes the chords, beat, bass and melody as code. Roll the dice: the lines below are what this page just generated.">스타일과 시드를 고르면 코드 진행, 비트, 베이스, 멜로디까지 코드로 써 줘요. 주사위를 굴려 보세요. 아래 줄은 이 페이지가 지금 실제로 만든 결과예요.</p>
+      <div class="chips" id="styles"></div>
+      <div class="seed"><span>SEED</span><output id="seed">42</output><button class="btn small" id="dice" type="button" data-ko="주사위" data-en="Roll">주사위</button></div>
+      <pre class="snip gout" id="gout"></pre>
+    </article>
+    <article class="verb">
+      <h2>Conduct <span class="ko" data-ko="· 손으로" data-en="">· 손으로</span></h2>
+      /*CONDUCT*/
+      <dl class="hands">
+        <dt data-ko="왼손 높이" data-en="Left hand up">왼손 높이</dt><dd data-ko="노브 k1, 보통 필터" data-en="knob k1, usually a filter">노브 k1, 보통 필터</dd>
+        <dt data-ko="오른손 집기" data-en="Right pinch">오른손 집기</dt><dd data-ko="빌드업, 놓으면 드롭" data-en="build-up, drop on release">빌드업, 놓으면 드롭</dd>
+        <dt data-ko="왼손 집기" data-en="Left pinch">왼손 집기</dt><dd data-ko="비트 리피트" data-en="beat repeat">비트 리피트</dd>
+        <dt data-ko="주먹" data-en="Fist">주먹</dt><dd data-ko="브레이크다운" data-en="breakdown">브레이크다운</dd>
+        <dt data-ko="오른손 휙" data-en="Right swipe">오른손 휙</dt><dd data-ko="다음 씬" data-en="next scene">다음 씬</dd>
+      </dl>
+    </article>
+  </section>
+
+  <section class="facts" aria-label="Facts">
+    <div class="fact"><b>30</b><span data-ko="CC0 녹음 악기. 피아노는 세기별 3단 레이어" data-en="CC0 sampled instruments, piano in three velocity layers">CC0 녹음 악기. 피아노는 세기별 3단 레이어</span></div>
+    <div class="fact"><b>14</b><span data-ko="예제 곡. 트랜스부터 굿거리, 바흐까지" data-en="example songs, from trance to gutgeori to Bach">예제 곡. 트랜스부터 굿거리, 바흐까지</span></div>
+    <div class="fact"><b>8</b><span data-ko="자동 작곡 스타일" data-en="composing styles">자동 작곡 스타일</span></div>
+    <div class="fact"><b>16</b><span data-ko="연주 패드, 모두 코드로 수정" data-en="performance pads, all editable as code">연주 패드, 모두 코드로 수정</span></div>
+    <div class="fact"><b>4</b><span data-ko="루프 슬롯, 지연 자동 보정" data-en="loop slots with automatic latency calibration">루프 슬롯, 지연 자동 보정</span></div>
+    <div class="fact"><b>0</b><span data-ko="설치할 것. 브라우저 하나면 돼요" data-en="things to install. A browser is enough">설치할 것. 브라우저 하나면 돼요</span></div>
+  </section>
+
+  <section class="built" id="built">
+    <div>
+      <h2 data-ko="대화 하나로, 라이브로 만든 악기" data-en="An instrument built live, in one conversation">대화 하나로, 라이브로 만든 악기</h2>
+      <p data-ko="얼마 전 ArtCraft 프로젝트는 Claude Code 에이전트로 Photoshop, Premiere, Lightroom 같은 Adobe 앱을 Rust로 다시 만들었어요. PhotoCraft는 wgpu로 GPU에서 그림을 그려요. Tactus는 같은 질문을 오디오에 던져 봤어요. 한 순간도 박을 놓치면 안 되는 음악 소프트웨어도 에이전트와 대화하며 만들 수 있을까요?" data-en="ArtCraft recently rebuilt Adobe apps like Photoshop, Premiere and Lightroom in Rust with Claude Code agents, and PhotoCraft draws on the GPU through wgpu. Tactus asks the same question of audio: can music software, which can never miss a beat, be built by talking with an agent?">얼마 전 ArtCraft 프로젝트는 Claude Code 에이전트로 Photoshop, Premiere, Lightroom 같은 Adobe 앱을 Rust로 다시 만들었어요. PhotoCraft는 wgpu로 GPU에서 그림을 그려요. Tactus는 같은 질문을 오디오에 던져 봤어요. 한 순간도 박을 놓치면 안 되는 음악 소프트웨어도 에이전트와 대화하며 만들 수 있을까요?</p>
+      <p data-ko="Strudel의 불편함을 분석하는 데서 시작해 스물다섯 번 남짓한 요청으로 지금 모습이 됐어요. 사람은 원하는 것을 말하고 귀로 판단했고, Claude가 설계와 구현을 하고 헤드리스 브라우저에서 곡을 렌더링해 음량과 스펙트럼을 재며 A/B를 비교했어요. 결과물은 약 5,200줄의 JavaScript와 HTML, 그리고 오디오 스레드를 맡은 Rust 코드예요." data-en="It started from a critique of Strudel and reached this shape in about twenty-five requests. A person said what they wanted and judged by ear; Claude designed and wrote the code, rendered songs in a headless browser and measured loudness and spectrum for A/B comparisons. The result is about 5,200 lines of JavaScript and HTML, plus the Rust code that runs on the audio thread.">Strudel의 불편함을 분석하는 데서 시작해 스물다섯 번 남짓한 요청으로 지금 모습이 됐어요. 사람은 원하는 것을 말하고 귀로 판단했고, Claude가 설계와 구현을 하고 헤드리스 브라우저에서 곡을 렌더링해 음량과 스펙트럼을 재며 A/B를 비교했어요. 결과물은 약 5,200줄의 JavaScript와 HTML이에요.</p>
+      <p><a href="https://www.phoronix.com/news/Photocraft-Filmcraft-AI" target="_blank" rel="noopener" data-ko="ArtCraft 소개 기사 (Phoronix)" data-en="ArtCraft coverage (Phoronix)">ArtCraft 소개 기사 (Phoronix)</a></p>
+      <div class="next">
+        <p data-ko="Rust로 옮긴 부분: 현을 튕기는 Karplus-Strong 16음과 303 애시드 보이스를 Rust로 다시 써서, 11.6KB짜리 WebAssembly로 AudioWorklet 안에서 돌려요. 할당이 전혀 없는 no_std 코드라 오디오 스레드에서 가비지 컬렉션이 일어나지 않아요. 같은 부하에서 이전 JavaScript 보이스보다 약 1.6배 빠르고, 애시드 출력은 JS 버전과 피크의 0.2% 안에서 같아요." data-en="What moved to Rust: the 16-voice Karplus-Strong strings and the 303 acid voice, rewritten in Rust and running as an 11.6 KB WebAssembly module inside the AudioWorklet. It is no_std code that never allocates, so the audio thread never waits on garbage collection. On the same load it runs about 1.6× faster than the previous JavaScript voices, and the acid output matches the JS version within 0.2% of peak.">Rust로 옮긴 부분: 현을 튕기는 Karplus-Strong 16음과 303 애시드 보이스를 Rust로 다시 써서, 11.6KB짜리 WebAssembly로 AudioWorklet 안에서 돌려요. 할당이 전혀 없는 no_std 코드라 오디오 스레드에서 가비지 컬렉션이 일어나지 않아요. 같은 부하에서 이전 JavaScript 보이스보다 약 1.6배 빠르고, 애시드 출력은 JS 버전과 피크의 0.2% 안에서 같아요.</p>
+        <div class="bench" role="img" aria-label="JavaScript 30x realtime, Rust WebAssembly 47x realtime">
+          <div class="br"><span>JavaScript</span><i style="--w:63.8%"></i><b>30×</b></div>
+          <div class="br rust"><span>Rust → WASM</span><i style="--w:100%"></i><b>47×</b></div>
+        </div>
+        <small data-ko="실시간 대비 처리 속도. 현 16음과 16분음표 애시드 라인 30초를 128샘플 블록으로 렌더링 (Node 22, 3회 중 최고)." data-en="Speed relative to realtime: 16 strings and a 16th-note acid line, 30 s rendered in 128-sample blocks (Node 22, best of three).">실시간 대비 처리 속도. 현 16음과 16분음표 애시드 라인 30초를 128샘플 블록으로 렌더링 (Node 22, 3회 중 최고).</small>
+        /*DSPSRC*/
+      </div>
+    </div>
+    <ol class="steps">
+        <li><b data-ko="엔진" data-en="Engine">엔진</b><span data-ko="Strudel의 불편함을 분석하고, 한 줄이 한 트랙인 문법과 마디 단위 반영을 만들었어요" data-en="Took apart Strudel's pain points, then built a one-line-per-track language with bar-quantized edits">Strudel의 불편함을 분석하고, 한 줄이 한 트랙인 문법과 마디 단위 반영을 만들었어요</span></li>
+        <li><b data-ko="루프 스테이션" data-en="Loop station">루프 스테이션</b><span data-ko="녹음, 소리를 끄고 녹음하는 스피커 모드, 지연 자동 보정" data-en="Recording, a speaker mode that mutes while recording, automatic latency calibration">녹음, 소리를 끄고 녹음하는 스피커 모드, 지연 자동 보정</span></li>
+        <li><b data-ko="곡 구조" data-en="Song structure">곡 구조</b><span data-ko="씬과 곡 구성, maj7 같은 코드 이름과 스케일" data-en="Scenes and arrangements, chord names like maj7, scales">씬과 곡 구성, maj7 같은 코드 이름과 스케일</span></li>
+        <li><b data-ko="손 컨트롤" data-en="Hand control">손 컨트롤</b><span data-ko="카메라로 두 손을 따라가 노브와 제스처를 조작" data-en="The camera follows both hands to turn knobs and fire gestures">카메라로 두 손을 따라가 노브와 제스처를 조작</span></li>
+        <li><b data-ko="편집기" data-en="Editor">편집기</b><span data-ko="자동 완성, 곡 위치 추적, 피아노 롤과 시각화" data-en="Autocomplete, live song position, piano roll and visualizations">자동 완성, 곡 위치 추적, 피아노 롤과 시각화</span></li>
+        <li><b data-ko="소리" data-en="Sound">소리</b><span data-ko="AudioWorklet 신스, 홀 리버브, CC0 녹음 악기 30종" data-en="AudioWorklet synths, a hall reverb, 30 CC0 sampled instruments">AudioWorklet 신스, 홀 리버브, CC0 녹음 악기 30종</span></li>
+        <li><b data-ko="음악성" data-en="Musicianship">음악성</b><span data-ko="보이스 리딩, 필인과 전환, 드럼 버스, 폴리미터, 세기별 샘플" data-en="Voice leading, fills and transitions, a drum bus, polymeter, velocity layers">보이스 리딩, 필인과 전환, 드럼 버스, 폴리미터, 세기별 샘플</span></li>
+        <li><b data-ko="연주와 작곡" data-en="Perform and compose">연주와 작곡</b><span data-ko="패드를 코드로, 시드 생성기와 자동 작곡, 새 디자인" data-en="Pads as code, seeded generators and one-click composing, a new design">패드를 코드로, 시드 생성기와 자동 작곡, 새 디자인</span></li>
+        <li><b data-ko="이름과 이 페이지" data-en="A name and this page">이름과 이 페이지</b><span data-ko="Tactus라는 이름과 지금 보고 있는 소개 페이지" data-en="The name Tactus and the page you are reading">Tactus라는 이름과 지금 보고 있는 소개 페이지</span></li>
+        <li><b data-ko="Rust DSP" data-en="Rust DSP">Rust DSP</b><span data-ko="오디오 스레드의 보이스를 Rust로 옮겨 WebAssembly로 실행" data-en="The audio-thread voices rewritten in Rust and run as WebAssembly">오디오 스레드의 보이스를 Rust로 옮겨 WebAssembly로 실행</span></li>
+        <li><b data-ko="WebGPU" data-en="WebGPU">WebGPU</b><span data-ko="사인파 수천 개 악기, 모달 리버브, 파동 방정식 북, 신경망 색소폰, 셰이더 라이브 코딩" data-en="Instruments of thousands of sines, modal reverb, a wave-equation drum, a neural sax, live-coded shaders">사인파 수천 개 악기, 모달 리버브, 파동 방정식 북, 신경망 색소폰, 셰이더 라이브 코딩</span></li>
+        <li><b data-ko="믹스" data-en="Mix">믹스</b><span data-ko="버스와 센드, 트랙마다 EQ·코러스·페이저·디스토션·컴프레서, 마스터 체인까지 코드로" data-en="Buses and sends, EQ, chorus, phaser, distortion and compression on every track, and the master chain, all in code">버스와 센드, 트랙마다 EQ·코러스·페이저·디스토션·컴프레서, 마스터 체인까지 코드로</span></li>
+    </ol>
+  </section>
+
+  <section class="gpu" id="gpu">
+    <div class="gpu-head">
+      <h2 data-ko="WebGPU로 새로 할 수 있게 된 것" data-en="What WebGPU makes possible">WebGPU로 새로 할 수 있게 된 것</h2>
+      <p data-ko="오디오 스레드(AudioWorklet)에서는 WebGPU를 쓸 수 없어요. 그래서 Tactus는 GPU에게 음표를 통째로 미리 렌더링시키고, 스케줄러가 정확한 시간에 틀어요. 실시간 입력을 블록마다 처리하는 일엔 맞지 않지만, 미리 준비할 수 있는 무거운 소리와 그림에는 잘 맞아요. GPU가 없는 브라우저에서는 모두 CPU 소리와 기존 시각화로 대신해요." data-en="WebGPU is not available on the audio thread (AudioWorklet). So Tactus has the GPU render whole notes ahead of time and the scheduler plays them at the exact moment. That does not suit per-block processing of live input, but it fits heavy sounds and pictures that can be prepared a moment early. Browsers without a GPU fall back to CPU voices and the existing visuals.">오디오 스레드(AudioWorklet)에서는 WebGPU를 쓸 수 없어요. 그래서 Tactus는 GPU에게 음표를 통째로 미리 렌더링시키고, 스케줄러가 정확한 시간에 틀어요. 실시간 입력을 블록마다 처리하는 일엔 맞지 않지만, 미리 준비할 수 있는 무거운 소리와 그림에는 잘 맞아요. GPU가 없는 브라우저에서는 모두 CPU 소리와 기존 시각화로 대신해요.</p>
+      <div class="gbench">
+        <button class="btn small" id="gbench" type="button" data-ko="이 컴퓨터에서 재 보기" data-en="Measure on this computer">이 컴퓨터에서 재 보기</button>
+        <div class="gres" id="gres" data-ko="swarm 음표 하나(사인파 1,920개)를 GPU와 JavaScript로 각각 렌더링해 시간을 비교해요." data-en="Renders one swarm note (1,920 sines) on the GPU and in JavaScript and compares the time.">swarm 음표 하나(사인파 1,920개)를 GPU와 JavaScript로 각각 렌더링해 시간을 비교해요.</div>
+        <div class="bench" id="gbars" hidden>
+          <div class="br"><span>JavaScript</span><i id="gbJs"></i><b id="gbJsT"></b></div>
+          <div class="br rust"><span>WebGPU</span><i id="gbGpu"></i><b id="gbGpuT"></b></div>
+        </div>
+      </div>
+    </div>
+    <ul class="glist">
+      <li class="gi done"><span class="st" data-ko="구현함" data-en="Built">구현함</span><b data-ko="수천 개 사인파로 된 악기" data-en="Instruments made of thousands of sines">수천 개 사인파로 된 악기</b><p data-ko="swarm은 음표 하나에 사인파 1,920개(40개 목소리 × 48배음), choir는 포먼트를 입힌 1,056개, plate는 금속판의 고유 진동 수백~1,500개를 각자 다른 감쇠로 더해요. JavaScript로는 음표 하나에 수십 초가 걸리는 양이라 실시간으로는 불가능했어요." data-en="swarm sums 1,920 sines per note (40 voices × 48 harmonics), choir 1,056 shaped by vowel formants, plate several hundred to 1,500 metal-plate modes, each with its own decay. In JavaScript one such note takes tens of seconds, so this was out of reach in real time.">swarm은 음표 하나에 사인파 1,920개(40개 목소리 × 48배음), choir는 포먼트를 입힌 1,056개, plate는 금속판의 고유 진동 수백~1,500개를 각자 다른 감쇠로 더해요. JavaScript로는 음표 하나에 수십 초가 걸리는 양이라 실시간으로는 불가능했어요.</p></li>
+      <li class="gi done"><span class="st" data-ko="구현함" data-en="Built">구현함</span><b data-ko="스펙트럴 프리즈" data-en="Spectral freeze">스펙트럴 프리즈</b><p data-ko="P를 누르면 지금 믹스의 FFT에서 가장 센 2,048개 성분을 뽑아 무작위 위상의 사인파로 다시 합성해, 끝없이 이어지는 화음으로 붙잡아요. 드럼은 그대로 흘러가요." data-en="Hold P and the 2,048 strongest components of the mix's FFT are resynthesized as sines with random phases, held as an endless chord while the drums keep going.">P를 누르면 지금 믹스의 FFT에서 가장 센 2,048개 성분을 뽑아 무작위 위상의 사인파로 다시 합성해, 끝없이 이어지는 화음으로 붙잡아요. 드럼은 그대로 흘러가요.</p></li>
+      <li class="gi done"><span class="st" data-ko="구현함" data-en="Built">구현함</span><b data-ko="코드 뒤의 셰이더 배경" data-en="Shader backdrops behind the code">코드 뒤의 셰이더 배경</b><p data-ko="최근 5초의 스펙트럼을 GPU 텍스처에 쌓아 두고 매 프레임 그려요. terrain은 그 스펙트럼을 겹겹의 산 능선으로, contour는 등고선 지도로, dots는 LED 격자로 보여 주고, demo는 90년대 데모신처럼 터널과 사인 스크롤러를 띄워요. 트랙이 칠 때마다 그 코드 줄에서 물결이 퍼져요. 위 데모 화면 아래에서 바꿔 볼 수 있어요." data-en="The last five seconds of spectrum live in a GPU texture and are drawn every frame. terrain turns it into layered ridgelines, contour into a topographic map, dots into an LED grid, and demo raises a tunnel and a sine scroller in the spirit of the 90s demoscene. Each time a track plays, a ripple spreads from its code line. Switch between them under the demo screen above.">최근 5초의 스펙트럼을 GPU 텍스처에 쌓아 두고 매 프레임 그려요. terrain은 그 스펙트럼을 겹겹의 산 능선으로, contour는 등고선 지도로, dots는 LED 격자로 보여 주고, demo는 90년대 데모신처럼 터널과 사인 스크롤러를 띄워요. 트랙이 칠 때마다 그 코드 줄에서 물결이 퍼져요. 위 데모 화면 아래에서 바꿔 볼 수 있어요.</p></li>
+      <li class="gi done"><span class="st" data-ko="구현함" data-en="Built">구현함</span><b data-ko="모달 리버브" data-en="Modal reverb">모달 리버브</b><code class="gc">space cathedral</code><p data-ko="공간을 공진 모드의 합으로 만들어요. 낮은 쪽은 방 크기로 계산한 실제 모드라서 작은 방은 진짜 작은 방처럼 웅웅거리고, 위쪽은 이웃 모드가 겹칠 만큼 촘촘하게 놓아요. 성당은 모드 약 4만 9천 개를 7초 넘게 더해야 해서 JavaScript로는 15분쯤, GPU로는 순식간이에요." data-en="A space built as a sum of its resonant modes. The low ones are the true modes of the room's size, so a small room booms like a real one; higher up they sit just densely enough to overlap. The cathedral adds about 49,000 modes over more than seven seconds: about fifteen minutes in JavaScript, a moment on a GPU.">공간을 공진 모드의 합으로 만들어요. 낮은 쪽은 방 크기로 계산한 실제 모드라서 작은 방은 진짜 작은 방처럼 웅웅거리고, 위쪽은 이웃 모드가 겹칠 만큼 촘촘하게 놓아요. 성당은 모드 약 4만 9천 개를 7초 넘게 더해야 해서 JavaScript로는 15분쯤, GPU로는 순식간이에요.</p></li>
+      <li class="gi done"><span class="st" data-ko="구현함" data-en="Built">구현함</span><b data-ko="파동 방정식 북" data-en="A wave-equation drum">파동 방정식 북</b><code class="gc">timp 0 . 4 . | membrane</code><p data-ko="북 가죽을 96×96 격자에서 파동 방정식으로 한 샘플씩 풀어요. GPU 워크그룹 하나가 북 하나를 맡아 네 가지 세기를 동시에 치고, 세게 칠수록 가죽이 순간 팽팽해져 음이 살짝 높게 시작해요. 같은 계산을 JavaScript로 하면 음 하나에 10초 넘게 걸려요." data-en="A drum head solved as the wave equation on a 96×96 grid, one step per sample. Each GPU workgroup owns one head and the four strengths are struck at once; a harder hit tightens the skin for a moment, so the pitch starts a little high. The same work in JavaScript takes over ten seconds per note.">북 가죽을 96×96 격자에서 파동 방정식으로 한 샘플씩 풀어요. GPU 워크그룹 하나가 북 하나를 맡아 네 가지 세기를 동시에 치고, 세게 칠수록 가죽이 순간 팽팽해져 음이 살짝 높게 시작해요. 같은 계산을 JavaScript로 하면 음 하나에 10초 넘게 걸려요.</p></li>
+      <li class="gi done"><span class="st" data-ko="구현함" data-en="Built">구현함</span><b data-ko="신경망 색소폰" data-en="A neural sax">신경망 색소폰</b><code class="gc">sax ... | nsax</code><p data-ko="키트의 색소폰 녹음 20개로 작은 신경망을 직접 학습시켰어요. 주파수·음높이·세기·시간을 넣으면 그 성분의 크기를 알려 줘서, 녹음에 없는 음도 자연스럽게 만들어요. 학습에서 뺀 음으로 재 보면 배음 오차가 9.5 dB로, 가장 가까운 녹음을 옮겨 쓰는 방식(13~20 dB)보다 정확해요. 추론과 합성 모두 GPU에서 돌아요." data-en="We trained a small network on the kit's 20 sax recordings. Given a frequency, pitch, strength and moment it returns that component's level, so it makes notes that were never recorded. On notes held out of training its harmonics are off by 9.5 dB, against 13–20 dB for re-pitching the nearest recording. Both the network and the synthesis run on the GPU.">키트의 색소폰 녹음 20개로 작은 신경망을 직접 학습시켰어요. 주파수·음높이·세기·시간을 넣으면 그 성분의 크기를 알려 줘서, 녹음에 없는 음도 자연스럽게 만들어요. 학습에서 뺀 음으로 재 보면 배음 오차가 9.5 dB로, 가장 가까운 녹음을 옮겨 쓰는 방식(13~20 dB)보다 정확해요. 추론과 합성 모두 GPU에서 돌아요.</p></li>
+      <li class="gi done"><span class="st" data-ko="구현함" data-en="Built">구현함</span><b data-ko="셰이더 라이브 코딩" data-en="Live-coded shaders">셰이더 라이브 코딩</b><code class="gc">shader glow sin(length(q)*20.-t*4.)*bass</code><p data-ko="viz 줄이 마디에 맞춰 배경을 바꾸고, shader 줄에 쓴 WGSL 식이 그대로 배경이 돼요. bass·kick·스펙트럼·트랙 타격을 변수로 쓸 수 있고, 식을 고치면 바로 다시 컴파일해 오류는 그 줄에 표시해요." data-en="A viz line changes the backdrop on the bar, and a WGSL expression on a shader line becomes the backdrop itself. bass, kick, the spectrum and track hits are variables; edit the expression and it recompiles at once, with errors shown on that line.">viz 줄이 마디에 맞춰 배경을 바꾸고, shader 줄에 쓴 WGSL 식이 그대로 배경이 돼요. bass·kick·스펙트럼·트랙 타격을 변수로 쓸 수 있고, 식을 고치면 바로 다시 컴파일해 오류는 그 줄에 표시해요.</p></li>
+      <li class="gi done"><span class="st" data-ko="구현함" data-en="Built">구현함</span><b data-ko="곡 전체 소노그램" data-en="A whole-song sonogram">곡 전체 소노그램</b><code class="gc">viz sono</code><p data-ko="곡이 흐르는 동안 마디 위치마다 스펙트럼을 GPU 텍스처에 쌓아, 곡 전체를 한 장의 지도로 보여 줘요. 파트 경계와 지금 위치가 함께 그려져서 어디가 비고 어디가 꽉 찼는지 한눈에 보여요." data-en="As the song plays, its spectrum is stacked into a GPU texture at each bar position, so the whole song becomes one map, with the part boundaries and where you are. You can see at a glance where it thins out and where it fills up.">곡이 흐르는 동안 마디 위치마다 스펙트럼을 GPU 텍스처에 쌓아, 곡 전체를 한 장의 지도로 보여 줘요. 파트 경계와 지금 위치가 함께 그려져서 어디가 비고 어디가 꽉 찼는지 한눈에 보여요.</p></li>
+      <li class="gi next"><span class="st" data-ko="다음 후보" data-en="Next">다음 후보</span><b data-ko="불러온 루프에서 드럼 분리" data-en="Drum separation for loaded loops">불러온 루프에서 드럼 분리</b><p data-ko="Demucs 같은 분리 모델은 수십 MB라서 페이지에 넣기엔 커요. 처음 쓸 때 내려받아 캐시하는 방식으로 WebGPU 추론을 붙일 계획이에요." data-en="Separation models like Demucs weigh tens of megabytes, too much to ship inside the page. The plan is to download one on first use, cache it, and run it on WebGPU.">Demucs 같은 분리 모델은 수십 MB라서 페이지에 넣기엔 커요. 처음 쓸 때 내려받아 캐시하는 방식으로 WebGPU 추론을 붙일 계획이에요.</p></li>
+    </ul>
+    <p class="gsrc"><span data-ko="참고" data-en="References">참고</span>: <a href="https://www.frontiersin.org/journals/signal-processing/articles/10.3389/frsip.2025.1522604/full" target="_blank" rel="noopener">CPU, GPU, FPGA for modal reverberation (Frontiers, 2025)</a> · <a href="https://www.synthtopia.com/?p=140639" target="_blank" rel="noopener">Audio Modeling × GPU Audio</a> · <a href="https://www.graphics.rwth-aachen.de/publication/0295/" target="_blank" rel="noopener">Efficient Modal Sound Synthesis on GPUs (RWTH, 2014)</a> · <a href="https://arxiv.org/abs/2001.04643" target="_blank" rel="noopener">DDSP (Engel et al., 2020)</a> · <a href="https://github.com/facebookresearch/demucs" target="_blank" rel="noopener">Demucs</a></p>
+  </section>
+
+  <section class="name">
+    <h2>tac·tus <em>/ˈtæk.təs/</em></h2>
+    <div>
+      <p data-ko="르네상스 음악에서 tactus는 지휘자가 손을 내렸다 올리며 짚던 박을 부르던 말이에요. 악보의 모든 음표가 그 손짓에 맞춰 흘렀어요." data-en="In Renaissance music the tactus was the beat a conductor marked by lowering and raising a hand. Every note on the page moved to that gesture.">르네상스 음악에서 tactus는 지휘자가 손을 내렸다 올리며 짚던 박을 부르던 말이에요. 악보의 모든 음표가 그 손짓에 맞춰 흘렀어요.</p>
+      <p data-ko="이 악기도 같은 생각에서 시작했어요. 코드를 고치는 손, 패드를 누르는 손, 카메라 앞에서 움직이는 손이 모두 박을 짚어요. 기계가 박을 지키고, 사람은 느낌을 바꿔요." data-en="This instrument starts from the same idea. The hand that edits code, the hand on the pads and the hand in front of the camera all mark the beat. The machine keeps time and you change the feel.">이 악기도 같은 생각에서 시작했어요. 코드를 고치는 손, 패드를 누르는 손, 카메라 앞에서 움직이는 손이 모두 박을 짚어요. 기계가 박을 지키고, 사람은 느낌을 바꿔요.</p>
+    </div>
+  </section>
+
+  <footer class="end">
+    <h2><span data-ko="첫 마디를 바꿔 보세요" data-en="Change the first bar">첫 마디를 바꿔 보세요</span><small data-ko="Chrome·Edge·Safari 최신 버전 · 헤드폰을 권해요" data-en="Latest Chrome, Edge or Safari · headphones recommended">Chrome·Edge·Safari 최신 버전 · 헤드폰을 권해요</small></h2>
+    <a class="btn key ext" href="/*APP_URL*/" target="_blank" rel="noopener" data-ko="Tactus 열기" data-en="Open Tactus">Tactus 열기</a>
+    <p class="oss"><span data-ko="오픈 소스예요. 코드, 소리, 학습 스크립트까지 모두 공개돼 있고 PR을 환영해요." data-en="Open source: the code, the sounds and the training scripts are all public, and pull requests are welcome.">오픈 소스예요. 코드, 소리, 학습 스크립트까지 모두 공개돼 있고 PR을 환영해요.</span> <a href="/*REPO*/" target="_blank" rel="noopener">github.com/nakosung/tactus</a> · MIT / Apache-2.0</p>
+  </footer>
+</div>
+
+<script>
+/*I18N*/
+/*ENGINE*/
+/*GEN*/
+const DEMOS = /*DEMOS*/;
+// the instrument's GPU module runs here too: a few stand-ins for the engine globals it reads
+const S = { dirty: false, playing: false, ctx: null }, A = {};
+const mtof = m => 440 * Math.pow(2, (m - 69) / 12);
+const BASE = { detune: 18, bright: 0.6, width: 0.7, dec: 1, atk: 0.005, rel: 0.15 };
+const INST = { swarm: { lvl: 0.55, atk: 0.25, dec: 1, rel: 1.2, width: 0.85, detune: 22, bright: 0.55 } };
+const TRACK_COLORS = ['#ff9a4d', '#a48bff', '#5fd6a4', '#6fb6ff', '#ff6b8e', '#f2c443', '#e58cff', '#9be36a', '#62d9e8', '#ffb6a0'];
+/*GPUJS*/
+</script>
+<script>
+// ===================== landing: demo player, live code, letters =====================
+const $ = s => document.querySelector(s);
+const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+let L = (navigator.language || 'ko').toLowerCase().startsWith('ko') ? 'ko' : 'en';
+function applyLang() {
+  document.documentElement.lang = L;
+  document.querySelectorAll('[data-ko]').forEach(el => { el.textContent = el.dataset[L]; });
+  $('#lang').textContent = L === 'ko' ? 'EN' : '한국어';
+  buildTracks(); rollGen(false);
+}
+$('#lang').addEventListener('click', () => { L = L === 'ko' ? 'en' : 'ko'; applyLang(); });
+
+// ---- demos: compiled with the real engine, so the code lights up exactly where the notes are ----
+const GLOB = new Set(['bpm', 'key', 'scale', 'swing', 'prog', 'scene', 'song', 'master', 'seed', 'fx']);
+function hlPat(text, base, line) {
+  let toks; try { toks = tokenize(text, base); } catch (e) { return esc(text); }
+  let out = '', pos = base, tilde = false;
+  for (const tk of toks) {
+    out += esc(text.slice(pos - base, tk.c0 - base));
+    const s = esc(text.slice(tk.c0 - base, tk.c1 - base));
+    const gen = tilde && tk.t === 'atom' && tk.c0 === pos;
+    tilde = tk.t === 'rest' && text[tk.c0 - base] === '~';
+    if (tk.t === 'atom') out += `<span class="at${gen ? ' gen' : ''}" id="a${line}_${tk.c0}">${s}</span>`;
+    else if (tilde) out += `<span class="gen">~</span>`;
+    else if (tk.t === 'rest') out += `<span class="rs">${s}</span>`;
+    else if ('[]<>'.includes(tk.t)) out += `<span class="br">${s}</span>`;
+    else out += `<span class="op">${s}</span>`;
+    pos = tk.c1;
+  }
+  return out + esc(text.slice(pos - base));
+}
+const hlPar = s => esc(s).replace(/(-?(?:\d+\.?\d*|\.\d+))/g, '<span class="nm">$1</span>');
+function hlCode(code) {
+  return code.split('\n').map((ln, i) => {
+    const ci = ln.indexOf('//'), c = ci >= 0 ? ln.slice(0, ci) : ln, cm = ci >= 0 ? `<span class="cm">${esc(ln.slice(ci))}</span>` : '';
+    const m = HEAD_RE.exec(c);
+    if (!m) return `<span class="ln" data-l="${i}">${esc(c)}${cm}</span>`;
+    const name = m[2], base = m[0].length, rest = c.slice(base);
+    let o = esc(m[1]);
+    if (GLOB.has(name)) o += `<span class="gl">${esc(m[0].slice(m[1].length))}</span>` + (name === 'prog' ? hlPat(rest, base, i) : name === 'song' || name === 'scene' ? esc(rest) : hlPar(rest));
+    else {
+      const bar = rest.indexOf('|');
+      o += `<span class="nmn">${esc(m[0].slice(m[1].length))}</span>` + (bar < 0 ? hlPat(rest, base, i) : hlPat(rest.slice(0, bar), base, i) + `<span class="pr">|${hlPar(rest.slice(bar + 1))}</span>`);
+    }
+    return `<span class="ln" data-l="${i}">${o}${cm}</span>`;
+  }).join('\n');
+}
+const DEMO_LIST = [
+  { id: 'trance', ko: ['트랜스', '직접 쓴 곡 · 빌드업에서 드롭으로'], en: ['Trance', 'hand-written · build-up into the drop'] },
+  { id: 'lofi42', ko: ['로파이', 'seed 42로 자동 작곡'], en: ['Lo-fi', 'composed from seed 42'] },
+  { id: 'boombap', ko: ['붐뱁', '직접 쓴 곡 · 피아노 찹과 묵직한 킥'], en: ['Boom bap', 'hand-written · chopped piano, heavy kick'] },
+];
+for (const d of DEMO_LIST) {
+  const m = DEMOS[d.id], r = compile(m.code);
+  d.meta = m; d.r = r; d.html = hlCode(m.code);
+  d.order = r.order.slice(0, 6);
+  d.audio = new Audio(); d.audio.preload = 'auto'; d.audio.src = 'data:audio/mpeg;base64,' + m.mp3;
+  d.audio.addEventListener('ended', () => { if (cur === d && playing) select(DEMO_LIST[(DEMO_LIST.indexOf(d) + 1) % DEMO_LIST.length], true); });
+}
+let cur = null, playing = false, ctx = null, an = null, lastPos = null;
+const els = new Map();
+function buildTracks() {
+  $('#tracks').innerHTML = DEMO_LIST.map(d => `<button class="trk" type="button" data-id="${d.id}" aria-pressed="${d === cur}"><b>${d[L][0]}</b><small>${d[L][1]}</small></button>`).join('');
+}
+$('#tracks').addEventListener('click', e => { const b = e.target.closest('.trk'); if (b) select(DEMO_LIST.find(d => d.id === b.dataset.id), true); });
+function select(d, autoplay) {
+  if (cur && cur !== d) { cur.audio.pause(); cur.audio.currentTime = 0; }
+  cur = d; lastPos = null; els.clear();
+  $('#code').innerHTML = d.html; $('#code').scrollTop = 0;
+  $('#fname').textContent = d.id === 'lofi42' ? 'lofi · seed 42' : d.id;
+  $('#bpm').textContent = Math.round(d.meta.cps * 240);
+  document.querySelectorAll('.word .tn').forEach((el, i) => { el.textContent = d.order[i] || ''; });
+  buildTracks(); markScene(d.meta.pos0);
+  if (autoplay) start();
+}
+function ensureAudio() {
+  if (ctx) return;
+  ctx = new (window.AudioContext || window.webkitAudioContext)();
+  an = ctx.createAnalyser(); an.fftSize = 1024; an.smoothingTimeConstant = 0.78; an.connect(ctx.destination);
+  for (const d of DEMO_LIST) { try { ctx.createMediaElementSource(d.audio).connect(an); } catch (e) { } }
+}
+async function start() {
+  ensureAudio(); if (ctx.state !== 'running') await ctx.resume();
+  try { await cur.audio.play(); playing = true; } catch (e) { playing = false; }
+  syncBtn();
+  if (playing && !SCENE.ready && !SCENE.loading && !SCENE.failed) sceneInit($('#scene')).then(() => { $('#scene').hidden = !SCENE.ready || scnMode === 'off'; $('#scnbar').hidden = !SCENE.ready; });
+}
+function stopPlay() { cur.audio.pause(); playing = false; syncBtn(); }
+function syncBtn() {
+  const b = $('#play'); b.classList.toggle('on', playing);
+  b.querySelector('span').textContent = playing ? (L === 'ko' ? '멈추기' : 'Pause') : (L === 'ko' ? '데모 듣기' : 'Play the demo');
+  b.querySelector('span').dataset.ko = playing ? '멈추기' : '데모 듣기'; b.querySelector('span').dataset.en = playing ? 'Pause' : 'Play the demo';
+  $('#dot').classList.toggle('on', playing);
+}
+$('#play').addEventListener('click', () => (playing ? stopPlay() : start()));
+// 'auto' walks through the scenes every 8 bars with a short fade; picking one stops it
+const SCN_CYCLE = ['terrain', 'contour', 'dots', 'demo'];
+let scnMode = 'terrain', scnAuto = true, scnFading = false;
+function scnShow(m) {
+  scnMode = m;
+  const cv = $('#scene'); cv.hidden = m === 'off' || !SCENE.ready; cv.style.opacity = m === 'demo' ? 0.55 : 1;
+  $('#scnbar').querySelectorAll('button').forEach(x => x.classList.toggle('cur', scnAuto && x.dataset.v === m));
+}
+function scnCycle(pos) {
+  if (!scnAuto || scnFading || !SCENE.ready) return;
+  const m = SCN_CYCLE[Math.floor(pos / 8) % SCN_CYCLE.length];
+  if (m === scnMode) return;
+  scnFading = true; $('#scene').style.opacity = 0;
+  setTimeout(() => { scnFading = false; if (scnAuto) scnShow(m); }, 600);
+}
+$('#scnbar').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  scnAuto = b.dataset.v === 'auto';
+  $('#scnbar').querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', x === b));
+  scnShow(scnAuto ? scnMode : b.dataset.v);
+});
+
+// which scene is playing at a song position
+function sceneAtPos(r, p) {
+  if (!r.song || !r.scenes.size) return null;
+  const pos = ((p % r.song.total) + r.song.total) % r.song.total;
+  for (const part of r.song.parts) if (pos < part.start + part.bars) return r.scenes.get(part.name);
+  return null;
+}
+const activeIn = (sc, n) => !sc || (!sc.exc.has(n) && (sc.all || sc.inc.has(n)));
+let shownScene = null;
+function markScene(p) {
+  const sc = sceneAtPos(cur.r, p);
+  if (sc === shownScene) return; shownScene = sc;
+  for (const [n, def] of cur.r.tracks) { const el = $('#code').querySelector(`.ln[data-l="${def.line}"]`); if (el) el.classList.toggle('off', !activeIn(sc, n)); }
+}
+const energy = new Float32Array(6), letters = [...document.querySelectorAll('.word .L')];
+function flash(id) {
+  let el = els.get(id); if (el === undefined) { el = document.getElementById(id); els.set(id, el); }
+  if (el) { el.classList.remove('hit'); void el.offsetWidth; el.classList.add('hit'); }
+}
+const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const spec = $('#spec'), sg = spec.getContext('2d'); let fbuf = null;
+function frame() {
+  requestAnimationFrame(frame);
+  if (cur && playing) {
+    const p = cur.meta.pos0 + cur.audio.currentTime * cur.meta.cps;
+    if (lastPos !== null && p > lastPos && p - lastPos < 0.5) {
+      const sc = sceneAtPos(cur.r, p);
+      for (const [n, def] of cur.r.tracks) {
+        if (!activeIn(sc, n)) continue;
+        const evs = eventsIn(def, lastPos, p);
+        if (!evs.length) continue;
+        for (const ev of evs) if (ev.loc) flash(`a${def.line}_${ev.loc.c0}`);
+        if (SCENE.ready) sceneHit(def.line);
+        const k = cur.order.indexOf(n); if (k >= 0) energy[k] = 1;
+      }
+      markScene(p);
+    }
+    lastPos = p;
+    $('#bar').textContent = `${Math.floor(p) + 1}.${Math.floor((p % 1) * 4) + 1}`;
+  }
+  // WebGPU backdrop: each track's code line is a point the scene reacts to
+  if (SCENE.failed && !$('#scene').hidden) { $('#scene').hidden = true; $('#scnbar').hidden = true; }
+  if (SCENE.ready && cur && scnMode !== 'off') {
+    S.playing = playing; S.ctx = ctx; A.an = an;
+    const box = $('#scene').getBoundingClientRect(), code = $('#code'), em = [];
+    if (box.height) for (const [n, def] of cur.r.tracks) {
+      const el = code.querySelector(`.ln[data-l="${def.line}"]`); if (!el) continue;
+      const r = el.getBoundingClientRect();
+      em.push({ line: def.line, y: (r.top + r.height / 2 - box.top) / box.height, x: Math.max(0, (r.left + (n.length + 1) * 7.5 - box.left) / box.width), col: cur.r.order.indexOf(n) % 10 });
+    }
+    const pos = cur.meta.pos0 + (cur.audio.currentTime || 0) * cur.meta.cps;
+    scnCycle(pos); sceneFrame(scnMode, em, pos);
+  }
+  // letters breathe with their tracks
+  letters.forEach((el, i) => {
+    const e = energy[i]; energy[i] *= 0.88;
+    if (!playing && e < 0.01) { if (el._on) { el._on = false; el.firstChild.style.fontVariationSettings = ''; el.classList.remove('hot'); } return; }
+    el._on = true; el.classList.toggle('hot', e > 0.3);
+    if (!reduce) el.firstChild.style.fontVariationSettings = `"wght" ${Math.round(480 + 220 * e)}, "wdth" ${Math.round(76 + 24 * e)}`;
+  });
+  // spectrum
+  const dpr = devicePixelRatio || 1, w = spec.clientWidth * dpr, h = spec.clientHeight * dpr;
+  if (spec.width !== w || spec.height !== h) { spec.width = w; spec.height = h; }
+  sg.clearRect(0, 0, w, h);
+  const cs = getComputedStyle(document.documentElement), c1 = cs.getPropertyValue('--k-orange').trim(), c2 = cs.getPropertyValue('--scr-line').trim();
+  const bars = 64, bw = w / bars;
+  if (an && playing) { fbuf = fbuf || new Uint8Array(an.frequencyBinCount); an.getByteFrequencyData(fbuf); }
+  for (let i = 0; i < bars; i++) {
+    let v = 0;
+    if (fbuf && playing) { const a = Math.floor(Math.pow(i / bars, 1.8) * 300) + 1, b = Math.floor(Math.pow((i + 1) / bars, 1.8) * 300) + 2; for (let k = a; k < b; k++) v = Math.max(v, fbuf[k]); v /= 255; }
+    const bh = Math.max(2 * dpr, v * h * 0.9);
+    sg.fillStyle = v > 0.7 ? c1 : c2; sg.globalAlpha = v > 0.7 ? 0.9 : 1;
+    sg.fillRect(i * bw + dpr, h - bh, bw - 2 * dpr, bh);
+  }
+  sg.globalAlpha = 1;
+}
+// keep each letter in a fixed cell so the word never shifts while letters swell
+function lockLetters() {
+  letters.forEach(el => { el.style.width = ''; });
+  const ws = letters.map(el => { const c = el.firstChild; const prev = c.style.fontVariationSettings; c.style.animation = 'none'; c.style.fontVariationSettings = '"wght" 700, "wdth" 100'; const w = c.getBoundingClientRect().width; c.style.fontVariationSettings = prev; c.style.animation = ''; return w; });
+  letters.forEach((el, i) => { el.style.width = ws[i] + 'px'; });
+}
+
+// ---- perform: the real built-in pads ----
+const CAT = { lp: 'tone', hp: 'tone', res: 'tone', kill: 'tone', crush: 'tone', repeat: 'rhythm', gate: 'rhythm', riser: 'struct', mute: 'struct', only: 'struct', fill: 'struct', scene: 'struct', throw: 'space', echo: 'space', verb: 'space', set: 'mod', pitch: 'mod' };
+$('#minipads').innerHTML = DEFAULT_PADS.map(p => `<button class="mp" type="button" data-cat="${CAT[p.acts[0].op] || 'tone'}" data-n="${p.name}" aria-pressed="false"><span>${p.name}</span><kbd>${esc(p.key)}</kbd></button>`).join('');
+function showPad(n) {
+  const src = DEFAULT_PAD_SRC.find(l => l.split(/\s+/)[1] === n) || '';
+  const m = /^fx\s+(\w+)\s+(\S)\s*\|\s*(.*)$/.exec(src);
+  $('#padline').innerHTML = m ? `<span class="i">fx</span> <span class="k">${m[1]}</span> <span class="n">${esc(m[2])}</span> <span class="c">|</span> ${esc(m[3]).replace(/(-?\.?\d[\d.>]*)/g, '<span class="n">$1</span>')}` : '';
+  document.querySelectorAll('.mp').forEach(b => b.setAttribute('aria-pressed', b.dataset.n === n));
+}
+$('#minipads').addEventListener('click', e => { const b = e.target.closest('.mp'); if (b) showPad(b.dataset.n); });
+showPad('gate');
+
+// ---- compose: the real generator, run right here ----
+const SN = { house: 'House', techno: 'Techno', dnb: 'DnB', lofi: 'Lo-fi', trance: 'Trance', synthwave: 'Synthwave', ambient: 'Ambient', jazz: 'Jazz' };
+let gStyle = 'lofi', gSeed = 42;
+$('#styles').innerHTML = COMPOSE_LIST.map(s => `<button class="chip" type="button" data-s="${s}" aria-pressed="${s === gStyle}">${SN[s]}</button>`).join('');
+$('#styles').addEventListener('click', e => { const b = e.target.closest('.chip'); if (!b) return; gStyle = b.dataset.s; document.querySelectorAll('#styles .chip').forEach(c => c.setAttribute('aria-pressed', c === b)); rollGen(false); });
+function rollGen(anim) {
+  const txt = composeSong(gStyle, gSeed, L).split('\n').filter(l => l && !l.startsWith('//'));
+  const lines = txt.filter(l => /^(prog|[a-z]+\s+~)/.test(l)).map(l => {
+    if (l.startsWith('prog')) return `<span class="i">prog</span> ${esc(genProg(gSeed, +(l.split(/\s+/)[2] || 4)).join(' '))}`;
+    const name = l.split(/\s+/)[0], r = compile(`seed ${gSeed}\n` + l);
+    const def = r.tracks.get(name);
+    const g = def && def.gen ? genText(def.gen, 0) : '';
+    const first = g.startsWith('<') ? g.slice(2, g.indexOf(']')) : g;
+    return `<span class="k">${name.padEnd(6)}</span><span class="g">~${def ? def.gen.kind : ''}</span> <span class="c">→</span> ${esc(first)}`;
+  });
+  $('#gout').innerHTML = lines.join('\n');
+  $('#seed').textContent = gSeed;
+  if (anim && !reduce) { $('#gout').animate([{ opacity: 0.25, transform: 'translateY(3px)' }, { opacity: 1, transform: 'none' }], { duration: 260, easing: 'ease-out' }); }
+}
+$('#dice').addEventListener('click', () => {
+  let n = 0; const target = 1 + Math.floor(Math.random() * 9999);
+  if (reduce) { gSeed = target; rollGen(true); return; }
+  const iv = setInterval(() => { gSeed = 1 + Math.floor(Math.random() * 9999); $('#seed').textContent = gSeed; if (++n > 9) { clearInterval(iv); gSeed = target; rollGen(true); } }, 45);
+});
+
+// ---- benchmark: one swarm note on this computer's GPU and in JavaScript ----
+$('#gbench').addEventListener('click', async () => {
+  const b = $('#gbench'), out = $('#gres'); b.disabled = true;
+  out.textContent = L === 'ko' ? '재는 중… (JavaScript는 일부만 재서 환산해요)' : 'Measuring… (JavaScript is timed on a slice and scaled up)';
+  await new Promise(r => setTimeout(r, 30));
+  try {
+    const r = await gpuBench(), f = x => Math.round(x).toLocaleString();
+    const bars = $('#gbars'); bars.hidden = false;
+    $('#gbJsT').textContent = f(r.cpuMs) + ' ms'; $('#gbJs').style.setProperty('--w', '100%');
+    if (r.gpuMs != null) {
+      $('#gbGpuT').textContent = f(r.gpuMs) + ' ms'; $('#gbGpu').style.setProperty('--w', Math.max(0.6, 100 * r.gpuMs / r.cpuMs).toFixed(2) + '%');
+      out.innerHTML = L === 'ko' ? `${esc(r.gpu)}: GPU가 <b>${(r.cpuMs / r.gpuMs).toFixed(0)}배</b> 빨라요. ${r.seconds.toFixed(1)}초짜리 음표 하나, 사인파 ${r.partials.toLocaleString()}개.`
+        : `${esc(r.gpu)}: the GPU is <b>${(r.cpuMs / r.gpuMs).toFixed(0)}× faster</b>. One ${r.seconds.toFixed(1)} s note of ${r.partials.toLocaleString()} sines.`;
+    } else {
+      $('#gbGpuT').textContent = '—'; $('#gbGpu').style.setProperty('--w', '0%');
+      out.innerHTML = L === 'ko' ? `이 브라우저에서는 WebGPU를 쓸 수 없어요 (${esc(r.err || '')}). JavaScript로는 음표 하나에 <b>${f(r.cpuMs)} ms</b>가 걸려요.` : `WebGPU is not available in this browser (${esc(r.err || '')}). In JavaScript one note takes <b>${f(r.cpuMs)} ms</b>.`;
+    }
+  } catch (e) { out.textContent = String(e.message || e); }
+  b.disabled = false;
+});
+
+applyLang();
+select(DEMO_LIST[0], false);
+(document.fonts ? document.fonts.ready : Promise.resolve()).then(lockLetters);
+addEventListener('resize', lockLetters);
+requestAnimationFrame(frame);
+</script>

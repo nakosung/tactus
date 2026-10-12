@@ -1,0 +1,527 @@
+<meta charset="utf-8">
+<title>Tactus</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' rx='15' fill='%2317191e'/><path d='M11 13h34v10H33v28H23V23H11z' fill='%23eceef2'/><circle cx='45' cy='44' r='7.5' fill='%23ff7a3c'/></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wdth,wght@75..100,400..700&family=Spline+Sans+Mono:wght@400;500;700&family=IBM+Plex+Sans+KR:wght@400;500;600&display=swap">
+<style>
+/* Layout: a groovebox. A machined body frames one dark screen (the code) on the left and a control surface on the right:
+   pads, macros, loops, compose and the guide sit behind tabs so the surface stays one screen tall. Keycap colours say what a pad does. */
+:root {
+  --body: #17191e; --panel: #1f2228; --raised: #2a2e36; --line: #353a44; --fg: #eceef2; --dim: #9aa1ae; --faint: #646b78;
+  --k-orange: #ff7a3c; --k-blue: #4f8cff; --k-green: #34c58b; --k-yellow: #f2c443; --k-pink: #ff5d8f; --k-violet: #a48bff;
+  --on-key: #14161a; --shadow: 0 1px 0 rgba(255,255,255,.04) inset, 0 1px 2px rgba(0,0,0,.4);
+  /* the screen stays dark in both themes, like a display */
+  --scr: #0d0f12; --scr-2: #13161a; --scr-line: #242830; --scr-fg: #e6e8ec; --scr-dim: #8a91a0; --scr-faint: #4f5562;
+  --c-name: #b8a6ff; --c-glob: #6fb6ff; --c-num: #5fd6a4; --c-op: #ffb054; --c-inst: #7cc8ff; --c-err: #ff6b8e; --c-gen: #f2c443;
+  --amber: var(--k-orange); --lilac: var(--k-violet); --mint: var(--k-green); --rose: var(--k-pink); --sky: var(--k-blue);
+  --f-code: "Spline Sans Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  --f-ui: "Instrument Sans", "IBM Plex Sans KR", "Apple SD Gothic Neo", "Noto Sans KR", system-ui, sans-serif;
+  --code-size: 13.5px; --code-lh: 22px;
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) {
+  --body: #dfe1e5; --panel: #eceef1; --raised: #f9fafb; --line: #c5c9d1; --fg: #1a1c21; --dim: #545b67; --faint: #868d99;
+  --k-orange: #f0602a; --k-blue: #2d6ce6; --k-green: #129d68; --k-yellow: #d9a514; --k-pink: #e23d70; --k-violet: #7356ec;
+  --on-key: #ffffff; --shadow: 0 1px 0 rgba(255,255,255,.9) inset, 0 1px 2px rgba(20,24,32,.14);
+  color-scheme: light;
+} }
+:root[data-theme="light"] {
+  --body: #dfe1e5; --panel: #eceef1; --raised: #f9fafb; --line: #c5c9d1; --fg: #1a1c21; --dim: #545b67; --faint: #868d99;
+  --k-orange: #f0602a; --k-blue: #2d6ce6; --k-green: #129d68; --k-yellow: #d9a514; --k-pink: #e23d70; --k-violet: #7356ec;
+  --on-key: #ffffff; --shadow: 0 1px 0 rgba(255,255,255,.9) inset, 0 1px 2px rgba(20,24,32,.14);
+  color-scheme: light;
+}
+html, body { height: 100%; }
+body { background: var(--body); color: var(--fg); font-family: var(--f-ui); font-size: 14px; overflow: hidden; font-stretch: 100%; }
+body.scrubbing, body.scrubbing * { cursor: ew-resize !important; user-select: none; }
+button, select, input { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--k-blue); outline-offset: 2px; }
+[hidden] { display: none !important; }
+
+.app { height: 100%; display: flex; flex-direction: column; padding-inline: 16px; padding-block: 12px; gap: 10px; box-sizing: border-box; }
+.app > .stage { flex: 1; }
+
+/* ---- top bar ---- */
+.top { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.brand { display: flex; align-items: baseline; gap: 8px; margin-right: 4px; }
+.brand b { font-weight: 700; font-stretch: 75%; font-size: 22px; letter-spacing: .14em; }
+.brand .build { font-family: var(--f-code); font-size: 10px; color: var(--faint); }
+/* space is reserved from the start so the header does not shift when the Rust DSP loads on first play */
+.brand .dsp { visibility: hidden; opacity: 0; transition: opacity .4s; }
+.brand .dsp.on { visibility: visible; opacity: 1; }
+.play { width: 42px; height: 42px; border-radius: 50%; border: 0; background: var(--k-orange); color: var(--on-key); cursor: pointer; display: grid; place-items: center; box-shadow: var(--shadow), 0 0 0 4px color-mix(in srgb, var(--k-orange) 16%, transparent); flex: none; }
+.play .tri { width: 0; height: 0; border-left: 13px solid currentColor; border-top: 8px solid transparent; border-bottom: 8px solid transparent; margin-left: 3px; }
+.play.on .tri { border: 0; width: 12px; height: 12px; background: currentColor; border-radius: 2px; margin: 0; }
+.play span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+.lcd { display: flex; align-items: stretch; border-radius: 10px; background: var(--scr); border: 1px solid var(--scr-line); color: var(--scr-fg); overflow: hidden; }
+.lcd .cell { display: flex; flex-direction: column; justify-content: center; gap: 1px; padding: 5px 12px; border-left: 1px solid var(--scr-line); }
+.lcd .cell:first-child { border-left: 0; }
+.lcd label { font-size: 9.5px; font-weight: 600; font-stretch: 80%; letter-spacing: .08em; color: var(--scr-dim); }
+.lcd output { font-family: var(--f-code); font-weight: 500; font-size: 15px; font-variant-numeric: tabular-nums; line-height: 1.2; white-space: nowrap; }
+.lcd .row { display: flex; align-items: center; gap: 8px; }
+#bpmbox { cursor: ns-resize; }
+.tap { font-family: var(--f-code); font-size: 9.5px; border: 1px solid var(--scr-line); background: var(--scr-2); border-radius: 5px; padding: 2px 6px; cursor: pointer; color: var(--scr-dim); }
+.tap.hit { animation: tap .25s; }
+.pips { display: inline-flex; gap: 3px; }
+.pip { width: 6px; height: 6px; border-radius: 50%; background: var(--scr-line); }
+.pip.on { background: var(--k-orange); box-shadow: 0 0 6px var(--k-orange); }
+.queue { font-family: var(--f-code); font-size: 11px; color: var(--on-key); background: var(--k-violet); padding: 5px 9px; border-radius: 6px; }
+.spacer { flex: 1; }
+#scope { width: 150px; height: 32px; border-radius: 8px; background: var(--scr); border: 1px solid var(--scr-line); }
+.btn { font-size: 12.5px; font-weight: 600; border: 1px solid var(--line); background: var(--raised); color: var(--fg); border-radius: 8px; padding: 7px 11px; cursor: pointer; box-shadow: var(--shadow); white-space: nowrap; }
+.btn:hover { border-color: color-mix(in srgb, var(--fg) 30%, var(--line)); }
+.btn.ghost { background: transparent; box-shadow: none; color: var(--dim); font-weight: 500; }
+.btn:disabled { opacity: .4; cursor: default; }
+.toggle[aria-pressed="true"] { color: var(--k-green); border-color: color-mix(in srgb, var(--k-green) 50%, var(--line)); }
+.preset { font-size: 13px; font-weight: 600; background: var(--raised); border: 1px solid var(--line); border-radius: 8px; padding: 7px 8px; cursor: pointer; max-width: 210px; box-shadow: var(--shadow); }
+
+/* ---- arrangement ---- */
+.arr { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; }
+.songbtn { font-size: 12px; font-weight: 600; border: 1px solid var(--line); background: var(--raised); color: var(--dim); border-radius: 8px; padding: 7px 10px; cursor: pointer; }
+.songbtn[aria-pressed="true"] { background: var(--k-violet); border-color: var(--k-violet); color: var(--on-key); }
+.timeline { position: relative; flex: 1 1 360px; min-width: 0; }
+.tl-parts { display: flex; gap: 3px; height: 32px; }
+.part { position: relative; flex-basis: 0; min-width: 0; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--dim); font-size: 11.5px; font-weight: 600; text-align: left; padding: 0; cursor: pointer; overflow: hidden; }
+.part .fill { position: absolute; inset: 0 auto 0 0; width: 0; background: color-mix(in srgb, var(--k-violet) 24%, transparent); }
+.part .pl { position: relative; display: flex; align-items: center; gap: 5px; padding: 0 8px; height: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.part small { color: var(--faint); font-size: 10px; font-family: var(--f-code); font-weight: 400; }
+.part.on { background: var(--raised); color: var(--fg); border-color: color-mix(in srgb, var(--k-violet) 60%, var(--line)); }
+.part.queued, .songbtn.queued { animation: queued .5s steps(2) infinite; }
+.part.queued { outline: 1px solid var(--k-orange); }
+.tl-head { position: absolute; top: -3px; bottom: -3px; width: 2px; margin-left: -1px; background: var(--k-orange); border-radius: 1px; pointer-events: none; }
+.skip { width: 32px; height: 32px; border: 1px solid var(--line); background: var(--raised); color: var(--dim); border-radius: 8px; cursor: pointer; font-size: 12px; padding: 0; }
+.songpos { font-family: var(--f-code); font-size: 11px; color: var(--k-violet); min-width: 9ch; font-variant-numeric: tabular-nums; }
+.scenes { display: flex; flex-wrap: wrap; gap: 5px; }
+.scn { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; border: 1px solid var(--line); background: var(--panel); color: var(--fg); border-radius: 7px; padding: 6px 9px; cursor: pointer; }
+.scn kbd { font-family: var(--f-code); font-size: 9.5px; color: var(--faint); border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; }
+.scn em { font-style: normal; font-size: 10px; font-weight: 500; color: var(--k-blue); }
+.scn.on { background: var(--k-violet); border-color: var(--k-violet); color: var(--on-key); }
+.scn.on kbd, .scn.on em { color: var(--on-key); border-color: color-mix(in srgb, var(--on-key) 40%, transparent); }
+.scn.queued { border-color: var(--k-violet); animation: queued .5s steps(2) infinite; }
+@keyframes queued { 50% { background: var(--raised); } }
+
+/* ---- stage ---- */
+.stage { display: grid; grid-template-columns: minmax(0, 1fr) 348px; gap: 12px; min-height: 0; }
+.editor { position: relative; display: grid; grid-template-columns: 46px minmax(0, 1fr); background: var(--scr); border-radius: 14px; overflow: hidden; min-height: 0; border: 1px solid var(--scr-line); box-shadow: 0 0 0 4px color-mix(in srgb, var(--body) 60%, var(--panel)), 0 0 0 5px var(--line); }
+.gutter { overflow: hidden; padding-block: 14px; background: var(--scr-2); border-right: 1px solid var(--scr-line); }
+.gr { height: var(--code-lh); display: flex; align-items: center; justify-content: flex-end; gap: 5px; padding-right: 6px; }
+.gr .mute { width: 19px; height: 16px; border: 0; border-radius: 4px; background: var(--scr-line); color: var(--scr-dim); font-family: var(--f-code); font-size: 10px; cursor: pointer; padding: 0; }
+.gr .mute.off { background: transparent; color: var(--c-err); text-decoration: line-through; }
+.gr .mute.solo { background: var(--k-blue); color: #fff; }
+.gr .led { width: 4px; height: 12px; border-radius: 2px; background: color-mix(in srgb, var(--tc, var(--scr-dim)) 30%, var(--scr-line)); }
+.gr .led.hit { animation: led .24s ease-out; }
+.gr.bad .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--c-err); margin-right: 5px; }
+.code { position: relative; min-width: 0; }
+#hl, #src { position: absolute; inset: 0; margin: 0; padding: 14px 16px; border: 0; font-family: var(--f-code); font-size: var(--code-size); line-height: var(--code-lh); white-space: pre; tab-size: 2; overflow: auto; box-sizing: border-box; font-variant-ligatures: none; letter-spacing: 0; }
+#hl { color: var(--scr-fg); pointer-events: none; overflow: hidden; }
+#src { background: transparent; color: transparent; caret-color: var(--k-orange); resize: none; outline: none; -webkit-text-fill-color: transparent; }
+#src::selection { background: rgba(164, 139, 255, .32); -webkit-text-fill-color: transparent; }
+.ln.err { text-decoration: underline wavy var(--c-err); text-underline-offset: 5px; text-decoration-thickness: 1px; }
+.ln.mut { opacity: .36; }
+.ln.scn-live { background: rgba(164, 139, 255, .14); }
+.nmn { color: var(--c-name); font-weight: 700; }
+.gl { color: var(--c-glob); font-weight: 700; }
+.at { color: var(--scr-fg); border-radius: 3px; }
+.at.gen { color: var(--c-gen); font-weight: 700; }
+.at.hit { animation: hit .28s ease-out; }
+.rs { color: var(--scr-faint); }
+.br { color: var(--scr-dim); }
+.op { color: var(--c-op); }
+.pipe { color: var(--scr-faint); }
+.nm { color: var(--c-num); }
+.pk { color: var(--scr-dim); }
+.in { color: var(--c-inst); }
+.kn { color: var(--c-op); font-weight: 700; }
+.wd { color: var(--c-err); }
+.cm { color: var(--scr-faint); font-style: italic; }
+.scn-n { color: var(--c-name); font-weight: 700; text-decoration: underline; text-underline-offset: 3px; }
+.tr { color: var(--scr-fg); }
+.sp.on { background: var(--c-name); border-radius: 3px; box-shadow: 0 0 0 2px var(--c-name); }
+.sp.on span { color: var(--scr); }
+@keyframes hit { from { background: var(--c-op); color: var(--scr); box-shadow: 0 0 0 2px var(--c-op); } to { background: transparent; box-shadow: 0 0 0 2px transparent; } }
+@keyframes led { from { background: var(--tc, var(--c-op)); box-shadow: 0 0 10px var(--tc, var(--c-op)); } }
+@keyframes tap { from { background: var(--k-orange); color: var(--on-key); } }
+#viz, #vizgpu { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; display: block; }
+#vizgpu { opacity: .95; }
+.vizbar { position: absolute; top: 8px; right: 12px; z-index: 4; display: flex; gap: 2px; padding: 2px; border-radius: 8px; background: rgba(19, 22, 26, .88); border: 1px solid var(--scr-line); }
+.vizbar button { border: 0; background: transparent; color: var(--scr-dim); font-size: 11px; padding: 4px 8px; border-radius: 6px; cursor: pointer; }
+.vizbar button.bycode { box-shadow: inset 0 -2px 0 var(--k-orange); }
+.vizbar .vsep { width: 1px; align-self: stretch; margin: 3px 2px; background: var(--scr-line); }
+.vizbar { flex-wrap: wrap; max-width: calc(100% - 24px); justify-content: flex-end; }
+.vizbar button[aria-pressed="true"] { background: var(--scr-line); color: var(--scr-fg); }
+.ac { position: absolute; z-index: 5; min-width: 220px; max-width: min(440px, 90%); max-height: 230px; overflow: auto; background: #1b1e24; border: 1px solid var(--scr-line); border-radius: 9px; box-shadow: 0 10px 28px rgba(0,0,0,.45); padding: 4px; }
+.ac-i { display: flex; align-items: baseline; gap: 10px; padding: 4px 8px; border-radius: 6px; cursor: pointer; }
+.ac-i code { font-family: var(--f-code); font-size: 12px; color: var(--scr-fg); white-space: nowrap; }
+.ac-i span { font-size: 11px; color: var(--scr-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ac-i.sel { background: rgba(164, 139, 255, .26); }
+.recbar { position: absolute; left: 46px; right: 0; bottom: 0; z-index: 3; display: flex; align-items: center; gap: 12px; padding: 8px 14px; background: #2a1720; border-top: 1px solid #6b2b42; color: var(--scr-fg); font-size: 12.5px; }
+.recbar .rt { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.recbar .count { font-weight: 700; font-stretch: 75%; font-size: 22px; color: var(--c-err); min-width: 18px; text-align: center; }
+.beats { display: flex; gap: 6px; }
+.beats i { width: 26px; height: 18px; border-radius: 4px; background: var(--scr-line); }
+.beats i.on { background: var(--c-err); box-shadow: 0 0 12px var(--c-err); }
+.beats i.on:first-child { background: var(--c-op); box-shadow: 0 0 14px var(--c-op); }
+body.recording .editor { border-color: var(--c-err); }
+
+/* ---- control surface ---- */
+.rack { display: flex; flex-direction: column; gap: 10px; min-height: 0; }
+.tabs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 3px; padding: 3px; border-radius: 10px; background: var(--panel); border: 1px solid var(--line); }
+.tabs button { border: 0; background: transparent; color: var(--dim); font-size: 12.5px; font-weight: 600; padding: 7px 4px; border-radius: 7px; cursor: pointer; }
+.tabs button[aria-selected="true"] { background: var(--raised); color: var(--fg); box-shadow: var(--shadow); }
+.pane { display: flex; flex-direction: column; gap: 12px; min-height: 0; overflow: auto; padding: 2px 2px 8px; }
+.sec-h { margin: 0; display: flex; justify-content: space-between; align-items: baseline; gap: 8px; font-size: 13px; font-weight: 700; font-stretch: 85%; }
+.sec-h small { font-size: 11px; font-weight: 400; color: var(--faint); font-stretch: 100%; text-align: right; }
+
+.pads { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+.pad { --kc: var(--k-blue); position: relative; text-align: left; border: 1px solid var(--line); background: var(--raised); border-radius: 10px; padding: 8px 7px 7px; cursor: pointer; display: grid; gap: 3px; align-content: start; min-height: 64px; touch-action: none; user-select: none; -webkit-user-select: none; transition: transform .06s, background .06s; box-shadow: var(--shadow); }
+.pad[data-cat="rhythm"] { --kc: var(--k-yellow); }
+.pad[data-cat="struct"] { --kc: var(--k-orange); }
+.pad[data-cat="space"] { --kc: var(--k-green); }
+.pad[data-cat="tone"] { --kc: var(--k-blue); }
+.pad[data-cat="mod"] { --kc: var(--k-violet); }
+.pad .lamp { width: 7px; height: 7px; border-radius: 50%; background: color-mix(in srgb, var(--kc) 45%, var(--line)); }
+.pad b { font-size: 12px; font-weight: 650; line-height: 1.2; overflow-wrap: normal; word-break: keep-all; hyphens: auto; }
+.pad span { font-size: 10px; color: var(--dim); line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.pad kbd { position: absolute; top: 6px; right: 6px; font-family: var(--f-code); font-size: 10px; color: var(--faint); border: 1px solid var(--line); border-radius: 4px; padding: 0 5px; background: var(--panel); }
+.pad .latch { position: absolute; top: 8px; right: 30px; font-size: 9px; color: var(--faint); }
+.pad.on { background: var(--kc); border-color: var(--kc); transform: scale(.97); box-shadow: 0 0 18px color-mix(in srgb, var(--kc) 45%, transparent); }
+.pad.on b, .pad.on span, .pad.on kbd, .pad.on .latch { color: var(--on-key); background: transparent; border-color: color-mix(in srgb, var(--on-key) 35%, transparent); }
+.pad.on .lamp { background: var(--on-key); }
+.row-btns { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.knobs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.knob { display: grid; justify-items: center; gap: 2px; cursor: ns-resize; touch-action: none; border-radius: 10px; padding: 6px 0 4px; background: var(--panel); border: 1px solid var(--line); }
+.knob svg { width: 54px; height: 54px; }
+.knob .track { fill: none; stroke: var(--line); stroke-width: 4; stroke-linecap: round; stroke-dasharray: 94.25 200; }
+.knob .arc { fill: none; stroke: var(--k-orange); stroke-width: 4; stroke-linecap: round; }
+.knob .cap { fill: var(--raised); stroke: var(--line); }
+.knob .needle { stroke: var(--fg); stroke-width: 2.2; stroke-linecap: round; }
+.knob .kn-name { font-family: var(--f-code); font-size: 11px; font-weight: 700; color: var(--fg); }
+.knob .kv { color: var(--dim); font-weight: 400; font-variant-numeric: tabular-nums; }
+.knob .kl { font-size: 10px; color: var(--faint); text-align: center; line-height: 1.3; max-width: 72px; overflow-wrap: anywhere; min-height: 26px; }
+.handrow { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+.calinfo { font-family: var(--f-code); font-size: 10.5px; color: var(--faint); }
+.handrow .calinfo { font-family: var(--f-ui); font-size: 11px; line-height: 1.45; flex: 1 1 180px; }
+.handsbtn[aria-pressed="true"] { color: var(--k-orange); border-color: color-mix(in srgb, var(--k-orange) 50%, var(--line)); }
+.handcv { display: block; width: 100%; aspect-ratio: 4 / 3; max-width: 100%; max-height: 230px; border-radius: 10px; background: var(--scr); }
+
+/* compose */
+.chips { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 5px; }
+.chip { border: 1px solid var(--line); background: var(--raised); color: var(--fg); border-radius: 8px; padding: 8px 4px; font-size: 12px; font-weight: 600; cursor: pointer; box-shadow: var(--shadow); }
+.chip[aria-pressed="true"] { background: var(--k-yellow); border-color: var(--k-yellow); color: #1c1606; }
+.seedrow { display: flex; gap: 6px; align-items: stretch; }
+.seedrow label { display: flex; align-items: center; gap: 8px; flex: 1; border: 1px solid var(--scr-line); background: var(--scr); color: var(--scr-dim); border-radius: 8px; padding: 0 10px; font-size: 11px; font-weight: 600; }
+.seedrow input { width: 100%; min-width: 0; background: transparent; border: 0; color: var(--scr-fg); font-family: var(--f-code); font-size: 16px; padding: 7px 0; outline: none; }
+.go { background: var(--k-yellow); border-color: var(--k-yellow); color: #1c1606; }
+.note { font-size: 12px; color: var(--dim); line-height: 1.5; margin: 0; }
+.note code, .gens code { font-family: var(--f-code); font-size: 11.5px; color: var(--fg); background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; }
+.gens { display: grid; grid-template-columns: auto 1fr; gap: 6px 10px; font-size: 11.5px; color: var(--dim); margin: 0; }
+.gens dt { white-space: nowrap; }
+.gens dd { margin: 0; line-height: 1.4; }
+
+/* loops */
+.loopctl { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--panel); }
+.seg button { border: 0; background: transparent; color: var(--dim); font-size: 12px; padding: 6px 10px; cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--raised); color: var(--fg); box-shadow: var(--shadow); }
+.chk { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--dim); cursor: pointer; }
+.chk input { accent-color: var(--k-pink); margin: 0; }
+.lat { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; color: var(--faint); }
+.lat input { width: 50px; font-family: var(--f-code); font-size: 11px; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 3px 4px; }
+.calbtn { font-size: 12px; border: 1px solid var(--line); background: var(--raised); color: var(--fg); border-radius: 8px; padding: 6px 10px; cursor: pointer; box-shadow: var(--shadow); }
+.slots { display: grid; gap: 6px; }
+.slot { display: grid; grid-template-columns: 32px minmax(0, 1fr) auto auto auto auto; align-items: center; gap: 5px; padding: 6px; border-radius: 10px; background: var(--panel); border: 1px solid var(--line); }
+.slot.drop { border-color: var(--k-blue); }
+.slot .rec { width: 32px; height: 32px; border-radius: 50%; border: 1px solid var(--line); background: var(--raised); cursor: pointer; display: grid; place-items: center; padding: 0; box-shadow: var(--shadow); }
+.slot .rec i { width: 11px; height: 11px; border-radius: 50%; background: var(--k-pink); }
+.slot.armed .rec { animation: blink .5s steps(2) infinite; }
+.slot.rec-on .rec { background: var(--k-pink); border-color: var(--k-pink); }
+.slot.rec-on .rec i { background: var(--on-key); }
+.slot.full .rec i { box-shadow: 0 0 0 3px color-mix(in srgb, var(--k-pink) 25%, transparent); }
+.sl-main { min-width: 0; display: grid; gap: 3px; }
+.sl-top { display: flex; align-items: baseline; gap: 6px; min-width: 0; }
+.sl-top b { font-family: var(--f-code); font-size: 11.5px; color: var(--k-violet); }
+.sl-top kbd { font-family: var(--f-code); font-size: 9.5px; color: var(--faint); border: 1px solid var(--line); border-radius: 3px; padding: 0 4px; }
+.sl-state { font-size: 10.5px; color: var(--faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wave { width: 100%; height: 22px; display: block; border-radius: 4px; background: var(--scr); }
+.slot select { font-family: var(--f-code); font-size: 11px; background: var(--raised); border: 1px solid var(--line); border-radius: 6px; padding: 3px 2px; }
+.sm { width: 25px; height: 25px; border-radius: 6px; border: 1px solid var(--line); background: var(--raised); color: var(--dim); cursor: pointer; padding: 0; font-family: var(--f-code); font-size: 11px; }
+.sm:disabled { opacity: .3; cursor: default; }
+.sm.mute.off { color: var(--k-pink); border-color: color-mix(in srgb, var(--k-pink) 50%, var(--line)); text-decoration: line-through; }
+.loopio { display: flex; gap: 6px; flex-wrap: wrap; }
+.loopio button, .loopio label { position: relative; font-size: 12px; border: 1px solid var(--line); background: var(--raised); border-radius: 8px; padding: 6px 10px; cursor: pointer; box-shadow: var(--shadow); }
+.loopio input[type=file] { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
+@keyframes blink { 50% { background: var(--k-pink); } }
+
+/* guide */
+.help { font-size: 12px; color: var(--dim); }
+.gpubox { border: 1px solid var(--line); background: var(--panel); border-radius: 12px; padding: 12px; display: grid; gap: 8px; }
+.gpubox h3 { margin: 0; display: flex; align-items: center; gap: 8px; }
+.gpubox p { margin: 0; line-height: 1.5; }
+.gpu-state { font: 500 11px/1.3 var(--f-code); color: var(--faint); }
+.gpu-state.ok { color: var(--k-green); }
+.gpu-res { font-size: 12px; color: var(--fg); }
+.gpu-res b { font-family: var(--f-code); }
+.help h3 { margin: 6px 0 6px; font-size: 12.5px; font-weight: 700; color: var(--fg); font-stretch: 85%; }
+.help dl { display: grid; grid-template-columns: minmax(0, auto) minmax(0, 1fr); gap: 6px 10px; margin: 0 0 8px; }
+.help dt { font-family: var(--f-code); font-size: 11px; color: var(--fg); overflow-wrap: anywhere; max-width: 150px; }
+.help dd { margin: 0; line-height: 1.45; }
+
+.status { font-size: 12px; color: var(--dim); min-height: 18px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.status.bad { color: var(--k-pink); }
+.status.ok { color: var(--k-green); }
+.status .gtxt { font-family: var(--f-code); font-size: 11.5px; color: var(--fg); }
+
+@media (max-width: 900px) {
+  body { overflow: auto; }
+  .app { height: auto; min-height: 100%; }
+  .stage { grid-template-columns: minmax(0, 1fr); }
+  .editor { height: 58vh; }
+  #scope { width: 110px; }
+  .status { white-space: normal; }
+  .pane { overflow: visible; }
+}
+@media (max-width: 520px) {
+  .lcd .cell { padding: 5px 8px; }
+  .chips { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .preset { max-width: 100%; }
+}
+@media (prefers-reduced-motion: reduce) { .at.hit, .gr .led.hit, .tap.hit { animation-duration: .01s; } .pad { transition: none; } }
+</style>
+
+<div class="app">
+  <header class="top">
+    <div class="brand"><b>TACTUS</b><span class="build" id="build" title="build">/*BUILD*/<span class="dsp" id="dspTag"> · Rust DSP</span></span></div>
+    <button id="play" class="play"><i class="tri"></i><span></span></button>
+    <div class="lcd">
+      <div class="cell" id="bpmbox" data-i18n-title="bpmTitle"><label>BPM</label><div class="row"><output id="bpm">138</output><button class="tap" id="tap">TAP</button></div></div>
+      <div class="cell"><label data-i18n="keyLbl">KEY</label><output id="keyo">A minor</output></div>
+      <div class="cell"><label data-i18n="barLbl">BAR</label><div class="row"><output id="pos">1.1</output><span class="pips" aria-hidden="true"><i class="pip"></i><i class="pip"></i><i class="pip"></i><i class="pip"></i></span></div></div>
+    </div>
+    <select class="preset" id="preset" data-i18n-aria="presetLabel" data-i18n-title="presetLabel"></select>
+    <button class="btn" id="composeBtn" data-i18n="composeBtn"></button>
+    <div class="queue" id="queue" hidden></div>
+    <div class="spacer"></div>
+    <canvas id="scope" aria-hidden="true"></canvas>
+    <button class="btn ghost toggle" id="auto" aria-pressed="true" data-i18n="auto" data-i18n-title="autoTitle"></button>
+    <a class="btn ghost" id="srcLink" href="https://github.com/nakosung/tactus" target="_blank" rel="noopener" data-i18n-title="srcTitle">GitHub</a>
+    <button class="btn ghost" id="lang" data-i18n="lang" data-i18n-title="langTitle"></button>
+  </header>
+
+  <section class="arr" id="arr" hidden>
+    <button class="songbtn" id="songBtn" aria-pressed="true" data-i18n="songMode" data-i18n-title="songTitle"></button>
+    <button class="skip" id="prevPart" data-i18n-title="prevPart" data-i18n-aria="prevPart">⏮</button>
+    <div class="timeline" id="timeline"><div class="tl-parts"></div><i class="tl-head" hidden></i></div>
+    <button class="skip" id="nextPart" data-i18n-title="nextPart" data-i18n-aria="nextPart">⏭</button>
+    <span class="songpos" id="songPos"></span>
+    <div class="scenes" id="scenes"></div>
+  </section>
+
+  <main class="stage">
+    <section class="editor">
+      <div class="gutter" id="gutter"></div>
+      <div class="code">
+        <canvas id="vizgpu" aria-hidden="true" hidden></canvas>
+        <canvas id="viz" aria-hidden="true"></canvas>
+        <pre id="hl" aria-hidden="true"></pre>
+        <div class="vizbar" id="vizbar" role="group" data-i18n-aria="vizTitle">
+          <button data-v="roll" data-i18n="vizRoll"></button><button data-v="grid" data-i18n="vizGrid"></button><button data-v="spiral" data-i18n="vizSpiral"></button><button data-v="fft" data-i18n="vizFft"></button><span class="vsep" aria-hidden="true"></span><button data-v="terrain" data-i18n="vizTerrain" data-i18n-title="vizGpuTitle"></button><button data-v="contour" data-i18n="vizContour" data-i18n-title="vizGpuTitle"></button><button data-v="dots" data-i18n="vizDots" data-i18n-title="vizGpuTitle"></button><button data-v="demo" data-i18n="vizDemo" data-i18n-title="vizGpuTitle"></button><button data-v="sono" data-i18n="vizSono" data-i18n-title="vizSonoTitle"></button><span class="vsep" aria-hidden="true"></span><button data-v="off" data-i18n="vizOff"></button>
+        </div>
+        <textarea id="src" spellcheck="false" autocapitalize="off" autocomplete="off" autocorrect="off" wrap="off" data-i18n-aria="codeLabel"></textarea>
+      </div>
+      <div class="recbar" id="recbar" hidden><span class="count" id="reccount"></span><span class="rt" id="rectext"></span><span class="beats" aria-hidden="true"><i></i><i></i><i></i><i></i></span></div>
+    </section>
+
+    <aside class="rack">
+      <div class="tabs" role="tablist">
+        <button role="tab" id="tab-perform" aria-controls="pane-perform" aria-selected="true" data-i18n="tabPerform"></button>
+        <button role="tab" id="tab-compose" aria-controls="pane-compose" aria-selected="false" data-i18n="tabCompose"></button>
+        <button role="tab" id="tab-loops" aria-controls="pane-loops" aria-selected="false" data-i18n="tabLoops"></button>
+        <button role="tab" id="tab-guide" aria-controls="pane-guide" aria-selected="false" data-i18n="tabGuide"></button>
+      </div>
+
+      <section class="pane" id="pane-perform" role="tabpanel" aria-labelledby="tab-perform">
+        <h2 class="sec-h"><span data-i18n="gestures"></span><small data-i18n="gesturesHint"></small></h2>
+        <div class="pads" id="pads"></div>
+        <div class="row-btns"><button class="btn ghost" id="padCode" data-i18n="padCode" data-i18n-title="padCodeTitle"></button></div>
+        <h2 class="sec-h"><span data-i18n="macros"></span><small data-i18n="macrosHint"></small></h2>
+        <div class="knobs">
+          <div class="knob" role="slider" tabindex="0" aria-label="k1" aria-valuemin="0" aria-valuemax="100"><svg viewBox="0 0 56 56"><circle class="track" cx="28" cy="28" r="20" transform="rotate(135 28 28)"/><circle class="arc" cx="28" cy="28" r="20" transform="rotate(135 28 28)"/><circle class="cap" cx="28" cy="28" r="13"/><line class="needle" x1="28" y1="28" x2="28" y2="17"/></svg><span class="kn-name">k1 <span class="kv">50</span></span><span class="kl"></span></div>
+          <div class="knob" role="slider" tabindex="0" aria-label="k2" aria-valuemin="0" aria-valuemax="100"><svg viewBox="0 0 56 56"><circle class="track" cx="28" cy="28" r="20" transform="rotate(135 28 28)"/><circle class="arc" cx="28" cy="28" r="20" transform="rotate(135 28 28)"/><circle class="cap" cx="28" cy="28" r="13"/><line class="needle" x1="28" y1="28" x2="28" y2="17"/></svg><span class="kn-name">k2 <span class="kv">50</span></span><span class="kl"></span></div>
+          <div class="knob" role="slider" tabindex="0" aria-label="k3" aria-valuemin="0" aria-valuemax="100"><svg viewBox="0 0 56 56"><circle class="track" cx="28" cy="28" r="20" transform="rotate(135 28 28)"/><circle class="arc" cx="28" cy="28" r="20" transform="rotate(135 28 28)"/><circle class="cap" cx="28" cy="28" r="13"/><line class="needle" x1="28" y1="28" x2="28" y2="17"/></svg><span class="kn-name">k3 <span class="kv">50</span></span><span class="kl"></span></div>
+          <div class="knob" role="slider" tabindex="0" aria-label="k4" aria-valuemin="0" aria-valuemax="100"><svg viewBox="0 0 56 56"><circle class="track" cx="28" cy="28" r="20" transform="rotate(135 28 28)"/><circle class="arc" cx="28" cy="28" r="20" transform="rotate(135 28 28)"/><circle class="cap" cx="28" cy="28" r="13"/><line class="needle" x1="28" y1="28" x2="28" y2="17"/></svg><span class="kn-name">k4 <span class="kv">50</span></span><span class="kl"></span></div>
+        </div>
+        <h2 class="sec-h"><span data-i18n="h24t"></span></h2>
+        <div class="handrow">
+          <button class="calbtn handsbtn" id="handsBtn" aria-pressed="false" data-i18n-title="handsTitle"></button>
+          <span class="calinfo" id="handsMap" hidden data-i18n="handsMap"></span>
+        </div>
+        <canvas id="handcv" class="handcv" hidden></canvas>
+      </section>
+
+      <section class="pane" id="pane-compose" role="tabpanel" aria-labelledby="tab-compose" hidden>
+        <h2 class="sec-h"><span data-i18n="cmpTitle"></span></h2>
+        <p class="note" data-i18n="cmpIntro"></p>
+        <div class="chips" id="cmpStyles" role="group" data-i18n-aria="cmpStyle"></div>
+        <div class="seedrow">
+          <label for="cmpSeed">SEED<input type="number" id="cmpSeed" value="1" min="0" max="999999"></label>
+          <button class="btn" id="cmpDice" data-i18n="cmpDice" data-i18n-title="cmpDiceTitle"></button>
+        </div>
+        <div class="row-btns">
+          <button class="btn go" id="cmpGo" data-i18n="cmpGo"></button>
+          <button class="btn ghost" id="cmpUndo" data-i18n="cmpUndo" disabled></button>
+        </div>
+        <h2 class="sec-h"><span data-i18n="genTitle"></span></h2>
+        <dl class="gens">
+          <dt><code>~beat four</code></dt><dd data-i18n="genBeat"></dd>
+          <dt><code>~bass offbeat</code></dt><dd data-i18n="genBass"></dd>
+          <dt><code>~melody</code></dt><dd data-i18n="genMelody"></dd>
+          <dt><code>~chords stab</code></dt><dd data-i18n="genChords"></dd>
+          <dt><code>~arp broken</code></dt><dd data-i18n="genArp"></dd>
+          <dt><code>prog ~gen 4</code></dt><dd data-i18n="genProg"></dd>
+          <dt><code>seed 42</code></dt><dd data-i18n="genSeed"></dd>
+          <dt><code>dens evolve bars</code></dt><dd data-i18n="genParams"></dd>
+          <dt><code>Ctrl+B</code></dt><dd data-i18n="genBake"></dd>
+        </dl>
+      </section>
+
+      <section class="pane" id="pane-loops" role="tabpanel" aria-labelledby="tab-loops" hidden>
+        <h2 class="sec-h"><span data-i18n="loops"></span><small data-i18n="loopsHint"></small></h2>
+        <div class="loopctl">
+          <span class="seg" data-i18n-title="srcTitle"><button id="srcMic" data-i18n="srcMic" aria-pressed="false"></button><button id="srcOut" data-i18n="srcOut" aria-pressed="true"></button></span>
+          <label class="chk" data-i18n-title="speakerTitle"><input type="checkbox" id="speaker" checked><span data-i18n="speaker"></span></label>
+          <label class="lat" data-i18n-title="latencyTitle"><span data-i18n="latency"></span><input type="number" id="latency" value="0" step="5" min="-200" max="200">ms</label>
+        </div>
+        <div class="loopctl cal">
+          <button class="calbtn" id="calAuto" data-i18n="calAuto" data-i18n-title="calAutoTitle"></button>
+          <button class="calbtn" id="calClap" data-i18n="calClap" data-i18n-title="calClapTitle"></button>
+          <span class="calinfo" id="calInfo"></span>
+        </div>
+        <div class="slots" id="slots"></div>
+        <div class="loopio">
+          <label for="file"><span data-i18n="loadFile"></span><input type="file" id="file" accept="audio/*"></label>
+          <button id="export" data-i18n="exportZip"></button>
+        </div>
+      </section>
+
+      <section class="pane help" id="pane-guide" role="tabpanel" aria-labelledby="tab-guide" hidden>
+        <div class="gpubox">
+          <h3>GPU <span class="gpu-state" id="gpuState"></span></h3>
+          <p data-i18n="gpuIntro"></p>
+          <dl>
+            <dt>swarm · choir · plate</dt><dd data-i18n="gpuInst"></dd>
+            <dt>fx freeze P | freeze</dt><dd data-i18n="gpuFreeze"></dd>
+            <dt data-i18n="gpuScenesT"></dt><dd data-i18n="gpuScenes"></dd>
+            <dt>membrane · timp</dt><dd data-i18n="gpuMem"></dd>
+            <dt>nsax</dt><dd data-i18n="gpuNsax"></dd>
+            <dt>space hall</dt><dd data-i18n="gpuSpace"></dd>
+            <dt>viz &lt;terrain dots&gt;/4</dt><dd data-i18n="gpuViz"></dd>
+            <dt>shader glow sin(length(q)*20.-t*4.)*bass</dt><dd data-i18n="gpuShader"></dd>
+            <dt>sono</dt><dd data-i18n="gpuSono"></dd>
+          </dl>
+          <div class="row-btns"><button class="btn" id="gpuBench" data-i18n="gpuBench"></button></div>
+          <p class="gpu-res" id="gpuResult" hidden></p>
+        </div>
+        <h3 data-i18n="hgTracks"></h3>
+        <dl>
+          <dt>name pattern | params</dt><dd data-i18n="h1d"></dd>
+          <dt>x . [x x] &lt;a b&gt;</dt><dd data-i18n="h2d"></dd>
+          <dt>*2 /2 !3 ? _ @3</dt><dd data-i18n="h3d"></dd>
+          <dt>x(3,8)</dt><dd data-i18n="h4d"></dd>
+          <dt>x:3  {x . x}%16</dt><dd data-i18n="h31d"></dd>
+          <dt>x x' x x''  · vel .8</dt><dd data-i18n="h29d"></dd>
+          <dt>every 4 rev · inv · skip · fast 2 · ply 2 · +2</dt><dd data-i18n="h32d"></dd>
+          <dt>swing .3 human .4 nudge -10</dt><dd data-i18n="h30d"></dd>
+        </dl>
+        <h3 data-i18n="hgHarmony"></h3>
+        <dl>
+          <dt>0 2 4  4#  0^  0^7</dt><dd data-i18n="h5d"></dd>
+          <dt>prog &lt;0 5 2 6&gt;</dt><dd data-i18n="h6d"></dd>
+          <dt>scale dorian</dt><dd data-i18n="h18d"></dd>
+          <dt>Cmaj7 Am9 G7sus4</dt><dd data-i18n="h19d"></dd>
+          <dt>prog &lt;Dm7 G7 Cmaj7&gt;</dt><dd data-i18n="h20d"></dd>
+          <dt>0 r r r | range 7</dt><dd data-i18n="h33d"></dd>
+          <dt>drop2 open spread · arp up rate 16</dt><dd data-i18n="h34d"></dd>
+          <dt>swarm choir plate</dt><dd data-i18n="h44d"></dd>
+        </dl>
+        <h3 data-i18n="hgSound"></h3>
+        <dl>
+          <dt>cut 300~3000/8</dt><dd data-i18n="h7d"></dd>
+          <dt>cut k1(300,6000)</dt><dd data-i18n="h8d"></dd>
+          <dt>duck .8</dt><dd data-i18n="h9d"></dd>
+          <dt>gain pan oct cut res env</dt><dd data-i18n="h10d"></dd>
+          <dt>master default loud warm open</dt><dd data-i18n="h37d"></dd>
+          <dt>chop 0 3 x 2 | loop1</dt><dd data-i18n="h16d"></dd>
+        </dl>
+        <h3 data-i18n="hgMix"></h3>
+        <dl>
+          <dt>lpf 3000 mid -3 midf 400 dist .3 crush .4 chorus .5 phaser .4</dt><dd data-i18n="hm1d"></dd>
+          <dt>thr -24 ratio 4 catk 10 crel 120</dt><dd data-i18n="hm2d"></dd>
+          <dt>bus wash | chorus .6 verb .7 hpf 300</dt><dd data-i18n="hm3d"></dd>
+          <dt>keys ... | wash .4</dt><dd data-i18n="hm4d"></dd>
+          <dt>bus delay | time 3 fb .55 lpf 3000</dt><dd data-i18n="hm5d"></dd>
+          <dt>bus verb | pre 40 hpf 300 duck .5</dt><dd data-i18n="hm6d"></dd>
+          <dt>master warm | thr -20 ratio 3 low 1 high 1.5 width 1.2 limit -1</dt><dd data-i18n="hm7d"></dd>
+          <dt>chorus 0~.8/8</dt><dd data-i18n="hm8d"></dd>
+        </dl>
+        <h3 data-i18n="hgSong"></h3>
+        <dl>
+          <dt>scene drop all -pad riser</dt><dd data-i18n="h21d"></dd>
+          <dt>scene drop all fill swell pause impact down</dt><dd data-i18n="h35d"></dd>
+          <dt>scene build arp | arp.cut 300&gt;6000</dt><dd data-i18n="h36d"></dd>
+          <dt>song intro:8 drop:16</dt><dd data-i18n="h22d"></dd>
+        </dl>
+        <h3 data-i18n="hgPads"></h3>
+        <dl>
+          <dt>fx wob P | set bass.cut 200&gt;3000</dt><dd data-i18n="h38d"></dd>
+          <dt>lp hp res · kill low mid high · crush 6</dt><dd data-i18n="h39d"></dd>
+          <dt>repeat 8 · gate x.xx.x.x · mute drums · only bass</dt><dd data-i18n="h40d"></dd>
+          <dt>throw · echo · verb .8 · pitch 12</dt><dd data-i18n="h41d"></dd>
+          <dt>riser · fill · impact · swell · down · scene next</dt><dd data-i18n="h42d"></dd>
+          <dt>latch · in 4 · fx throw off</dt><dd data-i18n="h43d"></dd>
+        </dl>
+        <h3 data-i18n="hgKeys"></h3>
+        <dl>
+          <dt data-i18n="h11t"></dt><dd data-i18n="h11d"></dd>
+          <dt>Ctrl+Enter</dt><dd data-i18n="h12d"></dd>
+          <dt>Ctrl+Space · Tab</dt><dd data-i18n="h26d"></dd>
+          <dt>Ctrl+/</dt><dd data-i18n="h13d"></dd>
+          <dt>Ctrl+B</dt><dd data-i18n="genBake"></dd>
+          <dt>1–9 · Shift+1–9</dt><dd data-i18n="h14d"></dd>
+          <dt>A S D F G H J K</dt><dd data-i18n="h23d"></dd>
+          <dt>[ ]</dt><dd data-i18n="h25d"></dd>
+          <dt>Q W E R</dt><dd data-i18n="h17d"></dd>
+          <dt>Space · T · Esc</dt><dd data-i18n="h15d"></dd>
+          <dt data-i18n="h24t"></dt><dd data-i18n="handsMap"></dd>
+        </dl>
+        <h3 data-i18n="hgSamples"></h3>
+        <dl>
+          <dt data-i18n="h27t"></dt><dd data-i18n="h27d"></dd>
+          <dt data-i18n="h28t"></dt><dd data-i18n="h28d"></dd>
+        </dl>
+      </section>
+    </aside>
+  </main>
+
+  <footer class="status" id="status" role="status"></footer>
+</div>
+
+<script>
+/*I18N*/
+/*KIT*/
+/*ENGINE*/
+/*GEN*/
+/*PRESETS*/
+/*AUDIO*/
+/*MIX*/
+/*DSPWASM*/
+/*SYNTH*/
+/*SAMPLES*/
+/*MUSICAL*/
+/*NSAXNET*/
+/*GPU*/
+/*LOOPS*/
+/*HAND*/
+/*UI*/
+/*VIZ*/
+</script>

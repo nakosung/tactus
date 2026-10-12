@@ -1,0 +1,10 @@
+dist/
+__pycache__/
+*.pyc
+dsp/target/
+tools/kit/dl/
+tools/kit/out/
+korean/*.wav
+neural/*.npz
+neural/sax_frames.json
+.DS_Store
