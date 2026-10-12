@@ -8,3 +8,6 @@ korean/*.wav
 neural/*.npz
 neural/sax_frames.json
 .DS_Store
+tools/scores/mp/
+tools/scores/*.midi
+tools/scores/lines.json

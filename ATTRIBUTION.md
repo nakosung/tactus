@@ -13,6 +13,18 @@ The code is MIT or Apache-2.0 (see the README). Bundled audio and data are liste
 
 The kkwaenggwari and jing partials were measured from reference recordings of performances (`korean/kkw_fit.py`). Only the measured numbers (frequencies, levels, decay times) are kept in `korean/kkw_fit.json` and in the scripts. No audio from those recordings is included.
 
+## Scores
+
+The transcribed example songs take their notes from scores of the [Mutopia Project](https://www.mutopiaproject.org/) (see `tools/scores/`). The compositions are in the public domain.
+
+| Example song | Mutopia edition | License of the edition |
+|---|---|---|
+| Für Elise | Beethoven, WoO 59, typeset by Stelios Samelis | Public domain |
+| Gymnopédie No.1 | Satie, typeset by Evin Robertson | Public domain |
+| The Entertainer | Joplin, typeset by Chris Sawer | Public domain |
+| Mountain King (Techno) | Grieg, Op. 46 No. 4, typeset by Coyau | Public domain |
+| Canon in D | Pachelbel, Canon per 3 Violini e Basso, typeset by Michael Fischer v. Mollard | CC BY 4.0 |
+
 ## Trained weights
 
 | What | Trained on | License |

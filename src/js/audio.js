@@ -286,8 +286,8 @@ const INST = {
 function valueAt(v, s, key) {
   switch (v.k) {
     case 'num': return v.v;
-    case 'lfo': return v.a + (v.b - v.a) * (0.5 - 0.5 * Math.cos(2 * Math.PI * s / v.per));
-    case 'ramp': return v.a + (v.b - v.a) * ((s % v.per + v.per) % v.per) / v.per;
+    case 'lfo': s -= patOrigin(s); return v.a + (v.b - v.a) * (0.5 - 0.5 * Math.cos(2 * Math.PI * s / v.per));
+    case 'ramp': s -= patOrigin(s); return v.a + (v.b - v.a) * ((s % v.per + v.per) % v.per) / v.per;
     case 'knob': {
       const x = S.knobs[v.i];
       if (EXP_PARAMS.has(key) && v.a > 0 && v.b > 0) return v.a * Math.pow(v.b / v.a, x);
@@ -545,11 +545,14 @@ function mapSpan(a, b) {
 }
 function progAt(s) {
   if (!S.prog) return 0;
+  s -= patOrigin(s);
   const n = Math.floor(s + EPS);
   let raw = null;
   for (const e of S.prog.q(n, n + 1)) if (e.s <= s + EPS && s < e.s + e.d - EPS) raw = e.v;
   return progValue(raw);
 }
+// pattern time follows the song: it starts where the song starts, and moves with a jump once the jump lands
+setPatOrigin(c => (S.songJump && c >= S.songJump.at - EPS ? S.songJump.start : S.songStart) || 0);
 // ---------- scenes & song ----------
 function sceneNameAt(c) {
   if (!S.scenes.size) return null;

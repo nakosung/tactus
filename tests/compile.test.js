@@ -16,4 +16,8 @@ for (const lang of ['ko', 'en']) {
 }
 const broken = ['bus 3x | chorus .5', 'master warm | chorus 1', 'kick x | fb .5', 'viz nothing', 'space kitchen', 'kick x | gain'];
 for (const line of broken) assert.ok(run(`compile(${JSON.stringify(line)}).errors.size`) > 0, 'should be an error: ' + line);
-console.log(`ok: ${n} preset compiles, ${broken.length} broken lines caught`);
+// Pattern time follows the song start: a written-out piece loaded at bar 12 plays its first bar there.
+const first = run(`(() => { const d = compile('rh <c4 d4 e4>').tracks.get('rh'); const at = c => cycleEvents(d, c).map(e => e.v + '@' + e.s).join(' ');
+  const a = at(0); setPatOrigin(() => 12); const b = at(12); setPatOrigin(() => 0); return JSON.stringify([a, b]); })()`);
+assert.deepStrictEqual(JSON.parse(first), ['c4@0', 'c4@12'], 'pattern origin: ' + first);
+console.log(`ok: ${n} preset compiles, ${broken.length} broken lines caught, pattern time follows the song start`);

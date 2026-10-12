@@ -215,7 +215,7 @@ function genPreview(li) {
   if (/^\s*prog\s+~gen/.test(code) && S.progGen) return { label: t('genNow', { k: 'prog ~gen' }), txt: S.progGen };
   const def = defAtLine(li);
   if (!def || !def.gen || !/~[a-z]/.test(code)) return null;
-  const g = genAt(def.gen, nowBar());
+  const g = genAt(def.gen, nowBar() - patOrigin(nowBar()));
   return { label: t('genNow', { k: '~' + def.gen.kind }) + (def.gen.evolve ? ' ' + t('genGen', { g: g + 1 }) : ''), txt: genText(def.gen, g) };
 }
 // replace a generator with the notes it is playing right now, so the line can be edited by hand
@@ -227,7 +227,7 @@ function bakeLine() {
   else {
     const def = defAtLine(li), hm = HEAD_RE.exec(code);
     if (!def || !def.gen || !hm) { loopMsg(t('bakeNone'), 'bad', 2400); return; }
-    const txt = genText(def.gen, genAt(def.gen, nowBar()));
+    const txt = genText(def.gen, genAt(def.gen, nowBar() - patOrigin(nowBar())));
     const base = hm[0].length, bar = code.indexOf('|', base);
     let params = bar >= 0 ? code.slice(bar + 1) : '';
     params = params.replace(/\s*\b(seed|dens|evolve|bars)\s+-?[\d.]+/g, '');
