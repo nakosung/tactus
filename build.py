@@ -74,8 +74,8 @@ def main():
     with open(os.path.join(ROOT, 'dist', 'tactus.html'), 'w', encoding='utf-8') as f:
         f.write(app)
 
-    conduct_site = ('카메라로 두 손을 따라가요. Chrome에서 Tactus를 열고 손 컨트롤을 켠 뒤 카메라를 허용하면 돼요.',
-                    'The camera follows both hands. Open Tactus in Chrome, turn on hand control and allow the camera.')
+    conduct_site = ('오른손으로 박을 저으면 템포와 셈여림이 따라오고, 왼손으로 가리키면 그 악기가 들어오거나 빠져요. 두 주먹은 페르마타. Chrome에서 Tactus를 열고 손 컨트롤을 켠 뒤 카메라를 허용하면 돼요.',
+                    'Beat time with your right hand and the tempo and dynamics follow; point with your left to cue an instrument in or out; two fists hold a fermata. Open Tactus in Chrome, turn on hand control and allow the camera.')
     land = build_landing('./play/', '<a class="home" href="/">Nako Sung</a>', conduct_site)
     land = land.replace('href="./play/" target="_blank" rel="noopener"', 'href="./play/"')
     icons = '<link rel="icon" type="image/png" sizes="32x32" href="{p}favicon-32.png">\n<link rel="apple-touch-icon" href="{p}apple-touch-icon.png">\n'
@@ -89,7 +89,7 @@ def main():
         shutil.copy(os.path.join(ROOT, 'assets', 'icons', icon), os.path.join(a.out, icon))
 
     if a.app_url:
-        conduct = ('카메라로 두 손을 따라가요. 내려받은 파일을 Chrome에서 열면 쓸 수 있어요.', 'The camera follows both hands. It works when you open the downloaded file in Chrome.')
+        conduct = ('오른손으로 박을 저으면 템포와 셈여림이 따라오고, 왼손으로 악기에 큐를 줘요. 내려받은 파일을 Chrome에서 열면 쓸 수 있어요.', 'Beat time with your right hand and the tempo and dynamics follow; cue instruments with your left. It works when you open the downloaded file in Chrome.')
         with open(os.path.join(ROOT, 'dist', 'landing-standalone.html'), 'w', encoding='utf-8') as f:
             f.write(build_landing(a.app_url, '', conduct))
     for p in [os.path.join(ROOT, 'dist', 'tactus.html'), os.path.join(a.out, 'index.html'), os.path.join(a.out, 'play', 'index.html')]:

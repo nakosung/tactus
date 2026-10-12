@@ -44,7 +44,9 @@ function initAudio() {
   A.fxGate = g(1); A.eqL = bq('lowshelf', 220, 0.7, 0); A.eqM = bq('peaking', 1100, 0.6, 0); A.eqH = bq('highshelf', 4500, 0.7, 0);
   A.crush = ctx.createWaveShaper();
   // previews (preview.js) join after the music's own duck, so the music can step back while one plays
-  A.pvDuck = g(1); A.pvIn = g(1); A.post.connect(A.pvDuck); A.pvDuck.connect(A.gate); A.pvIn.connect(A.gate);
+  // dynamics from the conductor's baton (hand.js), 1 unless someone is conducting
+  A.dyn = g(1);
+  A.pvDuck = g(1); A.pvIn = g(1); A.post.connect(A.dyn); A.dyn.connect(A.pvDuck); A.pvDuck.connect(A.gate); A.pvIn.connect(A.gate);
   A.gate.connect(A.fxGate); A.fxGate.connect(A.hp); A.hp.connect(A.lp); A.lp.connect(A.eqL); A.eqL.connect(A.eqM); A.eqM.connect(A.eqH); A.eqH.connect(A.crush); A.crush.connect(A.glue);
   A.mud = bq('peaking', 280, 0.9, -1.5); A.air = bq('highshelf', 9500, 0.7, 2.5);
   // master EQ and stereo width, set from the master line's parameters (flat and 1 by default)

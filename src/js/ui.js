@@ -22,7 +22,7 @@ $('#lang').addEventListener('click', () => {
   if (cur) srcEl.value = presetText(cur, other);
   LANG = other;
   try { localStorage.setItem('pulse-lang', LANG); } catch (e) { }
-  applyI18n(); buildSlots(); buildPresets(); syncHandsUI(); buildChips(); evaluate('bar'); renderPads(true);
+  applyI18n(); buildSlots(); buildPresets(); syncHandsUI(); buildChips(); evaluate('bar'); renderPads(true); renderGestureCards();
 });
 
 // ---------- evaluation ----------
@@ -1031,6 +1031,36 @@ evaluate('bar');
 renderPads();
 pvInit();
 sndInit();
+buildGuide();
+renderGestureCards();
 (document.fonts ? document.fonts.ready : Promise.resolve()).then(measure);
 measure();
 requestAnimationFrame(frame);
+
+// ---------- the guide: sections as cards, and a large view ----------
+// Each heading and what follows it becomes a card that opens and closes. "Open large" moves the same content into a
+// wide dialog in columns (moved, not copied, so its buttons keep working), and back when it closes.
+function buildGuide() {
+  const pane = $('#pane-guide'); if (!pane || $('#guideBody')) return;
+  const body = document.createElement('div'); body.id = 'guideBody'; body.className = 'help';
+  for (const el of [...pane.children]) if (!el.classList.contains('gtools') && el.id !== 'guideDlg') body.appendChild(el);
+  pane.appendChild(body);
+  let card = null, k = 0;
+  for (const el of [...body.children]) {
+    if (el.classList.contains('gpubox')) {
+      // the GPU box carries its own heading: it becomes a card of its own
+      const h = el.querySelector('h3'), d = document.createElement('details'); d.className = 'gsec';
+      const sm = document.createElement('summary'); sm.append(...h.childNodes); h.remove();
+      el.replaceWith(d); d.append(sm, el); card = null; continue;
+    }
+    if (el.tagName === 'H3') {
+      card = document.createElement('details'); card.className = 'gsec'; if (k++ < 2) card.open = true;
+      const sm = document.createElement('summary'); sm.innerHTML = `<span data-i18n="${el.dataset.i18n || ''}">${el.innerHTML}</span>`;
+      card.appendChild(sm); el.replaceWith(card);
+    } else if (card) card.appendChild(el);
+  }
+  const dlg = $('#guideDlg');
+  $('#guideBig').addEventListener('click', () => { dlg.querySelector('.gd-body').appendChild(body); for (const d of body.querySelectorAll('details.gsec')) d.dataset.was = d.open, d.open = true; dlg.showModal(); });
+  $('#guideClose').addEventListener('click', () => dlg.close());
+  dlg.addEventListener('close', () => { pane.appendChild(body); for (const d of body.querySelectorAll('details.gsec')) d.open = d.dataset.was === 'true'; });
+}
