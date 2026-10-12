@@ -327,7 +327,7 @@ rim      x . . x . . x . . . x . . x . .          | gain .35 pan .2 human .2
 kick     [x . . x] [x . . x] [x . . x] [x . . x]  | gain .4 dec .7
 shake    x*16                                     | gain [.4 .15 .25 .15]*4 pan -.3
 guitar   [0^7 . . 0^7] [. 0^7 . .] [0^7 . . 0^7] [. . 0^7 .] | zither oct 3 bright .5 dec .8 gain .26 pan -.15 human .25
-bass     0 _ 4 _                                  | zither oct 2 bright .25 dec 1 gain 1 hpf 30
+bass     0 _ 4 _                                  | upright gain .85 human .15
 flute    <[4 _ _ 5] [6 _ 4 _] [2 _ _ 1] [0 _ _ _]> | oct 5 gain .4 verb .35 delay .2
 vibes    <. [. 4 . 2] . [6 . 4 .]>                | oct 5 gain .3 verb .3
 
@@ -367,8 +367,8 @@ song intro:4 verse:8 hook:8 verse:8 hook:8
   {
     id: 'gpu', name: 'WebGPU Drift',
     head: {
-      ko: '// WebGPU Drift — 84 BPM, D 리디안. swarm(사인파 1,920개 패드)·choir(포먼트 합창)·plate(금속판 수백 개 모드)는 GPU가 음표를 미리 렌더링해요\n// P를 누르고 있으면 지금 소리를 얼려요(프리즈). 코드 위 시각화에서 terrain·contour·dots·demo를 고르면 GPU 셰이더 배경이 소리에 맞춰 움직여요. GPU가 없으면 CPU 소리로 대신 연주해요',
-      en: '// WebGPU Drift — 84 BPM, D lydian. swarm (a 1,920-sine pad), choir (formant voices) and plate (hundreds of metal-plate modes) are rendered note by note on the GPU\n// Hold P to freeze the sound. Pick terrain, contour, dots or demo above the code for a GPU shader backdrop that follows the sound. Without a GPU, CPU voices stand in',
+      ko: '// WebGPU Drift — 84 BPM, D 리디안. swarm(사인파 수천 개 패드)·choir(포먼트 합창)·plate(금속판 수백 개 모드)는 GPU가 음표를 미리 렌더링해요\n// P를 누르고 있으면 지금 소리를 얼려요(프리즈). 코드 위 시각화에서 terrain·contour·dots·demo를 고르면 GPU 셰이더 배경이 소리에 맞춰 움직여요. GPU가 없으면 CPU 소리로 대신 연주해요',
+      en: '// WebGPU Drift — 84 BPM, D lydian. swarm (a pad of thousands of sines), choir (formant voices) and plate (hundreds of metal-plate modes) are rendered note by note on the GPU\n// Hold P to freeze the sound. Pick terrain, contour, dots or demo above the code for a GPU shader backdrop that follows the sound. Without a GPU, CPU voices stand in',
     },
     body: `bpm 84
 key D lydian
@@ -431,7 +431,7 @@ kick   x*4                         | gain 1 tune .9
 clap   . x . x                     | gain .6 grit .3
 hat    [. x]*4                     | gain .35 phaser .5
 keys   <0^7 _ . [. 0^7]>           | epiano gain .5 wash .5 thr -24 ratio 4
-bass   [0 . . 0] [. 0 . .]         | bass gain .8 dist .2 duck .6
+bass   [0 . . 0] [. 0 . .]         | bass oct 2 gain .8 dist .2 duck .6
 lead   <[4 . 2 .] [. 7 . 4]>       | pluck gain .4 delay .35 wash .2 chorus .4 lpf k1(1200,9000)
 `,
   },

@@ -3,7 +3,7 @@
 // ahead of time on the main thread: it renders whole notes and textures into buffers that the scheduler
 // then plays at the exact time. That suits sounds that are too heavy for the CPU but can be prepared a
 // moment early:
-//   swarm  a supersaw pad of 40 detuned voices x 48 harmonics (about 1,900 sine partials per note)
+//   swarm  a supersaw pad of 40 detuned voices, each a harmonic series up to 14 kHz (up to 4,096 partials per note)
 //   choir  24 detuned voices with vowel formants (about 1,000 partials per note)
 //   plate  a struck metal plate: every inharmonic mode split into six beating neighbours, each with its own decay
 //          (a few hundred partials in the middle register, more for low notes)
@@ -166,7 +166,7 @@ function gpuVoice(inst, midi, dur, P, sr) {
     o = { atk: 0.0015 * sr };
   } else {
     // swarm and choir: many detuned voices, each a full harmonic series; their beating is the chorus
-    const choir = inst === 'choir', V = choir ? 24 : 40, H = choir ? 44 : 48, det = Math.max(2, P.detune ?? 18) * (choir ? 0.6 : 1);
+    const choir = inst === 'choir', V = choir ? 24 : 40, H = Math.max(8, Math.min(Math.floor(4096 / V), Math.floor((choir ? 11000 : 14000) / f0))), det = Math.max(2, P.detune ?? 18) * (choir ? 0.6 : 1);
     const bright = Math.max(0, Math.min(1, P.bright ?? 0.6)), fc = f0 * (3 + 45 * bright);
     const vow = FORMANTS.a.map((a, i) => [a[0] + (FORMANTS.o[i][0] - a[0]) * (1 - bright), a[1], a[2] + (FORMANTS.o[i][2] - a[2]) * (1 - bright)]);
     for (let v = 0; v < V; v++) {
@@ -239,8 +239,8 @@ function gpuBuildMembrane() {
 function membraneSetup(midi, P, sr) {
   const N = MEM_N, f0 = mtof(midi);
   const dec = Math.max(0.05, P.dec ?? 1), bright = Math.max(0, Math.min(1, P.bright ?? 0.5));
-  const T60 = 0.18 + 0.9 * dec, sig = 6.9078 / (T60 * sr) * 0.5;
-  const kap = 0.004 + 0.03 * (1 - bright);
+  const T60 = 0.35 + 2.0 * dec, sig = 6.9078 / (T60 * sr) * 0.5;   // a timpani-like head rings for seconds
+  const kap = 0.0015 + 0.012 * (1 - bright);
   // the note is the (1,1) mode, as on a timpani, where it is the tone you hear: f11 = 3.832 c / (2 pi R).
   // Pick the radius and Courant number to hit it; this scheme stays stable while lam^2 + 4 kap <= 1/2.
   const lamMax = Math.sqrt(0.48 - 4 * kap), J = 3.832;
@@ -252,14 +252,15 @@ function membraneSetup(midi, P, sr) {
   const idx = (dx, dy) => Math.round(c0 + dy * R) * N + Math.round(c0 + dx * R);
   const st = new Float32Array(MEM_LAYERS * 3 * N * N), vp = new Float32Array(MEM_LAYERS * 4);
   for (let L = 0; L < MEM_LAYERS; L++) {
-    // harder hits: more force, a smaller contact patch (brighter), more tension glide
-    const amp = [0.35, 0.6, 0.85, 1.1][L], w = (4.6 - L * 0.8) * (0.6 + 0.4 * R / 45) * (1.3 - 0.6 * bright);
+    // a felt mallet: a wide contact patch, smaller and brighter on harder hits; the pickups sit on the far side
+    // of the head, so the strike itself does not drown the ring
+    const amp = [0.35, 0.6, 0.85, 1.1][L], w = (8 - L * 1.2) * (0.6 + 0.4 * R / 45) * (1.3 - 0.6 * bright);
     const sx = c0 - 0.62 * R, sy = c0 + 0.1 * R, base = L * 3 * N * N;   // struck about 40% in from the rim, as on a timpani
     for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
       const r = Math.hypot(x - sx, y - sy);
       if (r < w && mask[y * N + x]) st[base + y * N + x] = -amp * 0.5 * (1 + Math.cos(Math.PI * r / w)) * lam;   // u(-1): initial velocity
     }
-    vp.set([idx(-0.38, 0.12), idx(0.36, -0.15), 1, [0.25, 0.5, 0.75, 1][L]], L * 4);
+    vp.set([idx(0.42, 0.3), idx(0.3, -0.45), 1, [0.25, 0.5, 0.75, 1][L]], L * 4);
   }
   return { N, R, lam2: lam * lam, sig, kap, n, mask, st, vp, glide: 0.12, gtau: 0.06 * sr };
 }

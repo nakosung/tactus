@@ -327,9 +327,12 @@ function metal(t, dur, tn, dest, scale = 1) {
   for (const f of METAL) { const o = ctx.createOscillator(); o.type = 'square'; o.frequency.value = f * tn * scale; o.connect(mix); o.start(t); o.stop(t + dur + 0.05); }
   mix.connect(dest);
 }
+const DRUM_TRIM = { clap: 4, hat: 1.8, ohat: 1.4, rim: 1.4, shaker: 1.6 }; // +12, +5, +3, +3, +4 dB
 function playDrum(inst, t, vel, P, out) {
   if (SAMPLE_HITS.has(inst)) return playSampleHit(inst, t, vel, P, out);
-  const ctx = S.ctx, amp = P.gain * vel;
+  // Level trims so every voice sits near the kick and snare at the same gain. Measured as 50 ms loudness at
+  // gain 1: the clap came out 22 dB under the kick and the hats 16 dB under, so in a full mix they vanished.
+  const ctx = S.ctx, amp = P.gain * vel * (DRUM_TRIM[inst] || 1);
   if (amp < 0.002) return;
   const spread = { hat: 0.18, ohat: 0.22, shaker: 0.3, ride: 0.12 }[inst] || 0;
   const dest = panTo(out, P.pan + (Math.random() - 0.5) * spread), dk = Math.max(0.1, P.dec), tn = Math.max(0.2, P.tune);
