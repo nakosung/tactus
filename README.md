@@ -30,7 +30,7 @@ Tactus was built live in conversation with an AI coding agent (Claude). The auth
 | WebGPU | `src/js/gpu.js` | Instruments of thousands of sines, spectral freeze, modal reverb (up to 65,536 modes), a wave-equation drum, the neural sax, and shader backdrops you can live-code |
 | Neural sax | `neural/` | A 14→64→64→1 network trained on the kit's sax recordings that predicts the spectral envelope; training code included |
 | Korean percussion | `korean/` | Janggu, buk, jing and kkwaenggwari, synthesized from physical models and measured partials |
-| Samples | `src/js/kit.js`, `tools/kit/` | A compact CC0 kit from the Versilian Community Sample Library |
+| Samples | `src/js/kit.js`, `tools/kit/`, `src/js/sounds.js` | A compact CC0 kit from the Versilian Community Sample Library, plus your own sounds: drop audio files on the page (kept in the browser) or load them from an address with a `sample` line |
 | UI | `src/app.html`, `src/js/ui.js`, `src/js/viz.js` | Editor with highlighting and autocomplete, pads, macros, visualizations, Korean and English |
 | Landing page | `src/landing.html` | The page at /tactus/ with the playable demos |
 

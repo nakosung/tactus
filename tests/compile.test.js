@@ -16,7 +16,8 @@ for (const lang of ['ko', 'en']) {
 }
 const broken = ['bus 3x | chorus .5', 'master warm | chorus 1', 'kick x | fb .5', 'viz nothing', 'space kitchen', 'kick x | gain',
   'auto nothing x', 'auto echo', 'auto st x | wobble', 'kick x\nauto kick x',
-  'lead c4 | off', 'lead $Z', 'let A = $A\nlead $A', 'lead c4 | struct 3', 'lead c4 | chunk 4 wobble', 'let = c4', 'lead c4 | cut rand(1)'];
+  'lead c4 | off', 'lead $Z', 'let A = $A\nlead $A', 'lead c4 | struct 3', 'lead c4 | chunk 4 wobble', 'let = c4', 'lead c4 | cut rand(1)',
+  'sample kick https://a.b/k.wav', 'sample zz', 'sample q1 h4 https://a.b/q.wav'];
 for (const line of ['auto echo <. . . x>', 'auto st . . . [x x] | repeat 16', 'kick x\nauto cut . x | mute kick', 'fx wob | lp 300\nauto wob x _ . .'])
   assert.strictEqual(run(`compile(${JSON.stringify(line)}).errors.size`), 0, 'should compile: ' + line);
 for (const line of broken) assert.ok(run(`compile(${JSON.stringify(line)}).errors.size`) > 0, 'should be an error: ' + line);
@@ -39,6 +40,14 @@ for (const [code, name, bars, want] of cases) assert.strictEqual(vs(evs(code, na
 { const a = vs(evs('lead [c4 d4 e4 f4]*2 | sometimes .5 +7', 'lead')), b = vs(evs('lead [c4 d4 e4 f4]*2 | sometimes .5 +7', 'lead')); assert.strictEqual(a, b, 'sometimes repeats the same way'); assert.ok(/\+7/.test(a) && /4@/.test(a.replace(/\+7@/g, '')), 'sometimes changes some notes: ' + a); }
 for (const w of ['scramble 4', 'shuffle 4']) assert.strictEqual(evs('lead c4 d4 e4 f4 | ' + w, 'lead').length, 4, w);
 { const k = c => run(`compile(${JSON.stringify(c)}).tracks.get('lead').patKey`); assert.notStrictEqual(k('let A = c4\nlead $A'), k('let A = d4\nlead $A'), 'a changed phrase changes the track'); }
+// sounds the person adds: sample lines and dropped files
+{ const kinds = code => run(`(() => { const r = compile(${JSON.stringify(code)}); return JSON.stringify([[...r.errors].map(e => e[1].msg), r.order.map(n => r.tracks.get(n).inst + ':' + r.tracks.get(n).kind)]); })()`);
+  assert.deepStrictEqual(JSON.parse(kinds('sample k2 https://a.b/k.wav\nbeat x . x . | k2')), [[], ['k2:drum']], 'a sample line is a hit');
+  assert.deepStrictEqual(JSON.parse(kinds('lead 0 2 | p1\nsample p1 c3 github:u/r/main/p.wav')), [[], ['p1:synth']], 'a note makes it pitched, from anywhere in the code');
+  run("USER_SOUNDS.set('mykick', { mode: 'hit', root: 60 })");
+  assert.deepStrictEqual(JSON.parse(kinds('d x . | mykick')), [[], ['mykick:drum']], 'a dropped file plays by its name');
+  assert.deepStrictEqual(JSON.parse(kinds('sample mykick c2\nd 0 2 | mykick')), [[], ['mykick:synth']], 'code can re-pitch a dropped file');
+  run('USER_SOUNDS.clear()'); }
 // Pattern time follows the song start: a written-out piece loaded at bar 12 plays its first bar there.
 const first = run(`(() => { const d = compile('rh <c4 d4 e4>').tracks.get('rh'); const at = c => cycleEvents(d, c).map(e => e.v + '@' + e.s).join(' ');
   const a = at(0); setPatOrigin(() => 12); const b = at(12); setPatOrigin(() => 0); return JSON.stringify([a, b]); })()`);

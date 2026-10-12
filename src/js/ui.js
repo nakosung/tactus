@@ -28,6 +28,7 @@ $('#lang').addEventListener('click', () => {
 // ---------- evaluation ----------
 function evaluate(mode = 'bar', opts = {}) {
   const r = compile(srcEl.value);
+  sndApplyCode(r.samples);
   S.errors = r.errors; S.lineNames = r.lineNames;
   S.progGen = r.progGen;
   { const sig = [...r.pads.values()].map(p => p.name + p.key + p.latch + p.src + r.autos.has(p.name)).join('|'); S.pads = r.pads; S.autoNames = new Set(r.autos.keys()); if (sig !== padSig) { padSig = sig; renderPads(); } }
@@ -133,7 +134,7 @@ function hlArr(text, kind) {
   });
 }
 function hlLine(text, i) {
-  const ci = text.indexOf('//');
+  const ci = commentAt(text);
   const code = ci >= 0 ? text.slice(0, ci) : text, comment = ci >= 0 ? text.slice(ci) : '';
   let out;
   const m = HEAD_RE.exec(code);
@@ -226,7 +227,7 @@ function genPreview(li) {
 // replace a generator with the notes it is playing right now, so the line can be edited by hand
 function bakeLine() {
   const li = caretLine(), v = srcEl.value, lines = v.split('\n'), ln = lines[li];
-  const ci = ln.indexOf('//'), code = ci >= 0 ? ln.slice(0, ci) : ln, comment = ci >= 0 ? ln.slice(ci) : '';
+  const ci = commentAt(ln), code = ci >= 0 ? ln.slice(0, ci) : ln, comment = ci >= 0 ? ln.slice(ci) : '';
   let out = null;
   if (/^\s*prog\s+~gen/.test(code) && S.progGen) out = code.replace(/~gen(\s+\d+)?/, S.progGen);
   else {
@@ -343,7 +344,7 @@ function acItems(pre, word) {
   const before = pre.slice(0, pre.length - word.length);
   const hm = /^\s*([a-zA-Z]\w*)/.exec(pre), head = hm && hm[1];
   if (/^\s*$/.test(before)) {
-    const g = ['bpm', 'key', 'scale', 'swing', 'prog', 'scene', 'song', 'master', 'seed', 'fx', 'auto', 'let', 'bus', 'space', 'viz', 'shader'].map(n => ({ label: n, ins: n + ' ', desc: t('ac_' + n) }));
+    const g = ['bpm', 'key', 'scale', 'swing', 'prog', 'scene', 'song', 'master', 'seed', 'fx', 'auto', 'let', 'sample', 'bus', 'space', 'viz', 'shader'].map(n => ({ label: n, ins: n + ' ', desc: t('ac_' + n) }));
     const tr = AC_TRACKS.map(n => ({ label: n, ins: n.padEnd(7) + ' ', desc: instForName(n), inst: LOOPS.includes(n) ? null : instForName(n) }));
     return [...tr, ...g];
   }
@@ -395,7 +396,7 @@ function acItems(pre, word) {
     }
     return PARAMS.filter(n => !RETURN_ONLY.includes(n)).map(n => ({ label: n, ins: n + ' ', desc: t('p_' + n) }))
       .concat(docNames(/^\s*bus\s+([a-zA-Z]\w*)/).filter(n => n !== 'verb' && n !== 'delay').map(n => ({ label: n, ins: n + ' ', desc: t('ac_send') })))
-      .concat([...SYNTHS, ...DRUMS].map(n => ({ label: n, ins: n + ' ', desc: t('ac_inst'), inst: n })), LOOPS.map(n => ({ label: n, ins: n + ' ', desc: t('ac_inst') })))
+      .concat([...SYNTHS, ...DRUMS, ...USER_SOUNDS.keys(), ...CODE_SOUNDS.keys()].map(n => ({ label: n, ins: n + ' ', desc: soundOf(n) ? t('sndMine') : t('ac_inst'), inst: n })), LOOPS.map(n => ({ label: n, ins: n + ' ', desc: t('ac_inst') })))
       .concat(['fixed', 'fast', 'slow', 'every'].map(n => ({ label: n, ins: n + ' ', desc: t('ac_' + n) })))
       .concat(TF_WORDS.map(n => ({ label: n, ins: n + ' ', desc: t('tf_' + n) })))
       .concat(VOICINGS.map(n => ({ label: n, ins: n + ' ', desc: t('ac_voicing') })))
@@ -407,7 +408,7 @@ function acUpdate(force) {
   const v = srcEl.value, pos = srcEl.selectionStart;
   if (pos !== srcEl.selectionEnd) return acClose();
   const ls = v.lastIndexOf('\n', pos - 1) + 1, pre = v.slice(ls, pos);
-  if (pre.includes('//')) return acClose();
+  if (commentAt(pre) >= 0) return acClose();
   const wm = /\$\w*$/.exec(pre) || /~[a-z]*$/.exec(pre) || /-?[A-Za-z_][\w#]*$/.exec(pre) || /-$/.exec(pre);
   const word = wm ? wm[0] : '';
   if (!word && !force) return acClose();
@@ -1029,6 +1030,7 @@ syncHandsUI();
 evaluate('bar');
 renderPads();
 pvInit();
+sndInit();
 (document.fonts ? document.fonts.ready : Promise.resolve()).then(measure);
 measure();
 requestAnimationFrame(frame);

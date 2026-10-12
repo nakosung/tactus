@@ -386,7 +386,7 @@ const RETURN_ONLY = ['time', 'fb', 'pre', 'limit'];
 // names of the code's own buses: each also works as a send parameter on track lines (set while compiling)
 let BUS_NAMES = new Set();
 const EXP_PARAMS = new Set(['cut', 'hpf', 'lpf', 'midf']);
-const GLOBALS = new Set(['bpm', 'key', 'scale', 'swing', 'prog', 'scene', 'song', 'master', 'seed', 'fx', 'auto', 'let', 'space', 'viz', 'shader', 'bus']);
+const GLOBALS = new Set(['bpm', 'key', 'scale', 'swing', 'prog', 'scene', 'song', 'master', 'seed', 'fx', 'auto', 'let', 'sample', 'space', 'viz', 'shader', 'bus']);
 // generator parameters shape the notes, so they are part of the pattern rather than the sound
 const GEN_PARAMS = ['seed', 'dens', 'evolve', 'bars'];
 let GEN_SEED = 0;
@@ -423,8 +423,18 @@ const SPACES_LIST = ['hall', 'room', 'chamber', 'cathedral', 'plate'];
 const VIZ_BUILTIN = ['roll', 'grid', 'spiral', 'fft', 'terrain', 'contour', 'dots', 'demo', 'sono', 'off'];
 const TRANSFORMS = ['rev', 'fast', 'slow', 'ply', 'skip', 'inv'];
 
+// sounds the person added: name -> { mode: 'hit' | 'pitched', root (midi), url? }.
+// USER_SOUNDS holds files dropped into the app (set by sounds.js); CODE_SOUNDS comes from sample lines, per compile.
+let USER_SOUNDS = new Map(), CODE_SOUNDS = new Map();
+const soundOf = n => CODE_SOUNDS.get(n) || USER_SOUNDS.get(n) || null;
+const isInst = w => DRUMS.includes(w) || SYNTHS.includes(w) || LOOPS.includes(w) || !!soundOf(w);
+// a hit plays the recording as it is on each x; a pitched sound is re-pitched to the notes
+const isHit = inst => DRUMS.includes(inst) || (soundOf(inst) || {}).mode === 'hit';
+// words a sound can't be called, so it can't hide a keyword
+const RESERVED = () => new Set([...DRUMS, ...SYNTHS, ...LOOPS, ...PARAMS, ...GLOBALS, ...TF_WORDS, ...VOICINGS, ...ARPS, 'fixed', 'fast', 'slow', 'every', 'rev', 'inv', 'skip', 'ply', 'x', 'r']);
 function instForName(name) {
   const n = name.toLowerCase();
+  if (isInst(name)) return name;
   if (DRUMS.includes(n) || SYNTHS.includes(n) || LOOPS.includes(n)) return n;
   for (const [pre, inst] of NAME_INST) if (n.startsWith(pre)) return inst;
   return 'tri';
@@ -492,7 +502,7 @@ function parseParams(src, base) {
   const every = [], tf = [];
   for (let i = 0; i < chunks.length; i++) {
     const w = chunks[i].s;
-    if (DRUMS.includes(w) || SYNTHS.includes(w) || LOOPS.includes(w)) { inst = w; continue; }
+    if (isInst(w)) { inst = w; continue; }
     if (w === 'fixed') { fixed = true; continue; }
     if (VOICINGS.includes(w)) { voicing = w; continue; }
     if (ARPS.includes(w)) { arp = w; continue; }
@@ -590,8 +600,10 @@ function tfAt(chunks, i) {
   return { fn, i, src: chunks.slice(at, i + 1).map(c => c.s).join(' ') };
 }
 
+// where a // comment starts; the // of an address (https://) is not one
+function commentAt(text) { const m = /(^|[^:])\/\//.exec(text); return m ? m.index + m[1].length : -1; }
 function stripComment(text) {
-  const i = text.indexOf('//');
+  const i = commentAt(text);
   return i >= 0 ? text.slice(0, i) : text;
 }
 
@@ -675,6 +687,8 @@ function parseLine(text) {
     return { type: 'prog', pat: parseMini(rest, restBase), src: rest.trim() };
   }
   if (name === 'fx') return { type: 'pad', pad: parsePad(rest, restBase) };
+  // sample NAME [hit | NOTE] [URL]     a recording as a sound: from the web, or a file dropped in (to change how it plays)
+  if (name === 'sample') return parseSample(rest, restBase);
   // let A = e5 d#5 e5 b4   ·   then $A anywhere a pattern goes: lead <$A $A $B>
   if (name === 'let') {
     const lm = /^(\s*)([a-zA-Z_]\w*)\s*=\s*/.exec(rest);
@@ -756,12 +770,28 @@ function parseLine(text) {
   const inst = pr.inst || instForName(name);
   return {
     type: 'track', name, pat: p, params: pr.params, inst, fixed: pr.fixed, opts: { voicing: pr.voicing, arp: pr.arp }, gen: spec,
-    kind: DRUMS.includes(inst) ? 'drum' : LOOPS.includes(inst) ? 'loop' : 'synth',
+    kind: isHit(inst) ? 'drum' : LOOPS.includes(inst) ? 'loop' : 'synth',
     chop: patSrc.trim() !== '',
     patKey: inst + '|' + patSrc.replace(/\s+/g, ' ').trim() + '|' + pr.speed + '|' + pr.every.map(x => x.src).join(',') + '|' + pr.tf.map(x => x.src).join(',') + varsUsed.map(n => '|$' + n + '=' + VARS.get(n).src).join('') + (spec ? `|g${spec.seed},${spec.dens},${spec.bars},${spec.evolve},${spec.range}` : ''),
   };
 }
 
+const URL_RE = /^(https?:\/\/\S+|github:\S+)$/;
+function parseSample(rest, restBase) {
+  const ch = splitChunks(rest, restBase);
+  if (!ch.length || !/^[a-zA-Z]\w*$/.test(ch[0].s)) throw new PErr(t('sampleFmt'), restBase);
+  const name = ch[0].s;
+  if (RESERVED().has(name)) throw new PErr(t('sampleName', { n: name }), ch[0].c0);
+  const out = { type: 'sample', name, mode: null, root: null, url: null };
+  for (const c of ch.slice(1)) {
+    if (c.s === 'hit') out.mode = 'hit';
+    else if (/^[a-gA-G][#b]?-?\d$/.test(c.s)) { out.mode = 'pitched'; out.root = atomNotes(c.s.toLowerCase(), 0, 'major', 4, 0)[0]; }
+    else if (URL_RE.test(c.s)) out.url = c.s.startsWith('github:') ? 'https://raw.githubusercontent.com/' + c.s.slice(7) : c.s;
+    else throw new PErr(t('sampleFmt'), c.c0);
+  }
+  if (!out.url && !USER_SOUNDS.has(name)) throw new PErr(t('sampleNone', { n: name }), ch[0].c0);
+  return out;
+}
 function parsePad(rest, restBase) {
   const bar = rest.indexOf('|');
   const head = splitChunks(bar >= 0 ? rest.slice(0, bar) : rest, restBase);
@@ -813,10 +843,13 @@ const DEFAULT_PADS = DEFAULT_PAD_SRC.map(l => { const r = parseLine(l); r.pad.bu
 function compile(text) {
   { const sm = /^\s*seed\s+(-?\d+)\s*(?:\/\/.*)?$/m.exec(text); GEN_SEED = sm ? +sm[1] : 0; }
   const lines = text.split('\n');
-  const out = { pads: new Map(), autos: new Map(), seed: GEN_SEED, master: null, bpm: null, key: null, scale: null, swing: null, prog: null, progSrc: '', scenes: new Map(), song: null, arrSrc: '', tracks: new Map(), order: [], errors: new Map(), lineNames: new Map(), space: null, viz: null, shaders: new Map(), buses: new Map(), masterParams: {} };
+  const out = { pads: new Map(), autos: new Map(), samples: new Map(), seed: GEN_SEED, master: null, bpm: null, key: null, scale: null, swing: null, prog: null, progSrc: '', scenes: new Map(), song: null, arrSrc: '', tracks: new Map(), order: [], errors: new Map(), lineNames: new Map(), space: null, viz: null, shaders: new Map(), buses: new Map(), masterParams: {} };
   // bus names first, so track lines anywhere in the code can send to them
   BUS_NAMES = new Set();
   VARS = new Map();
+  // sample lines first too, so a track above one can already play it
+  CODE_SOUNDS = new Map();
+  lines.forEach(ln => { if (!/^\s*sample\s/.test(stripComment(ln))) return; try { const r = parseLine(ln); const u = USER_SOUNDS.get(r.name); CODE_SOUNDS.set(r.name, { mode: r.mode || (u ? u.mode : 'hit'), root: r.root ?? (u ? u.root : 60), url: r.url }); } catch (e) { } });
   lines.forEach((ln, i) => { const m = /^(\s*let\s+([a-zA-Z_]\w*)\s*=\s*)(.*)$/.exec(stripComment(ln)); if (m && !VARS.has(m[2]) && m[3].trim()) VARS.set(m[2], { src: m[3], base: m[1].length, line: i }); });
   for (const ln of lines) { const m = /^\s*bus\s+([a-zA-Z]\w*)/.exec(stripComment(ln)); if (m && m[1] !== 'verb' && m[1] !== 'delay' && !PARAMS.includes(m[1]) && !TF_WORDS.includes(m[1])) BUS_NAMES.add(m[1]); }
   const sceneLines = [];
@@ -835,6 +868,7 @@ function compile(text) {
       else if (r.type === 'shader') { if (out.shaders.has(r.name)) throw new PErr(t('dup', { n: r.name }), 0); r.line = i; out.shaders.set(r.name, r); }
       else if (r.type === 'seed') out.seed = r.v;
       else if (r.type === 'pad') { r.pad.line = i; if (out.pads.has(r.pad.name)) throw new PErr(t('dup', { n: r.pad.name }), 0); out.pads.set(r.pad.name, r.pad); }
+      else if (r.type === 'sample') { if (out.samples.has(r.name)) throw new PErr(t('dup', { n: r.name }), 0); out.samples.set(r.name, { ...CODE_SOUNDS.get(r.name), line: i }); }
       else if (r.type === 'let') { if (VARS.get(r.name).line !== i) throw new PErr(t('dup', { n: r.name }), 0); }
       else if (r.type === 'auto') { if (out.autos.has(r.name)) throw new PErr(t('dup', { n: r.name }), 0); r.line = i; r.cache = new Map(); out.autos.set(r.name, r); }
       else if (r.type === 'swing') out.swing = r.v;

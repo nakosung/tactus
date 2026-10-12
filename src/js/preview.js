@@ -25,7 +25,7 @@ function pvPhrase(inst, drum) {
   return '0 2 4 7 4 2 0 _';
 }
 function pvDefFor(inst) {
-  const drum = DRUMS.includes(inst);
+  const drum = isHit(inst);
   // parseLine, not compile: compile resets the document's bus names and seed
   let def = null; try { def = parseLine('pv ' + pvPhrase(inst, drum) + ' | ' + inst); } catch (e) { return null; }
   return def && def.type === 'track' ? { ...def, name: '__pv' } : null;
