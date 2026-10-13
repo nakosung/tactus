@@ -25,6 +25,10 @@ The transcribed example songs take their notes from scores of the [Mutopia Proje
 | Mountain King (Techno) | Grieg, Op. 46 No. 4, typeset by Coyau | Public domain |
 | Canon in D | Pachelbel, Canon per 3 Violini e Basso, typeset by Michael Fischer v. Mollard | CC BY 4.0 |
 
+Korobeiniki (falling-block chip) uses the melody of the Russian folk song "Korobeiniki" (19th century, traditional, public domain), written down from the folk tune itself; its harmony line, bass and drums are new. It takes nothing from the Tetris soundtrack arrangements.
+
+The other game-style example songs (Pipe Hopper, Hero's Field, Steel Stage, Puffball Parade and the rest) are originals written for Tactus in the spirit of a genre; they do not quote any game's music.
+
 ## Trained weights
 
 | What | Trained on | License |
