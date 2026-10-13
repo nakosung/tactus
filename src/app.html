@@ -799,11 +799,20 @@ body.mob .bk-card.fold > :not(header) { display: none; }
 body.mob .bk-card.fold > header { cursor: pointer; }
 body.mob .bk-card.fold { padding-block: 5px; transition: background-color .12s; }
 body.mob .bk-card.fold .bk-nm small { display: none; }
+/* the list never grows wider than the screen: the name gives way (…) and the strip takes what is left */
+body.mob .bk-cards { grid-template-columns: minmax(0, 1fr); }
+body.mob .bk-card, body.mob .bk-card > * { min-width: 0; }
+body.mob .bk-card.fold > header { gap: 6px; }
+body.mob .bk-card.fold .bk-nm { flex: 0 1 auto; overflow: hidden; }
+body.mob .bk-card.fold .bk-nm b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+body.mob .bk-card.fold .bk-ico { flex: none; }
+body.mob .bk-card.fold header > button { flex: none; }
+body.mob .bk-gridbox { overflow-x: auto; }
 body.mob .bk-card.fold .bk-ico { display: inline-block; transform-origin: 50% 70%; }
 body.mob .bk-card.fold.sounding { background: color-mix(in srgb, var(--tc) 16%, var(--raised)); }
 body.mob .bk-card.fold.muted .bk-mini { opacity: .35; }
 .bk-mini { display: none; }
-body.mob .bk-card.fold .bk-mini { display: grid; grid-template-columns: repeat(16, 1fr); gap: 2px; flex: 1 1 96px; max-width: 150px; height: 14px; margin-inline: 6px auto; align-self: center; }
+body.mob .bk-card.fold .bk-mini { display: grid; grid-template-columns: repeat(16, minmax(0, 1fr)); gap: 2px; flex: 1 1 0; min-width: 48px; max-width: 150px; height: 14px; margin-inline: 2px auto; align-self: center; }
 body.mob .bk-mini i { border-radius: 2px; background: color-mix(in srgb, var(--fg) 8%, transparent); }
 body.mob .bk-mini i[data-b] { background: color-mix(in srgb, var(--fg) 14%, transparent); }
 body.mob .bk-mini i.on { background: color-mix(in srgb, var(--tc) 85%, var(--fg)); }
