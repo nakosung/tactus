@@ -17,7 +17,12 @@ function mobBuild() {
   nav.innerHTML = MOB_TABS.map(n => `<button role="tab" data-mt="${n}" data-i18n="${lbl[n]}" aria-selected="false">${esc(t(lbl[n]))}</button>`).join('');
   app.appendChild(nav);
   nav.addEventListener('click', e => { const b = e.target.closest('[data-mt]'); if (b) mobTab(b.dataset.mt); });
-  // ⋯ in the top bar: the preset, compose, share, skins and language, folded away on a phone
+  // ⋯ in the top bar opens a sheet with what is not needed while playing: compose and share (things done to the
+  // piece), live update, skin and language (settings), GitHub and install. The song's name, the scope and the display
+  // stay in the bar: they say what is playing and that it is.
+  const sheet = document.createElement('div'); sheet.className = 'msheet'; sheet.id = 'msheet'; sheet.hidden = true;
+  sheet.innerHTML = '<div class="msg" data-g="piece"></div><div class="msg" data-g="set"></div><div class="msg" data-g="more"></div>';
+  document.querySelector('.top').after(sheet);
   const more = document.createElement('button'); more.className = 'btn ghost mmore'; more.id = 'mmore';
   more.setAttribute('aria-expanded', 'false'); more.setAttribute('data-i18n-aria', 'mMore'); more.setAttribute('aria-label', t('mMore')); more.textContent = '⋯';
   document.querySelector('.top .lcd').after(more);
@@ -34,8 +39,9 @@ function mobBuild() {
     if (!vb.classList.contains('open')) { e.stopPropagation(); e.preventDefault(); vb.classList.add('open'); return; }
     setTimeout(() => vb.classList.remove('open'), 0);
   }, true);
+  sheet.addEventListener('click', e => { if (e.target.closest('#shareBtn, #srcLink, .installBtn')) mobMore(false); });
   document.addEventListener('pointerdown', e => {
-    if (MOB.more && !e.target.closest('.top')) mobMore(false);
+    if (MOB.more && !e.target.closest('#mmore, #msheet, .cmppop, .sharedlg')) mobMore(false);
     const vb = document.getElementById('vizbar'); if (vb.classList.contains('open') && !e.target.closest('#vizbar')) vb.classList.remove('open');
   });
   document.addEventListener('keydown', e => { if (e.key === 'Escape' && MOB.max && !e.defaultPrevented) mobMax(''); });
@@ -44,7 +50,18 @@ function mobBuild() {
 function mobMore(on) {
   MOB.more = on; document.body.classList.toggle('mmore-on', on);
   const b = document.getElementById('mmore'); if (b) b.setAttribute('aria-expanded', on);
-  mobSize();
+  const sh = document.getElementById('msheet'); if (sh) sh.hidden = !(on && MOB.on);
+}
+// the top bar's extras move into the sheet on a phone and back to their places on a desktop (moving keeps their handlers)
+const MOB_SHEET = [['piece', '.top .cmpwrap'], ['piece', '#shareBtn'], ['set', '#auto'], ['set', '#skins'], ['set', '#lang'], ['more', '#srcLink'], ['more', '.top .installBtn']];
+function mobSheet(on) {
+  const sh = document.getElementById('msheet'); if (!sh) return;
+  for (const [g, sel] of MOB_SHEET) {
+    const el = MOB.moved && MOB.moved.get(sel) ? MOB.moved.get(sel).el : document.querySelector(sel); if (!el) continue;
+    MOB.moved = MOB.moved || new Map();
+    if (on && !MOB.moved.has(sel)) { const mark = document.createComment(sel); el.before(mark); MOB.moved.set(sel, { el, mark }); sh.querySelector(`[data-g="${g}"]`).appendChild(el); }
+    if (!on && MOB.moved.has(sel)) { const m = MOB.moved.get(sel); m.mark.replaceWith(m.el); MOB.moved.delete(sel); }
+  }
 }
 // the room left for the module: the window less the top bar and the tab bar
 function mobSize() {
@@ -69,6 +86,7 @@ function mobApply() {
   const on = MOB_MQ.matches, land = on && MOB_LAND.matches;
   const was = MOB.on; MOB.on = on; MOB.land = land;
   document.body.classList.toggle('mob', on); document.body.classList.toggle('mland', land);
+  mobSheet(on);
   if (on) {
     if (MOB.max) mobMax('');
     let n = MOB.tab; if (!was) try { n = localStorage.getItem('tactus-mtab') || 'code'; } catch (e) { }

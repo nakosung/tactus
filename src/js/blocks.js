@@ -578,8 +578,9 @@ function bkRender() {
       const g = bkLoad(L, p.pat, kind);
       BK.items.push(L);
       const body = g ? `<div class="bk-gridbox">${bkGridHTML(L, null, d0)}</div>` : `<div class="bk-chip"><code>${esc(p.pat.trim())}</code><button class="bk-link" data-act="goto">${esc(t('bkInCode'))}</button></div>`;
-      cards.push(`<article class="bk-card phrase" data-i="${i}" data-sort="card" style="--tc:${bkHue(p.name)}">
-        <header><span class="bk-ico" aria-hidden="true">🧩</span><span class="bk-nm"><b>$${esc(p.name)}</b><small>${esc(t('bkPhrase'))}</small></span><small class="bk-use">${esc(us.length ? t('bkPhraseUse', { list: us.map(u => u.name).join(', ') }) : t('bkPhraseNone'))}</small></header>
+      const pfold = document.body.classList.contains('mob') && !BK.unfold.has(key);
+      cards.push(`<article class="bk-card phrase${pfold ? ' fold' : ''}" data-i="${i}" data-sort="card" style="--tc:${bkHue(p.name)}">
+        <header><span class="bk-ico" aria-hidden="true">🧩</span>${pfold ? '<i class="bk-led" aria-hidden="true"></i>' : ''}<span class="bk-nm"><b>$${esc(p.name)}</b><small>${esc(t('bkPhrase'))}</small></span>${pfold && g ? bkMiniHTML(L) : ''}<button class="bk-fold" data-act="fold" aria-expanded="${!pfold}" aria-label="${esc(t(pfold ? 'bkUnfold' : 'bkFold'))} $${esc(p.name)}">${pfold ? '▸' : '▾'}</button><small class="bk-use">${esc(us.length ? t('bkPhraseUse', { list: us.map(u => u.name).join(', ') }) : t('bkPhraseNone'))}</small></header>
         ${r.errors.get(i) ? `<p class="bk-err">${esc(r.errors.get(i).msg)}</p>` : ''}${body}<div class="bk-foot"><p class="bk-why">${esc(t('bkPhraseHint'))}</p>${L.grid ? bkMoreMenu(L, null) : ''}</div></article>`);
       return;
     }
@@ -613,7 +614,7 @@ function bkRender() {
     // on a phone the cards are folded to their name row; one tap opens a card
     const fold = document.body.classList.contains('mob') && !BK.unfold.has(name);
     cards.push(`<article class="bk-card${fold ? ' fold' : ''}${err ? ' bad' : ''}${m ? ' muted' : ''}${L.rules.length ? ' ruled' : ''}" data-i="${i}" data-sort="card" style="--tc:${col}">
-      <header><span class="bk-ico" aria-hidden="true">${BK_ICON(def.inst)}</span><span class="bk-nm"><b>${esc(name)}</b><small>${esc(bkName(def.inst))}</small></span>${fold ? bkMiniHTML(L) : ''}
+      <header><span class="bk-ico" aria-hidden="true">${BK_ICON(def.inst)}</span>${fold ? '<i class="bk-led" aria-hidden="true"></i>' : ''}<span class="bk-nm"><b>${esc(name)}</b><small>${esc(bkName(def.inst))}</small></span>${fold ? bkMiniHTML(L) : ''}
         <button class="bk-fold" data-act="fold" aria-expanded="${!fold}" aria-label="${esc(t(fold ? 'bkUnfold' : 'bkFold'))} ${esc(name)}">${fold ? '▸' : '▾'}</button><button class="bk-tg${m ? ' on' : ''}" data-act="mute" aria-pressed="${m}" title="${esc(t('bkMute'))}">M</button><button class="bk-tg${so ? ' on' : ''}" data-act="solo" aria-pressed="${so}" title="${esc(t('bkSolo'))}">S</button><button class="bk-x" data-act="del" title="${esc(t('bkDel'))}" aria-label="${esc(t('bkDel'))} ${esc(name)}">×</button></header>
       ${err ? `<p class="bk-err">${esc(err.msg)}</p>` : ''}${body}${synOpen ? bkSynHTML(L) : ''}
       <div class="bk-foot">${synBtn}${rules ? `<span class="bk-rules" title="${esc(t('bkRuleHint'))}">${rules}</span>` : ''}${st}${more}</div>
@@ -642,12 +643,15 @@ function bkRender() {
   const songBox = `<section class="bk-song"><h3>${esc(t('bkSong'))}</h3><p class="bk-why">${esc(t('bkSongHint'))}</p>
       ${sceneRows}<div class="bk-row2"><button class="bk-add" data-act="sceneadd">${esc(t('bkSceneAdd'))}</button></div>
       ${BK.scenes.length ? (r.song ? `<div class="bk-trainrow"><b>${esc(t('bkTrain'))}</b>${train}<button class="bk-bar add" data-act="caradd" aria-label="${esc(t('bkCarAdd'))}" title="${esc(t('bkCarAdd'))}">+</button></div>` : `<button class="bk-add" data-act="songnew">${esc(t('bkSongNew'))}</button>`) : ''}</section>`;
-  boardEl.innerHTML = `<p class="bk-hint">${esc(t('bkHint'))}</p><div class="bk-top">
+  const mob = document.body.classList.contains('mob');
+  const progTxt = P.toks ? P.toks.map(v => { const c = chords.find(c => (P.names ? c.name : c.deg) === v); return c ? c.name : v; }).join(' ') : '';
+  const setSum = `<summary><b>♩ ${bpm}</b><span>${esc(NOTE_NAMES[BK.key.root] + ' ' + bkT('bkm_' + sc, sc))}</span>${progTxt ? `<span class="bk-sprog">${esc(progTxt)}</span>` : ''}</summary>`;
+  boardEl.innerHTML = `${mob ? `<details class="bk-set"${BK.setOpen ? ' open' : ''}>${setSum}` : ''}<p class="bk-hint">${esc(t('bkHint'))}</p><div class="bk-top">
       <label class="bk-tempo"><span aria-hidden="true">🐢</span><input type="range" id="bkBpm" min="60" max="180" step="1" value="${bpm}" aria-label="${esc(t('bkTempo'))}"><span aria-hidden="true">🐇</span><b>${bpm}</b></label>
       <span class="bk-key"><select id="bkRoot" aria-label="${esc(t('bkRoot'))}">${roots}</select><span class="seg">${moods}</span><select id="bkScale" aria-label="${esc(t('bkScale'))}">${scales}</select></span>
       <button class="bk-snd" data-act="clicks" aria-pressed="${BK.clicks}" title="${esc(t('bkClicks'))}" aria-label="${esc(t('bkClicks'))}">${BK.clicks ? '🔊' : '🔈'}</button>
     </div>
-    <div class="bk-chords"><b>${esc(t('bkChords'))}</b>${chordRow}</div>
+    <div class="bk-chords"><b>${esc(t('bkChords'))}</b>${chordRow}</div>${mob ? '</details>' : ''}
     <div class="bk-cards">${cards.join('') || `<p class="bk-empty">${esc(t('bkEmpty'))}</p>`}</div>
     <div class="bk-pal"><b>${esc(t('bkAdd'))}</b>${BK_PALETTE.map(([n]) => `<button class="bk-add" data-add="${n}"><span aria-hidden="true">${BK_ICON(n)}</span>${esc(bkName(n))}</button>`).join('')}</div>
     ${songBox}
@@ -1023,7 +1027,7 @@ function bkInit() {
   });
   boardEl.addEventListener('click', e => {
     // a folded card's name row opens it, as its ▸ does
-    const nm = !e.target.closest('button') && e.target.closest('.bk-card.fold > header'); if (nm) { const L = bkLine(nm); if (L) { toggleSet(BK.unfold, L.name); bkRender(); } return; }
+    const nm = !e.target.closest('button') && e.target.closest('.bk-card.fold > header'); if (nm) { const L = bkLine(nm); if (L) bkOpen(L, nm.querySelector('.bk-mini')); return; }
     const b = e.target.closest('button'); if (!b) return;
     if (b.dataset.pick != null) { bkMenu(b); return; }
     if (b.dataset.act === 'clicks') { BK.clicks = !BK.clicks; try { localStorage.setItem('tactus-bkclick', BK.clicks ? '1' : '0'); } catch (err) { } b.setAttribute('aria-pressed', BK.clicks); b.textContent = BK.clicks ? '🔊' : '🔈'; if (BK.clicks) bkClick('on'); return; }
@@ -1059,7 +1063,7 @@ function bkInit() {
     if (b.dataset.rx != null) { const r = L.rules[+b.dataset.rx]; bkWrite(L.i, p => { p.params = bkReplace(p.params, r, ''); }); return; }
     if (b.dataset.pdel != null) { const tr = L.train.slice(); tr.splice(+b.dataset.pdel, 1); bkWriteTrain(L, tr); return; }
     if (b.dataset.act === 'padd') { bkWriteTrain(L, [...L.train, L.train[L.train.length - 1]]); return; }
-    if (b.dataset.act === 'fold') { toggleSet(BK.unfold, L.name); bkRender(); return; }
+    if (b.dataset.act === 'fold') { if (BK.unfold.has(L.key)) { BK.unfold.delete(L.key); bkRender(); } else bkOpen(L, b.closest('header').querySelector('.bk-mini')); return; }
     if (b.dataset.act === 'syn') { toggleSet(BK.synOpen, L.name); bkRender(); return; }
     if (b.dataset.ft != null) { bkWrite(L.i, p => { p.params = bkSetWord(p.params, 'ftype', b.dataset.ft); }); bkSynHear(L); return; }
     if (b.dataset.act === 'mute') { toggleSet(S.muted, L.name); syncLoopVols(); render(); bkRender(); }
@@ -1308,19 +1312,42 @@ function bkSynInit() {
 }
 
 // ---------- folded cards show what is playing ----------
-// A folded card keeps a strip of the bar's steps (lit where the pattern has a note, with the step now playing) and
-// lights up on each note as it is heard, for as long as it sounds, so a phone's list of cards still shows the music.
+// On a phone the cards fold to one row each, laid out on the same columns so the rows read as a small step sequencer:
+// a light, the name, the bar's steps and mute/solo. The steps show where the notes are (for a melody, how high, and
+// how long they are held), the step now playing, and dots for the bar when the pattern is longer than one. The light
+// is lit while the track's notes sound, brighter for louder ones; a track with no steps to show (a drone, a
+// generator) gets a level bar instead. Notes come from the scheduler as they are played (NOTE_LOG), so a muted track or
+// one left out of the scene stays dark.
 function bkMiniBars(L) {
   if (!L.grid || !(L.tok || L.notes)) return null;
-  const bars = Array.from({ length: L.bars }, () => new Set());
-  if (L.tok) L.tok.forEach((v, k) => { if (v !== '.' && v !== '_') bars[Math.floor(k / BK_STEPS)]?.add(k % BK_STEPS); });
-  else for (const o of L.notes) bars[Math.floor(o.s / BK_STEPS)]?.add(o.s % BK_STEPS);
+  const bars = Array.from({ length: L.bars }, () => Array(BK_STEPS).fill(null));
+  if (L.tok) { L.tok.forEach((v, k) => { if (v !== '.' && v !== '_') { const b = bars[Math.floor(k / BK_STEPS)]; if (b) b[k % BK_STEPS] = { on: 1, h: v === 'X' ? 1 : v === 'x?' ? 0.45 : 0.75 }; } }); return bars; }
+  // a melody: the top note of each onset, scaled between the lowest and highest the track plays
+  const tops = L.notes.map(o => { try { const ns = bkAtom(o.v, L); return ns.length ? Math.max(...ns) : null; } catch (e) { return null; } });
+  const vals = tops.filter(v => v != null), lo = vals.length ? Math.min(...vals) : 0, hi = vals.length ? Math.max(...vals) : 1;
+  L.notes.forEach((o, j) => {
+    const h = tops[j] == null || hi === lo ? 0.65 : 0.3 + 0.7 * (tops[j] - lo) / (hi - lo);
+    for (let q = 0; q < Math.max(1, o.len); q++) {
+      const at = o.s + q, b = bars[Math.floor(at / BK_STEPS)]; if (!b) continue;
+      const cur = b[at % BK_STEPS];
+      if (!cur || (q === 0 && !cur.on) || h > cur.h) b[at % BK_STEPS] = { on: q === 0 || (cur && cur.on) ? 1 : 0, h: Math.max(h, cur ? cur.h : 0) };
+    }
+  });
   return bars;
 }
+const bkCellHTML = (c, k) => `<i class="${c ? (c.on ? 'on' : 'hold') : ''}${(k & 3) === 0 ? ' b' : ''}" style="--h:${c ? c.h.toFixed(2) : 0}"></i>`;
 function bkMiniHTML(L) {
   L.mini = bkMiniBars(L);
-  const on = L.mini ? L.mini[0] : null;
-  return `<span class="bk-mini${on ? '' : ' free'}" aria-hidden="true">${on ? Array.from({ length: BK_STEPS }, (_, k) => `<i${on.has(k) ? ' class="on"' : ''}${(k & 3) === 0 ? ' data-b="1"' : ''}></i>`).join('') : '<i></i>'}</span>`;
+  if (!L.mini) return `<span class="bk-mini free" aria-hidden="true"><span class="bk-mlvl"><i></i></span></span>`;
+  const dots = L.bars > 1 ? `<span class="bk-mbars">${Array.from({ length: Math.min(L.bars, 16) }, (_, j) => `<i${j ? '' : ' class="cur"'}></i>`).join('')}</span>` : '';
+  return `<span class="bk-mini" aria-hidden="true" data-bar="0"><span class="bk-mcells">${L.mini[0].map(bkCellHTML).join('')}</span>${dots}</span>`;
+}
+// open one folded card (the others fold: one open card keeps the list readable), on the bar its strip is showing
+function bkOpen(L, strip) {
+  if (document.body.classList.contains('mob')) BK.unfold = new Set([L.key]); else BK.unfold.add(L.key);
+  if (strip && strip.dataset.bar != null && L.bars > 1) { L.page = +strip.dataset.bar; BK.pages.set(L.key, L.page); }
+  bkRender();
+  const card = boardEl.querySelector(`.bk-card[data-i="${L.i}"]`); if (card) card.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
 }
 function bkHits(c) {
   const folded = BK.view !== 'code' && boardEl.querySelector('.bk-card.fold');
@@ -1332,26 +1359,33 @@ function bkHits(c) {
     if (h.t > now) { keep.push(h); continue; }
     if (now - h.t > 0.25) continue;
     const L = BK.items.find(x => x.name === h.n), card = L && boardEl.querySelector(`.bk-card.fold[data-i="${L.i}"]`); if (!card) continue;
-    const ico = card.querySelector('.bk-ico'), a = Math.min(1.35, 1.08 + 0.2 * Math.min(1, h.v));
-    if (ico && ico.animate) ico.animate([{ transform: `scale(${a})` }, { transform: 'scale(1)' }], { duration: 200, easing: 'cubic-bezier(.2,.8,.2,1)' });
-    BK.lit.set(L.name, Math.max(BK.lit.get(L.name) || 0, h.t + Math.max(0.09, Math.min(h.d, 4))));
+    const v = Math.max(0.35, Math.min(1, h.v));
+    card.style.setProperty('--hv', v.toFixed(2));
+    BK.lit.set(L.name, Math.max(BK.lit.get(L.name) || 0, h.t + Math.max(0.08, Math.min(h.d, 4))));
     card.classList.add('sounding');
   }
   NOTE_LOG.q = keep;
   for (const [n, until] of BK.lit) if (now > until) { BK.lit.delete(n); const L = BK.items.find(x => x.name === n), card = L && boardEl.querySelector(`.bk-card[data-i="${L.i}"]`); if (card) card.classList.remove('sounding'); }
-  // the strip: the bar being played and the step now
   if (c < 0) return;
+  // the strip: the bar being played and the step now
   const k = Math.floor(mod(c, 1) * BK_STEPS), pb = Math.floor(c - patOrigin(c) + 1e-9);
   for (const L of BK.items) {
-    if (!L.mini) continue;
+    // a phrase plays inside other tracks, at their places: its strip stays a picture of its notes
+    if (!L.mini || L.phrase) continue;
     const strip = boardEl.querySelector(`.bk-card.fold[data-i="${L.i}"] .bk-mini`); if (!strip) continue;
     const bar = mod(pb, L.bars), sig = bar + ':' + k; if (strip.dataset.sig === sig) continue;
-    if (strip.dataset.bar !== String(bar)) { strip.dataset.bar = bar; const on = L.mini[bar]; [...strip.children].forEach((x, j) => x.classList.toggle('on', on.has(j))); }
+    const cells = strip.firstElementChild.children;
+    if (strip.dataset.bar !== String(bar)) {
+      strip.dataset.bar = bar;
+      L.mini[bar].forEach((c2, j) => { cells[j].className = (c2 ? (c2.on ? 'on' : 'hold') : '') + ((j & 3) === 0 ? ' b' : ''); cells[j].style.setProperty('--h', c2 ? c2.h.toFixed(2) : 0); });
+      const dots = strip.querySelector('.bk-mbars'); if (dots) [...dots.children].forEach((d, j) => d.classList.toggle('cur', j === bar));
+    }
     strip.dataset.sig = sig;
     // its own class: bkTick clears every .ph when the step moves
-    const ph = strip.querySelector('.cur'); if (ph) ph.classList.remove('cur');
-    strip.children[k] && strip.children[k].classList.add('cur');
+    for (const x of cells) x.classList.remove('cur');
+    cells[k] && cells[k].classList.add('cur');
   }
 }
+boardEl.addEventListener('toggle', e => { if (e.target.classList && e.target.classList.contains('bk-set')) BK.setOpen = e.target.open; }, true);
 bkInit();
 bkSynInit();

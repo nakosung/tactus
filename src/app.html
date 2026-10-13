@@ -759,9 +759,28 @@ body[data-max="rack"] .pad { min-height: 96px; }
 body.mob { overflow: auto; }
 body.mob .app { height: auto; min-height: 100dvh; padding: 0 12px calc(var(--mtab, 0px) + 12px); gap: 8px; }
 body.mob.mland .app { padding-right: 76px; padding-bottom: 12px; }
-body.mob .top { position: sticky; top: 0; z-index: 40; margin: 0 -12px; padding: 8px 12px; gap: 8px; background: var(--body); border-bottom: 1px solid var(--line); flex-wrap: wrap; }
-body.mob:not(.mmore-on) .top > :not(.brand, .play, .lcd, .mmore, .queue) { display: none; }
-body.mob.mmore-on .top > .spacer { display: none; }
+/* the bar: play, the song's name and ⋯ on top; the display and the scope under them; the armed change when there is one */
+body.mob .top { position: sticky; top: 0; z-index: 40; margin: 0 -12px; padding: 8px 12px; background: var(--body); border-bottom: 1px solid var(--line);
+  display: grid; grid-template-columns: auto minmax(0, 1fr) 56px; grid-template-areas: "play song more" "lcd lcd scope" "queue queue queue"; gap: 8px; align-items: center; }
+body.mob .top > :not(.play, .preset, .mmore, .lcd, #scope, .queue) { display: none; }
+body.mob .top .play { grid-area: play; }
+body.mob .top .preset { grid-area: song; min-width: 0; width: 100%; max-width: none; font-weight: 700; }
+body.mob .top .mmore { grid-area: more; justify-self: stretch; }
+body.mob .top .lcd { grid-area: lcd; }
+body.mob .top #scope { grid-area: scope; width: 100%; height: 38px; display: block; }
+body.mob .top .queue { grid-area: queue; }
+body.mob.mland .top { grid-template-columns: auto minmax(0, 1fr) minmax(0, 1.4fr) 64px auto; grid-template-areas: "play song lcd scope more" "queue queue queue queue queue"; }
+body.mob .lcd .cell:nth-child(2) { flex: 1 1 auto; }
+body.mob .lcd output { overflow: hidden; text-overflow: ellipsis; }
+/* the sheet under ⋯ */
+.msheet { display: none; }
+body.mob .msheet:not([hidden]) { display: grid; gap: 0; position: fixed; z-index: 60; top: calc(var(--mtop, 0px) + 6px); right: 10px; left: 10px; max-width: 440px; margin-left: auto;
+  padding: 6px 12px; border-radius: var(--r-l); background: var(--raised); border: 1px solid var(--line); box-shadow: 0 12px 32px rgba(0, 0, 0, .18); }
+body.mob .msheet .msg { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 0; }
+body.mob .msheet .msg + .msg { border-top: 1px solid var(--line); }
+body.mob .msheet .msg:empty { display: none; }
+body.mob .msheet .skins span { display: inline; }
+body.mob .cmppop { z-index: 70; top: calc(var(--mtop, 0px) + 6px); }
 body.mob .brand .build, body.mob .brand .dsp { display: none; }
 body.mob .brand b { font-size: 16px; }
 body.mob .play { width: 38px; height: 38px; }
@@ -769,7 +788,6 @@ body.mob .lcd { flex: 1 1 auto; min-width: 0; }
 body.mob .lcd .cell { padding: 4px 8px; min-width: 0; }
 body.mob .lcd output { font-size: 14px; }
 body.mob .mmore { display: inline-grid; place-items: center; font-size: 20px; line-height: 1; padding: 6px 10px; }
-body.mob .queue { order: 9; flex-basis: 100%; }
 body.mob .mtabs { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); position: fixed; left: 0; right: 0; bottom: 0; z-index: 50;
   padding: 6px 6px calc(6px + env(safe-area-inset-bottom)); gap: 3px; background: var(--panel); border-top: 1px solid var(--line); }
 body.mob .mtabs button { border: 0; background: transparent; color: var(--dim); font: inherit; font-size: 11.5px; font-weight: 700; padding: 9px 0; border-radius: var(--r-s); cursor: pointer; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -794,31 +812,53 @@ body.mob .pad { min-height: 78px; }
 body.mob .vizbar:not(.open) > :not([aria-pressed="true"]) { display: none; }
 body.mob .vizbar.open { left: 8px; right: 8px; max-width: none; justify-content: flex-start; }
 /* block cards fold to their name row */
-body.mob .bk-fold { display: inline-grid; place-items: center; border: 0; background: transparent; color: var(--dim); font-size: 15px; width: 30px; height: 30px; cursor: pointer; order: -1; }
-body.mob .bk-card.fold > :not(header) { display: none; }
-body.mob .bk-card.fold > header { cursor: pointer; }
-body.mob .bk-card.fold { padding-block: 5px; transition: background-color .12s; }
-body.mob .bk-card.fold .bk-nm small { display: none; }
-/* the list never grows wider than the screen: the name gives way (…) and the strip takes what is left */
-body.mob .bk-cards { grid-template-columns: minmax(0, 1fr); }
+/* block cards fold to one row each, on shared columns so the rows read as a small step sequencer:
+   ▸ · light · name · the bar's steps · M S. Delete lives in the opened card. */
+.bk-mini, .bk-led { display: none; }
+body.mob .bk-fold { display: inline-grid; place-items: center; border: 0; background: transparent; color: var(--dim); font-size: 13px; width: 24px; height: 32px; cursor: pointer; padding: 0; }
+body.mob .bk-cards { grid-template-columns: minmax(0, 1fr); gap: 6px; }
 body.mob .bk-card, body.mob .bk-card > * { min-width: 0; }
-body.mob .bk-card.fold > header { gap: 6px; }
-body.mob .bk-card.fold .bk-nm { flex: 0 1 auto; overflow: hidden; }
-body.mob .bk-card.fold .bk-nm b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-body.mob .bk-card.fold .bk-ico { flex: none; }
-body.mob .bk-card.fold header > button { flex: none; }
 body.mob .bk-gridbox { overflow-x: auto; }
-body.mob .bk-card.fold .bk-ico { display: inline-block; transform-origin: 50% 70%; }
-body.mob .bk-card.fold.sounding { background: color-mix(in srgb, var(--tc) 16%, var(--raised)); }
-body.mob .bk-card.fold.muted .bk-mini { opacity: .35; }
-.bk-mini { display: none; }
-body.mob .bk-card.fold .bk-mini { display: grid; grid-template-columns: repeat(16, minmax(0, 1fr)); gap: 2px; flex: 1 1 0; min-width: 48px; max-width: 150px; height: 14px; margin-inline: 2px auto; align-self: center; }
-body.mob .bk-mini i { border-radius: 2px; background: color-mix(in srgb, var(--fg) 8%, transparent); }
-body.mob .bk-mini i[data-b] { background: color-mix(in srgb, var(--fg) 14%, transparent); }
-body.mob .bk-mini i.on { background: color-mix(in srgb, var(--tc) 85%, var(--fg)); }
-body.mob .bk-mini i.cur { background: var(--fg); }
-body.mob .bk-mini i.on.cur { background: var(--tc); box-shadow: 0 0 0 1.5px var(--fg); }
-body.mob .bk-mini.free { display: none; }
+body.mob .bk-card.fold { padding: 4px 8px 4px 4px; gap: 0; }
+body.mob .bk-card.fold > :not(header) { display: none; }
+body.mob .bk-card.fold > header { display: grid; grid-template-columns: 24px 10px 74px minmax(0, 1fr) auto auto; align-items: center; column-gap: 6px; min-height: 36px; cursor: pointer; }
+body.mob .bk-card.fold .bk-fold { order: -3; }
+body.mob .bk-card.fold .bk-led { order: -2; }
+body.mob .bk-card.fold .bk-nm { order: -1; overflow: hidden; }
+body.mob .bk-card.fold :is(.bk-ico, .bk-nm small, .bk-x, .bk-use) { display: none; }
+body.mob .bk-card.phrase.fold > header { grid-template-columns: 24px 10px 74px minmax(0, 1fr); }
+body.mob .bk-card.phrase.fold .bk-led { visibility: hidden; }
+body.mob .bk-card.fold .bk-nm b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+body.mob .bk-card.fold .bk-tg { width: 30px; height: 30px; padding: 0; }
+/* the light: lit while the notes sound, brighter for louder ones */
+body.mob .bk-led { display: block; width: 9px; height: 9px; border-radius: 50%; background: color-mix(in srgb, var(--tc) 22%, var(--line)); transition: background-color .18s, box-shadow .18s; }
+body.mob .bk-card.sounding .bk-led { background: var(--tc); box-shadow: 0 0 0 2px color-mix(in srgb, var(--tc) 30%, transparent), 0 0 calc(10px * var(--hv, 1)) var(--tc); transition-duration: .02s; }
+body.mob .bk-card.fold.muted :is(.bk-mini, .bk-nm) { opacity: .4; }
+/* the steps: lit where the notes are (a melody's height is its pitch, a held note is fainter), the step now in ink */
+body.mob .bk-mini { display: grid; gap: 2px; align-self: stretch; align-content: center; }
+body.mob .bk-mcells { display: grid; grid-template-columns: repeat(16, minmax(0, 1fr)); gap: 2px; height: 20px; align-items: end; }
+body.mob .bk-mcells i { height: 100%; border-radius: 2px; background: color-mix(in srgb, var(--fg) 7%, transparent); }
+body.mob .bk-mcells i.b { background: color-mix(in srgb, var(--fg) 13%, transparent); }
+body.mob .bk-mcells i:is(.on, .hold) { height: calc(100% * var(--h, 1)); background: color-mix(in srgb, var(--tc) 85%, var(--fg)); }
+body.mob .bk-mcells i.hold { background: color-mix(in srgb, var(--tc) 40%, transparent); }
+body.mob .bk-mcells i.cur { box-shadow: inset 0 -3px 0 var(--fg); }
+body.mob .bk-mcells i:is(.on, .hold).cur { background: var(--tc); box-shadow: 0 0 0 1.5px var(--fg); }
+body.mob .bk-mbars { display: flex; gap: 2px; height: 3px; min-width: 0; overflow: hidden; }
+body.mob .bk-mbars i { flex: 0 1 8px; min-width: 2px; border-radius: 2px; background: color-mix(in srgb, var(--fg) 15%, transparent); }
+body.mob .bk-mbars i.cur { background: var(--fg); }
+/* no steps to show (a drone, a generator): how loud it is right now */
+body.mob .bk-mlvl { display: block; height: 8px; border-radius: 4px; background: color-mix(in srgb, var(--fg) 8%, transparent); overflow: hidden; }
+body.mob .bk-mlvl i { display: block; height: 100%; width: 100%; transform-origin: left; transform: scaleX(0); background: var(--tc); transition: transform .35s ease-out; }
+body.mob .bk-card.sounding .bk-mlvl i { transform: scaleX(var(--hv, 1)); transition-duration: .03s; }
+/* the song's tempo, key and chords fold into one summary row above the cards */
+.bk-set > summary { display: flex; align-items: baseline; gap: 10px; padding: 6px 2px; cursor: pointer; font-size: 13px; color: var(--dim); list-style: none; }
+.bk-set > summary::-webkit-details-marker { display: none; }
+.bk-set > summary::before { content: '▸'; font-size: 11px; }
+.bk-set[open] > summary::before { content: '▾'; }
+.bk-set > summary b { color: var(--fg); font-family: var(--f-code); }
+.bk-set > summary .bk-sprog { font-family: var(--f-code); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.bk-set[open] { display: grid; gap: 10px; padding-bottom: 6px; }
+@media (prefers-reduced-motion: reduce) { body.mob .bk-led, body.mob .bk-mlvl i { transition: none; } }
 body.mob:not(.mland) .brand { display: none; }
 html:has(body.mob) { scroll-padding-top: calc(var(--mtop, 0px) + 8px); scroll-padding-bottom: calc(var(--mtab, 0px) + 8px); }
 /* the status line: only news (an error, a done) and then just above the tab bar, where it is seen */
