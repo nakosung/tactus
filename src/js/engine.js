@@ -379,7 +379,7 @@ const NAME_INST = [
 ];
 const PARAMS = ['gain', 'pan', 'oct', 'cut', 'res', 'env', 'atk', 'dec', 'sus', 'rel', 'len', 'delay', 'verb', 'duck', 'shape', 'detune', 'tune', 'slices', 'hpf', 'low', 'high', 'drive', 'width', 'vib', 'slide', 'acc', 'bright', 'wave', 'sub', 'glide',
   // the synth engine: filter envelope and type, pitch envelope, noise, unison, pulse width, sync, ring, wavetable, FM, vowel
-  'fatk', 'fdec', 'fsus', 'ftype', 'penv', 'pdec', 'noise', 'voices', 'pw', 'sync', 'ring', 'table', 'scan', 'fm', 'ratio', 'fb', 'fmdec', 'vowel', 'vel', 'nudge', 'human', 'swing', 'sgrid', 'comp', 'rate', 'tr', 'range', 'seed', 'dens', 'evolve', 'bars',
+  'fatk', 'fdec', 'fsus', 'ftype', 'penv', 'pdec', 'noise', 'voices', 'pw', 'sync', 'ring', 'table', 'scan', 'fm', 'ratio', 'feed', 'fmdec', 'vowel', 'vel', 'nudge', 'human', 'swing', 'sgrid', 'comp', 'rate', 'tr', 'range', 'seed', 'dens', 'evolve', 'bars',
   // channel strip: more EQ, insert effects, compressor detail
   'lpf', 'mid', 'midf', 'chorus', 'phaser', 'dist', 'crush', 'thr', 'ratio', 'catk', 'crel',
   // only on 'bus delay', 'bus verb' and 'master' lines

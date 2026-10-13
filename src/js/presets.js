@@ -189,6 +189,108 @@ song dial:8 groove:8 drop:16 groove:8
 `,
   },
   {
+    id: 'reeserun', name: 'Reese Run (DnB, analog voices)',
+    head: {
+      ko: '// Reese Run — 174 BPM 드럼앤베이스. 새 신스 엔진 데모로 새로 쓴 곡이에요\n// reese: analog 소리를 5개 겹쳐(voices 5) 조금씩 어긋나게(detune) 울려서 넓고 흔들리는 베이스. lfo cut 2 는 필터가 2마디에 한 번 천천히 열렸다 닫혀요\n// pad 는 lfo pw 로 사각파 폭이 흔들리는 PWM 패드, arp 는 FM 벨이에요. 소리 모양은 블록 보기의 〰 버튼으로 끌어서 바꿀 수 있어요',
+      en: '// Reese Run — 174 BPM drum and bass, an original written to show the new synth engine\n// reese: five analog voices (voices 5), each a little detuned, for a wide moving bass. lfo cut 2 opens and closes the filter once every 2 bars\n// pad is a PWM pad (lfo pw sways the pulse width), arp is an FM bell. In the block view, the 〰 button lets you drag the sound shape',
+    },
+    body: `bpm 174
+key F minor
+prog <0 5 2 6>          // Fm Db Ab Eb
+master loud
+space hall
+
+kick   x . . . . . . . . . x . . . . .   | gain 1
+snare  . . . . x . . . . . . . x . . x?  | gain .8 verb .15
+hat    [x x? x x]*4                      | gain .26 human .2 pan .15
+reese  <[f1 _ _ _ _ _ _ _] [c#2 _ _ _ _ _ c2 _] [g#1 _ _ _ _ _ _ _] [d#1 _ _ _ d#2 _ c2 _]> | analog voices 5 detune 24 cut 420 res 1.4 env .35 dec .25 sus .8 drive .35 sub .5 lfo cut 2 sine 260 duck .6 gain .75
+pad    0^                                | analog wave 1 pw .4 lfo pw 4 tri .2 voices 3 detune 16 atk .6 rel 1.5 cut 1800 gain .3 duck .8 verb .5
+arp    [0 2 4 7 4 2 0' 4]                 | fmsynth oct 5 ratio 3.5 fm 2.5 fmdec .15 dec .25 sus 0 rel .3 gain .28 delay .3 pan .2 duck .4
+
+scene intro  pad arp
+scene roll   kick snare hat arp
+scene drop   all
+scene break  pad reese
+song intro:8 roll:8 drop:16 break:8 drop:16
+`,
+  },
+  {
+    id: 'growl', name: 'Vowel Growl (halftime, wavetable)',
+    head: {
+      ko: '// Vowel Growl — 140 BPM 하프타임. 웨이브테이블과 모음 필터 데모로 새로 쓴 곡이에요\n// growl: wt table growl 의 프레임을 lfo scan 이 4분음표마다 훑고, vowel o 에 lfo vowel 이 모음을 a→e→i→o→u 로 움직여서 말하는 듯한 베이스가 돼요\n// vox 는 formant 테이블에 vowel <a e i o> 로 마디마다 모음이 바뀌는 리드예요',
+      en: '// Vowel Growl — 140 BPM halftime, an original written to show the wavetables and the vowel filter\n// growl: lfo scan sweeps the growl table every quarter note, and lfo vowel moves the vowel filter through a e i o u, so the bass seems to talk\n// vox is a lead on the formant table whose vowel changes every bar (vowel <a e i o>)',
+    },
+    body: `bpm 140
+key E minor
+prog <0 5 2 6>          // Em C G D
+master loud
+space room
+
+kick   x . . . . . . . . . x . . . . .   | gain 1
+snare  . . . . . . . . x . . . . . . .   | gain .85 verb .2
+hat    [. x . x? . x . x]*2              | gain .25 human .2
+growl  <[e1 _ _ _ . e1 . g1] [e1 _ . e2 _ . d2 b1] [c2 _ _ _ . c2 . b1] [a1 _ . a2 g2 . e1 _]> | wt table growl scan .2 lfo scan 1/4 tri .45 vowel o lfo vowel 1/2 saw 2 cut 2400 res 1.5 drive .4 sub .45 duck .5 gain .7
+vox    <[b4 _ _ _ g4 _ a4 _] [b4 _ d5 _ e5 _ _ _] [c5 _ _ _ b4 _ g4 _] [a4 _ _ _ _ _ . .]> | wt table formant scan .5 vowel <a e i o> voices 3 detune 12 atk .03 rel .4 gain .32 delay .25 verb .3 duck .4
+pad    0^                                | wt table organ scan .3 atk .5 rel 1.2 cut 2600 gain .22 duck .8 verb .5
+
+scene calm   pad vox
+scene build  pad vox kick hat
+scene drop   kick snare hat growl
+scene full   all
+song calm:8 build:8 drop:16 full:16
+`,
+  },
+  {
+    id: 'fmglass', name: 'Glass Garden (FM)',
+    head: {
+      ko: '// Glass Garden — 96 BPM 칠 비트. FM 신스 데모로 새로 쓴 곡이에요\n// fmsynth 는 한 사인파(모듈레이터)가 다른 사인파를 흔들어 배음을 만들어요. ratio 는 두 사인파의 비율, fm 은 흔드는 세기, fmdec 은 그 세기가 줄어드는 시간\n// keys 는 ratio 1 의 일렉트릭 피아노, bell 은 ratio 3.5 의 유리 종, bass 는 feed(되먹임)로 조금 거칠게 만든 FM 베이스예요',
+      en: '// Glass Garden — 96 BPM chill beat, an original written to show the FM synth\n// fmsynth: one sine (the modulator) wobbles another, which makes harmonics. ratio sets the two sines\' ratio, fm how hard it wobbles, fmdec how fast that fades\n// keys is an electric piano (ratio 1), bell a glass bell (ratio 3.5), bass an FM bass roughened with feedback (feed)',
+    },
+    body: `bpm 96
+key D major
+prog <0 3 5 4>          // D G Bm A
+master warm
+space hall
+
+kick   x . . . . . x . . . x . . . . .   | gain .85
+snare  . . . . x . . . . . . . x . . .   | gain .55 verb .3
+hat    [x . x x]*4                       | gain .2 human .3 swing .1
+keys   [0^ _ _ . . 0^ _ .]               | fmsynth ratio 1 fm 1.4 fmdec .6 dec 1.2 sus .25 rel .8 gain .4 verb .3 duck .3
+bell   <[4' . 2' . 0' . . .] [5' . 4' . 2' . . 0']> | fmsynth oct 5 ratio 3.5 fm 2.2 fmdec .4 dec .8 sus 0 rel 1 gain .24 delay .35 pan -.2
+bass   [0 _ . 0 . . 4 .]                 | fmsynth oct 2 ratio 1 fm 1 feed .3 fmdec .2 dec .4 sus .5 rel .1 gain .7 duck .3
+
+scene morning keys bell
+scene walk    keys bass kick hat
+scene garden  all
+song morning:8 walk:8 garden:16 walk:8
+`,
+  },
+  {
+    id: 'syncchase', name: 'Sync Chase (electro, sync lead)',
+    head: {
+      ko: '// Sync Chase — 122 BPM 일렉트로. 하드 싱크와 피치 엔벨로프 데모로 새로 쓴 곡이에요\n// lead: sync 2.5 는 안쪽 오실레이터를 2.5배로 돌리다 겉 오실레이터에 맞춰 다시 시작시켜 날카로운 배음을 내요. lfo sync 가 그 비율을 움직이고, penv 12 pdec .04 는 음마다 한 옥타브 위에서 뚝 떨어지며 시작해요\n// pwm 패드는 wave 1(사각파)의 폭을 lfo pw 로 흔들어요',
+      en: '// Sync Chase — 122 BPM electro, an original written to show hard sync and the pitch envelope\n// lead: sync 2.5 runs an inner oscillator 2.5 times faster and restarts it with the outer one, for a sharp edge; lfo sync moves that ratio, and penv 12 pdec .04 drops each note in from an octave above\n// The pwm pad sways the width of a pulse wave (wave 1) with lfo pw',
+    },
+    body: `bpm 122
+key A minor
+prog <0 5 6 4>          // Am F G Em
+master loud
+space room
+
+kick   x x x x                           | gain .95
+clap   . x . x                           | gain .6 verb .2
+hat    [. x]*4                           | gain .3 human .15
+bass   [0 0' . 0 . 0 0' .]               | analog oct 2 wave .5 cut 500 res 3 env .7 dec .12 sus .2 duck .7 gain .7
+lead   <[0' . 4 . 2' . 0' 4] [5 . 4 . 2 _ 4 .] [0' . 4 . 2' . 4' 2'] [0' _ _ . . . . .]> | analog oct 4 sync 2.5 lfo sync 4 tri 1.2 penv 12 pdec .04 cut 3500 voices 2 detune 10 rel .2 gain .3 delay .3 duck .4
+pwm    0^                                | analog wave 1 pw .5 lfo pw 2 tri .35 atk .3 rel .8 cut 2500 gain .26 duck .8 verb .4
+
+scene night  pwm bass
+scene run    pwm bass kick hat
+scene chase  all
+song night:8 run:8 chase:16 run:8 chase:16
+`,
+  },
+  {
     id: 'gdchip', name: 'Neon Steps (GD style)',
     head: {
       ko: '// Neon Steps — 138 BPM 칩 하우스. Geometry Dash 같은 리듬 게임 음악 스타일로 새로 쓴 곡이에요 (원곡 없음)\n// 사각파 아르페지오, 오프비트 베이스, 사이드체인 슈퍼소 훅. 마지막 드롭에선 사각파가 한 옥타브 위에서 훅을 겹쳐요\n// auto 줄은 FX 시퀀스예요: 패드를 패턴대로 자동으로 눌러요 (스터터, 에코 아웃)',

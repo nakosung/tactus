@@ -268,7 +268,7 @@ function stripAt(r, P, time) {
 
 // ---------- params ----------
 const BASE = { gain: 0.8, pan: 0, delay: 0, verb: 0, duck: 0, len: 1, shape: 0, detune: 18, tune: 1, dec: 1, hpf: 20, low: 0, high: 0, drive: 0, width: 0.7, vib: 0, slide: 0, acc: 0, bright: 0.6, wave: 0, sub: 0, glide: 0,
-  ftype: -1, fatk: 0, fdec: -1, fsus: 0, penv: 0, pdec: 0.05, noise: 0, voices: 1, pw: 0.5, sync: 1, ring: 0, table: 0, scan: 0, fm: 2, ratio: 2, fb: 0, fmdec: 0, vowel: -1, vel: 1, nudge: 0, human: 0, swing: 0, sgrid: 16, comp: 0, rate: 16, tr: 0, range: 7 };
+  ftype: -1, fatk: 0, fdec: -1, fsus: 0, penv: 0, pdec: 0.05, noise: 0, voices: 1, pw: 0.5, sync: 1, ring: 0, table: 0, scan: 0, fm: 2, ratio: 2, feed: 0, fmdec: 0, vowel: -1, vel: 1, nudge: 0, human: 0, swing: 0, sgrid: 16, comp: 0, rate: 16, tr: 0, range: 7 };
 // slope: filter steepness in dB/octave. hpf: default track high-pass so pads and leads leave room for kick and bass
 const INST = {
   sine: { lvl: 0.42, oct: 4, cut: 9000, res: 0.5, env: 0, atk: 0.005, dec: 0.3, sus: 0.8, rel: 0.15, slope: 12 },

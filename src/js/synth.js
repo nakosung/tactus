@@ -404,7 +404,7 @@ function vsBlock(inst, midi, P, vel) {
   p[15] = P.ftype >= 0 ? Math.round(P.ftype) : VS_FTYPE[inst]; p[16] = (P.drive || 0) + (P.shape || 0);
   p[17] = P.penv || 0; p[18] = P.pdec; p[19] = Math.max(1, Math.min(7, Math.round(P.voices || 1)));
   p[20] = P.sub || 0; p[21] = P.noise || 0; p[22] = P.wave || 0; p[23] = P.pw; p[24] = P.sync; p[25] = P.ring || 0;
-  p[26] = Math.round(P.table || 0); p[27] = P.scan || 0; p[28] = P.fm; p[29] = P.ratio; p[30] = P.fb || 0; p[31] = P.fmdec || 0;
+  p[26] = Math.round(P.table || 0); p[27] = P.scan || 0; p[28] = P.fm; p[29] = P.ratio; p[30] = P.feed || 0; p[31] = P.fmdec || 0;
   p[32] = P.vowel; p[33] = P.glide || 0; p[34] = P.glide > 0 ? 1 : 0;
   // two lfos on the voice (the channel's gain, pan, lpf and hpf lfos run on the strip instead)
   const lf = (P._lfos || []).filter(l => VS_LFO[l.target]).slice(0, 2);
