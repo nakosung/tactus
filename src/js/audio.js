@@ -265,7 +265,7 @@ function stripAt(r, P, time) {
 }
 
 // ---------- params ----------
-const BASE = { gain: 0.8, pan: 0, delay: 0, verb: 0, duck: 0, len: 1, shape: 0, detune: 18, tune: 1, dec: 1, hpf: 20, low: 0, high: 0, drive: 0, width: 0.7, vib: 0, slide: 0, acc: 0, bright: 0.6, wave: 0, vel: 1, nudge: 0, human: 0, swing: 0, sgrid: 16, comp: 0, rate: 16, tr: 0, range: 7 };
+const BASE = { gain: 0.8, pan: 0, delay: 0, verb: 0, duck: 0, len: 1, shape: 0, detune: 18, tune: 1, dec: 1, hpf: 20, low: 0, high: 0, drive: 0, width: 0.7, vib: 0, slide: 0, acc: 0, bright: 0.6, wave: 0, sub: 0, glide: 0, vel: 1, nudge: 0, human: 0, swing: 0, sgrid: 16, comp: 0, rate: 16, tr: 0, range: 7 };
 // slope: filter steepness in dB/octave. hpf: default track high-pass so pads and leads leave room for kick and bass
 const INST = {
   sine: { lvl: 0.42, oct: 4, cut: 9000, res: 0.5, env: 0, atk: 0.005, dec: 0.3, sus: 0.8, rel: 0.15, slope: 12 },
@@ -275,6 +275,9 @@ const INST = {
   supersaw: { lvl: 0.24, oct: 4, cut: 3600, res: 1, env: 0.3, atk: 0.012, dec: 0.3, sus: 0.75, rel: 0.3, gain: 0.6, slope: 24, hpf: 140, width: 0.85 },
   pad: { lvl: 0.2, oct: 3, cut: 2200, res: 0.8, env: 0.12, atk: 0.4, dec: 0.9, sus: 0.85, rel: 1.4, detune: 24, gain: 0.5, slope: 24, hpf: 160, width: 1, vib: 4 },
   bass: { lvl: 0.33, oct: 1, cut: 650, res: 2.5, env: 0.5, atk: 0.003, dec: 0.18, sus: 0.6, rel: 0.08, slope: 24, drive: 0.15, width: 0 },
+  // an analog mono bass: saw (or square, or between: wave) with a second saw a few cents off and a square sub an
+  // octave down (sub), into a 24 dB low-pass that snaps open with each note; one note at a time, gliding (glide)
+  mono: { lvl: 0.36, oct: 2, cut: 800, res: 1.6, env: 0.65, atk: 0.003, dec: 0.15, sus: 0.4, rel: 0.05, slope: 24, drive: 0.25, width: 0, detune: 7, hpf: 25 },
   acid: { lvl: 0.32, oct: 2, cut: 380, res: 14, env: 0.9, atk: 0.003, dec: 0.16, sus: 0.2, rel: 0.06, gain: 0.7, slope: 24, drive: 0.35, hpf: 40, width: 0 },
   pluck: { lvl: 0.3, oct: 4, cut: 2600, res: 2, env: 0.8, atk: 0.002, dec: 0.16, sus: 0, rel: 0.25, gain: 0.6, slope: 24, hpf: 120, width: 0.5 },
   bell: { lvl: 0.34, oct: 5, cut: 9000, res: 0.5, env: 0, atk: 0.002, dec: 1.2, sus: 0, rel: 0.8, gain: 0.45, slope: 12, hpf: 200, width: 0.4 },
@@ -480,6 +483,13 @@ function playSynth(inst, midi, t, dur, P, vel, out) {
       break;
     }
     case 'bass': osc('sawtooth', f, 0, 0.62); osc('sine', f / 2, 0, 0.5); osc('sawtooth', f, 9, 0.25); break;
+    case 'mono': {
+      const wv = Math.max(0, Math.min(1, P.wave || 0)), sub = Math.max(0, Math.min(1, P.sub || 0));
+      if (wv < 1) { osc('sawtooth', f, 0, 0.62 * (1 - wv)); osc('sawtooth', f, P.detune, 0.32 * (1 - wv)); }
+      if (wv > 0) { osc('square', f, 0, 0.5 * wv); osc('square', f, P.detune, 0.25 * wv); }
+      if (sub > 0) osc('square', f / 2, 0, 0.55 * sub);
+      break;
+    }
     case 'acid': osc('sawtooth', f); break;
     case 'pluck': {
       osc('sawtooth', f, 3, 0.7, -0.35 * W); osc('sawtooth', f, -5, 0.7, 0.35 * W); osc('triangle', f * 2, 0, 0.22);
@@ -537,9 +547,23 @@ function playSynth(inst, midi, t, dur, P, vel, out) {
     for (const o of oscs) if (o instanceof OscillatorNode) lg.connect(o.detune);
     oscs.push(lfo);
   }
+  if (inst === 'mono') monoVoice(out, oscs, amp, f, t, tEnd, P);
   for (const o of oscs) { o.start(t + (o._delay || 0), o._offset); o.stop(tEnd); }
   oscs[0].onended = () => { try { amp.disconnect(); } catch (e) { } };
   return { filters, kt, tEnd };
+}
+
+// The mono voice plays one note at a time on each channel: a new note ends the one still sounding (unless they start
+// together, which keeps a chord), and with glide its pitch slides in from the last note's, as on an analog monosynth.
+const MONO = new WeakMap();
+function monoVoice(out, oscs, amp, f, t, tEnd, P) {
+  const prev = MONO.get(out);
+  if (prev && prev.t !== t && prev.tEnd > t) { const g = prev.amp.gain; g.cancelScheduledValues(t); g.setTargetAtTime(0, t, 0.004); }
+  const glide = Math.max(0, Math.min(2, P.glide || 0));
+  if (glide > 0 && prev && prev.t !== t && t - prev.tEnd < 1) {
+    for (const o of oscs) { if (!(o instanceof OscillatorNode)) continue; const r = o.frequency.value / f; o.frequency.setValueAtTime(prev.f * r, t); o.frequency.setTargetAtTime(f * r, t, glide / 3); }
+  }
+  if (!prev || prev.t !== t) MONO.set(out, { amp, f, t, tEnd });
 }
 
 // ---------- scheduler ----------

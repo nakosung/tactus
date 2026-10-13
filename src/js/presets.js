@@ -166,6 +166,29 @@ song intro:8 verse:16 build:4 chorus:16 verse:8 build:4 chorus:16 intro:8
 `,
   },
   {
+    id: 'lowpressure', name: 'Low Pressure (analog mono bass)',
+    head: {
+      ko: '// Low Pressure — 아날로그 모노신스 베이스 데모 영상의 소리를 분석해서 만든 새 곡이에요 (음은 새로 썼어요). D#단조 120 BPM, E 가 섞인 프리지안 색\n// mono 악기: 톱니파 두 개 + 한 옥타브 아래 서브(sub), 24dB 필터가 음마다 툭 열렸다 닫혀요. glide 는 앞 음에서 미끄러져 오는 시간\n// pulse 는 8분음표로 뛰는 베이스에 필터가 8마디에 걸쳐 열렸다 닫히고(cut 250~1400/8), bounce 는 옥타브로 튀며 서브가 바닥을 받쳐요',
+      en: '// Low Pressure — an original built from an analysis of an analog monosynth bass demo (the notes are new). D# minor at 120 BPM, with a Phrygian E\n// The mono instrument: two saws plus a square sub an octave down (sub), into a 24 dB filter that snaps open on each note. glide is the time to slide in from the last note\n// pulse is an eighth-note bass under a filter that opens and closes over 8 bars (cut 250~1400/8); bounce jumps octaves with the sub holding the floor',
+    },
+    body: `bpm 120
+key D# minor
+master warm
+space room
+
+pulse  <[d#2 d#2 d#2 d#2 d#2 d#2 e2 d#2] [d#2 d#2 d#2 d#2 f#2 d#2 a#2 b2] [d#2 d#2 d#2 d#2 d#2 d#2 e2 d#2] [f#2 f#2 e2 e2 d#2 d#2 a#1 c#2]> | mono cut 250~1400/8 res 2 vel [1 .7 .85 .7]*2 glide .03
+bounce <[d#2 d#3 . d#2 . d#3 a#2 d#3] [d#2 d#3 . d#2 f#3 . e3 d#3] [b1 b2 . b1 . b2 f#2 b2] [c#2 c#3 . c#2 g#2 . e3 d#3]> | mono sub .5 glide .06 cut 600~1300/4 env .8 dec .12 duck .4
+kick   x x x x                       | gain .9
+hat    [. x]*4                       | gain .3 human .15
+clap   . x . x                       | gain .45 verb .2
+
+scene dial   pulse
+scene groove pulse kick hat
+scene drop   bounce kick hat clap
+song dial:8 groove:8 drop:16 groove:8
+`,
+  },
+  {
     id: 'gdchip', name: 'Neon Steps (GD style)',
     head: {
       ko: '// Neon Steps — 138 BPM 칩 하우스. Geometry Dash 같은 리듬 게임 음악 스타일로 새로 쓴 곡이에요 (원곡 없음)\n// 사각파 아르페지오, 오프비트 베이스, 사이드체인 슈퍼소 훅. 마지막 드롭에선 사각파가 한 옥타브 위에서 훅을 겹쳐요\n// auto 줄은 FX 시퀀스예요: 패드를 패턴대로 자동으로 눌러요 (스터터, 에코 아웃)',
