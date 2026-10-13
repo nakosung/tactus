@@ -2,7 +2,8 @@
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' rx='15' fill='%2317191e'/><path d='M11 13h34v10H33v28H23V23H11z' fill='%23eceef2'/><circle cx='45' cy='44' r='7.5' fill='%23ff7a3c'/></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wdth,wght@75..100,400..700&family=Spline+Sans+Mono:wght@400;500;700&family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wdth,wght@75..100,400..700&family=Spline+Sans+Mono:wght@400;500;700&family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=Archivo:wdth,wght@62..125,400..800&family=IBM+Plex+Mono:wght@400;500;600&family=Nunito:wght@500..900&family=Gowun+Dodum&display=swap">
+<script>try { document.documentElement.dataset.skin = localStorage.getItem('tactus-skin') || 'studio'; } catch (e) { document.documentElement.dataset.skin = 'studio'; }</script>
 <style>
 /* Layout: the wordmark is the instrument. Six letters, six tracks: while the demo plays each letter swells when its track hits.
    Under it, the real code of the song lights up note by note; below, four verbs (write, perform, compose, conduct) in one row, then the facts and the way in. */
@@ -30,6 +31,7 @@
   color-scheme: light;
 }
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 html { scroll-behavior: smooth; }
 body { background: var(--body); color: var(--fg); font-family: var(--f-body); font-size: 16px; line-height: 1.6; padding-inline: 20px; padding-block: 0; }
 a { color: inherit; }
@@ -38,7 +40,7 @@ html[lang=ko] body { word-break: keep-all; }
 .wrap { max-width: 1180px; margin: 0 auto; }
 
 /* nav */
-.nav { display: flex; align-items: center; gap: 14px; padding-block: 18px; }
+.nav { position: relative; z-index: 2; display: flex; align-items: center; gap: 14px; padding-block: 18px; }
 .mark { font-family: var(--f-display); font-weight: 700; font-stretch: 75%; letter-spacing: .16em; font-size: 18px; text-decoration: none; }
 .nav .spacer { flex: 1; }
 .home { font-size: 13px; color: var(--dim); text-decoration: none; border-left: 1px solid var(--line); padding-left: 14px; }
@@ -218,6 +220,53 @@ html[lang=ko] body { word-break: keep-all; }
   .nav .btn { display: none; }
 }
 @media (prefers-reduced-motion: reduce) { .word .ch { animation: none; } .code .at.hit { animation-duration: .01s; } html { scroll-behavior: auto; } }
+/*SKINS*/
+/* ---- skins on this page: the same three bodies as the instrument ---- */
+.nav .skins { margin-right: 2px; }
+.nav .skins span { display: none; }
+.nav .skins button { padding: 5px; }
+.btn, .chip, .mp, .trk, .lang, .skins button { transition: transform .1s cubic-bezier(.2,.8,.2,1), box-shadow .1s, background-color .12s; }
+.btn:active, .chip:active, .mp:active, .trk:active { transform: translateY(2px); }
+
+[data-skin="field"] { --f-display: "Archivo", "IBM Plex Sans KR", system-ui, sans-serif; --f-body: var(--f-ui); }
+[data-skin="field"] body { background: var(--body) radial-gradient(circle, rgba(0,0,0,.13) 1px, transparent 1.3px) 0 0 / 14px 14px; }
+[data-skin="field"] .mark { text-transform: lowercase; font-stretch: 125%; font-weight: 800; letter-spacing: 0; font-size: 20px; }
+[data-skin="field"] .word { text-transform: lowercase; }
+[data-skin="field"] .word .L:nth-child(1) .ch { color: var(--k-orange); }
+[data-skin="field"] :is(.btn, .lang, .trk, .chip, .mp, .skins, .snip, .gbench, .built .next) { border-color: #000; border-radius: 4px; box-shadow: none; }
+[data-skin="field"] .btn.key { color: #000; border-color: #000; box-shadow: none; }
+[data-skin="field"] :is(.btn, .lang, .trk, .chip, .mp):active { background: #000; color: #fff; transform: none; transition: none; }
+[data-skin="field"] .trk[aria-pressed="true"] { background: #000; color: #fff; }
+[data-skin="field"] .trk[aria-pressed="true"] small { color: #bbb; }
+[data-skin="field"] .mp[aria-pressed="true"], [data-skin="field"] .mp.flash { background: #000; border-color: #000; color: #fff; }
+[data-skin="field"] .mp[aria-pressed="true"]::after, [data-skin="field"] .mp.flash::after { content: ''; position: absolute; top: 6px; right: 6px; width: 7px; height: 7px; background: var(--kc); }
+[data-skin="field"] .chip[aria-pressed="true"] { background: var(--k-orange); color: #000; }
+[data-skin="field"] .screen { border: 1px solid #000; border-radius: 6px; box-shadow: none; }
+[data-skin="field"] :is(.verbs, .facts, .verb + .verb, .fact + .fact, .end, .glist, .gi, .gi:nth-child(even), .steps) { border-color: #000; }
+[data-skin="field"] .fact b { font-stretch: 112%; }
+[data-skin="field"] .verb h2, [data-skin="field"] .name h2 { font-stretch: 112%; text-transform: lowercase; }
+[data-skin="field"] .skins button[aria-checked="true"] { background: #000; }
+
+[data-skin="pop"] { --f-display: "Nunito", "Gowun Dodum", system-ui, sans-serif; --f-body: var(--f-ui); }
+[data-skin="pop"] body { background: var(--body) radial-gradient(circle, rgba(255,255,255,.7) 2.2px, transparent 2.6px) 0 0 / 22px 22px; }
+[data-skin="pop"] .mark { color: var(--bezel); text-transform: lowercase; font-weight: 900; letter-spacing: .02em; font-size: 22px; }
+[data-skin="pop"] .word { text-transform: lowercase; }
+[data-skin="pop"] .word .L:nth-child(1) .ch { color: #ff5a6e; } [data-skin="pop"] .word .L:nth-child(2) .ch { color: #ff9f1c; } [data-skin="pop"] .word .L:nth-child(3) .ch { color: #ffbf2e; }
+[data-skin="pop"] .word .L:nth-child(4) .ch { color: #1bbf77; } [data-skin="pop"] .word .L:nth-child(5) .ch { color: #3b7bff; } [data-skin="pop"] .word .L:nth-child(6) .ch { color: #8b6bff; }
+[data-skin="pop"] :is(.btn, .chip, .mp, .trk, .lang) { border-width: 2px; transition: transform .34s cubic-bezier(.34,1.7,.5,1), box-shadow .2s, background-color .12s; }
+[data-skin="pop"] .btn { box-shadow: 0 4px 0 var(--key-edge); font-weight: 800; }
+[data-skin="pop"] .btn.key { background: var(--bezel); border-color: var(--bezel); box-shadow: 0 4px 0 #c33a52; color: #fff; }
+[data-skin="pop"] :is(.btn, .chip, .mp, .trk):active { transform: translateY(4px) scale(1.04, .92); box-shadow: 0 0 0 transparent; transition-duration: .05s; }
+[data-skin="pop"] .mp { background: color-mix(in srgb, var(--kc) 14%, #fff); border-color: color-mix(in srgb, var(--kc) 50%, #fff); box-shadow: 0 4px 0 color-mix(in srgb, var(--kc) 62%, #6a5f9e); border-radius: 12px; }
+[data-skin="pop"] .mp[aria-pressed="true"], [data-skin="pop"] .mp.flash { color: #fff; }
+[data-skin="pop"] .mp[data-cat="rhythm"][aria-pressed="true"] { color: #3a2600; }
+[data-skin="pop"] .trk { border-radius: 16px; }
+[data-skin="pop"] .trk[aria-pressed="true"] { border-color: var(--bezel); box-shadow: 0 4px 0 #c33a52; }
+[data-skin="pop"] .screen { border: 0; border-radius: 22px; box-shadow: 0 0 0 9px var(--bezel), 0 14px 0 9px #c33a52; margin: 9px; }
+[data-skin="pop"] .snip { border-radius: 12px; }
+[data-skin="pop"] .gbench, [data-skin="pop"] .built .next { border-width: 2px; border-radius: 18px; }
+[data-skin="pop"] .verb h2, [data-skin="pop"] .fact b, [data-skin="pop"] .name h2 { font-weight: 900; font-stretch: 100%; }
+@media (prefers-reduced-motion: reduce) { .btn, .chip, .mp, .trk, .lang, .skins button { transition: none !important; } :is(.btn, .chip, .mp, .trk):active { transform: none !important; } }
 </style>
 
 <div class="wrap">
@@ -225,6 +274,8 @@ html[lang=ko] body { word-break: keep-all; }
     <a class="mark" href="#top">TACTUS</a>/*HOME*/
     <div class="spacer"></div>
     <a class="gh" href="/*REPO*/" target="_blank" rel="noopener">GitHub</a>
+    <button class="lang installBtn" type="button" hidden data-ko="앱으로 설치" data-en="Install app">앱으로 설치</button>
+    <div class="skins" role="radiogroup"><button type="button" role="radio" data-skin="studio"><i></i><span></span></button><button type="button" role="radio" data-skin="field"><i></i><span></span></button><button type="button" role="radio" data-skin="pop"><i></i><span></span></button></div>
     <button class="lang" id="lang" type="button">EN</button>
     <a class="btn small ext" href="/*APP_URL*/" target="_blank" rel="noopener" data-ko="Tactus 열기" data-en="Open Tactus">Tactus 열기</a>
   </nav>
@@ -372,6 +423,8 @@ html[lang=ko] body { word-break: keep-all; }
 
 <script>
 /*I18N*/
+/*SKIN*/
+/*PWA*/
 /*ENGINE*/
 /*GEN*/
 const DEMOS = /*DEMOS*/;
@@ -387,14 +440,16 @@ const TRACK_COLORS = ['#ff9a4d', '#a48bff', '#5fd6a4', '#6fb6ff', '#ff6b8e', '#f
 // ===================== landing: demo player, live code, letters =====================
 const $ = s => document.querySelector(s);
 const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-let L = (navigator.language || 'ko').toLowerCase().startsWith('ko') ? 'ko' : 'en';
+// the language is shared with the instrument (i18n.js reads the same saved choice)
+let L = LANG;
 function applyLang() {
   document.documentElement.lang = L;
   document.querySelectorAll('[data-ko]').forEach(el => { el.textContent = el.dataset[L]; });
   $('#lang').textContent = L === 'ko' ? 'EN' : '한국어';
-  buildTracks(); rollGen(false);
+  skinLabels(); buildTracks(); rollGen(false);
 }
-$('#lang').addEventListener('click', () => { L = L === 'ko' ? 'en' : 'ko'; applyLang(); });
+function onSharedLang(v) { if (v === L || !['ko', 'en'].includes(v)) return; L = LANG = v; applyLang(); }
+$('#lang').addEventListener('click', () => { L = LANG = L === 'ko' ? 'en' : 'ko'; try { localStorage.setItem('pulse-lang', L); } catch (e) { } applyLang(); });
 
 // ---- demos: compiled with the real engine, so the code lights up exactly where the notes are ----
 const GLOB = new Set(['bpm', 'key', 'scale', 'swing', 'prog', 'scene', 'song', 'master', 'seed', 'fx']);
@@ -642,6 +697,10 @@ $('#gbench').addEventListener('click', async () => {
   b.disabled = false;
 });
 
+skinInit();
+pwaInit();
+// a skin brings its own typeface, so the letters' fixed cells are measured again
+function onSkinChange() { (document.fonts ? document.fonts.ready : Promise.resolve()).then(lockLetters); }
 applyLang();
 select(DEMO_LIST[0], false);
 (document.fonts ? document.fonts.ready : Promise.resolve()).then(lockLetters);

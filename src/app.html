@@ -369,14 +369,28 @@ body.recording .editor { border-color: var(--c-err); }
 .pad.on .lamp { box-shadow: 0 0 6px var(--on-key); }
 .knob:is(.press, :active) { box-shadow: var(--shadow), 0 0 0 var(--key-edge); transform: translateY(1px); }
 
-/* ---- the skin picker ---- */
-.skins { display: inline-flex; gap: 2px; padding: 2px; border-radius: var(--r-m); background: var(--panel); border: 1px solid var(--line); }
-.skins button { display: inline-flex; align-items: center; gap: 6px; border: 0; background: transparent; color: var(--dim); font-size: 11.5px; font-weight: 600; padding: 4px 8px 4px 5px; border-radius: var(--r-s); cursor: pointer; transition: transform .09s; }
-.skins button[aria-checked="true"] { background: var(--raised); color: var(--fg); box-shadow: var(--shadow); }
-.skins i { width: 14px; height: 14px; border-radius: 50%; flex: none; box-shadow: inset 0 0 0 1px rgba(0,0,0,.25); }
-.skins [data-skin="studio"] i { background: conic-gradient(#ff7a3c 0 25%, #17191e 0 75%, #a48bff 0); }
-.skins [data-skin="field"] i { background: conic-gradient(#ff4f00 0 25%, #e2e3df 0 75%, #000 0); border-radius: 3px; }
-.skins [data-skin="pop"] i { background: conic-gradient(#ff5a6e 0 25%, #ffc53d 0 50%, #1fc77e 0 75%, #3b7bff 0); }
+/*SKINS*/
+/* ---- sharing ---- */
+.sharedlg { width: min(520px, calc(100vw - 32px)); padding: 0; border: 1px solid var(--line); border-radius: var(--r-xl); background: var(--panel); color: var(--fg); box-shadow: 0 24px 60px rgba(0,0,0,.45); }
+.sharedlg::backdrop { background: rgba(0, 0, 0, .5); }
+.sh-head { display: flex; justify-content: space-between; align-items: center; padding: 14px 18px 4px; }
+.sh-head h2 { margin: 0; font-size: 17px; }
+.sharedlg section { padding: 12px 18px; border-top: 1px solid var(--line); margin-top: 8px; }
+.sharedlg h3 { margin: 0 0 4px; font-size: 13.5px; }
+.sharedlg p { margin: 0 0 10px; font-size: 12.5px; line-height: 1.5; color: var(--dim); }
+.sh-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.sh-stop { color: var(--c-err); border-color: color-mix(in srgb, var(--c-err) 50%, var(--line)); }
+.sh-state { margin-top: 10px !important; min-height: 1.5em; font-family: var(--f-code); }
+.sh-state.on::before { content: ''; display: inline-block; width: 8px; height: 8px; margin-right: 7px; border-radius: 50%; background: var(--c-err); box-shadow: 0 0 8px var(--c-err); vertical-align: 1px; }
+.sh-out { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.sh-out span { flex: 1 1 100%; font-size: 12.5px; color: var(--fg); }
+.sh-hint { padding: 0 18px; }
+.sh-msg { padding: 0 18px 8px; min-height: 1.2em; }
+.sh-msg.ok { color: var(--k-green) !important; } .sh-msg.bad { color: var(--c-err) !important; }
+.share-toast { display: flex; align-items: center; gap: 12px; }
+.share-toast button { font: inherit; font-weight: 700; border: 0; border-radius: var(--r-s, 6px); padding: 6px 10px; background: var(--k-orange); color: var(--on-key); cursor: pointer; white-space: nowrap; }
+[data-skin="field"] .sharedlg { border-color: #000; box-shadow: 6px 6px 0 #000; }
+[data-skin="pop"] .sharedlg { border: 3px solid var(--bezel); box-shadow: 0 8px 0 #c33a52; }
 /* the top row stays one row on a desktop: the build stamp, the preset name and the scope give way to the armed chip */
 @media (min-width: 1101px) {
   .top { flex-wrap: nowrap; }
@@ -418,18 +432,6 @@ body.recording .editor { border-color: var(--c-err); }
 @keyframes ring { from { transform: scale(.4); opacity: .9; } to { transform: scale(3.6); opacity: 0; } }
 
 /* =============== Field: aluminium, black ink, a dot-matrix display =============== */
-:root[data-skin="field"] {
-  --body: #e2e3df; --panel: #ebecea; --raised: #f8f8f6; --line: #a9aca7; --fg: #000; --dim: #50534f; --faint: #858884;
-  --k-orange: #ff4f00; --k-blue: #0057ff; --k-green: #00a669; --k-yellow: #ffc400; --k-pink: #ff3f7a; --k-violet: #6a5cff;
-  --on-key: #fff; --shadow: none; --key-edge: #000; --key-depth: 0px; --arm: #ff4f00; --go: #0057ff;
-  --scr: #000; --scr-2: #0a0a0a; --scr-line: #2a2a2a; --scr-fg: #f4f4f4; --scr-dim: #8f8f8f; --scr-faint: #565656;
-  --c-name: #ffffff; --c-glob: #6f9bff; --c-num: #00d18a; --c-op: #ff6a1f; --c-inst: #b9c8ff; --c-err: #ff3f7a; --c-gen: #ffc400;
-  --f-ui: "Archivo", "IBM Plex Sans KR", "Apple SD Gothic Neo", "Noto Sans KR", system-ui, sans-serif;
-  --f-code: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
-  --f-lcd: "Doto", "IBM Plex Mono", ui-monospace, monospace;
-  --r-xs: 2px; --r-s: 3px; --r-m: 4px; --r-l: 5px; --r-xl: 6px;
-  color-scheme: light;
-}
 [data-skin="field"] body { background: var(--body) radial-gradient(circle, rgba(0,0,0,.13) 1px, transparent 1.3px) 0 0 / 14px 14px; }
 [data-skin="field"] .brand b { font-stretch: 125%; font-weight: 800; letter-spacing: -.01em; text-transform: lowercase; font-size: 21px; }
 [data-skin="field"] .lcd { border-radius: var(--r-m); border-color: #000; }
@@ -471,16 +473,6 @@ body.recording .editor { border-color: var(--c-err); }
 [data-skin="field"] .help details.gsec, [data-skin="field"] .gcard, [data-skin="field"] .slot, [data-skin="field"] .gpubox { border-color: #000; }
 
 /* =============== Pop: a handheld toy, candy keys, springy presses =============== */
-:root[data-skin="pop"] {
-  --body: #d9e1ff; --panel: #f3f5ff; --raised: #ffffff; --line: #c2cbef; --fg: #241f4f; --dim: #59568a; --faint: #8b88b3;
-  --k-orange: #ff7b29; --k-blue: #3b7bff; --k-green: #1bbf77; --k-yellow: #ffbf2e; --k-pink: #ff5a8f; --k-violet: #8b6bff;
-  --on-key: #fff; --shadow: none; --key-edge: #b3bde6; --key-depth: 4px; --arm: #ff9f1c; --go: #1bbf77; --bezel: #ff5a6e;
-  --scr: #1f1a45; --scr-2: #251f52; --scr-line: #3b3573; --scr-fg: #f5f3ff; --scr-dim: #aaa5da; --scr-faint: #6f69a3;
-  --c-name: #ffd166; --c-glob: #7ec8ff; --c-num: #6ff0b0; --c-op: #ff9f5a; --c-inst: #c6aaff; --c-err: #ff6b8e; --c-gen: #ffe066;
-  --f-ui: "Nunito", "Gowun Dodum", "Apple SD Gothic Neo", "Noto Sans KR", system-ui, sans-serif;
-  --r-xs: 6px; --r-s: 10px; --r-m: 12px; --r-l: 16px; --r-xl: 22px;
-  color-scheme: light;
-}
 [data-skin="pop"] body { background: var(--body) radial-gradient(circle, rgba(255,255,255,.7) 2.2px, transparent 2.6px) 0 0 / 22px 22px; }
 [data-skin="pop"] .brand b { font-weight: 900; font-stretch: 100%; letter-spacing: .02em; font-size: 22px; text-transform: lowercase; color: var(--bezel); }
 [data-skin="pop"] .lcd { border-radius: 999px; border: 0; box-shadow: 0 4px 0 #b3bde6; padding-inline: 6px; }
@@ -543,13 +535,15 @@ body.recording .editor { border-color: var(--c-err); }
     </div>
     <select class="preset" id="preset" data-i18n-aria="presetLabel" data-i18n-title="presetLabel"></select>
     <button class="btn" id="composeBtn" data-i18n="composeBtn"></button>
+    <button class="btn" id="shareBtn" data-i18n="share" data-i18n-title="shareTitle"></button>
     <div class="queue" id="queue" role="status" hidden><i class="qled"></i><b class="qwhat"></b> <span class="qwhen"></span><span class="qseg" aria-hidden="true"><i></i><i></i><i></i><i></i></span></div>
     <div class="spacer"></div>
     <canvas id="scope" aria-hidden="true"></canvas>
     <button class="btn ghost toggle" id="auto" aria-pressed="true" data-i18n="auto" data-i18n-title="autoTitle"></button>
     <a class="btn ghost" id="srcLink" href="https://github.com/nakosung/tactus" target="_blank" rel="noopener" data-i18n-title="srcTitle">GitHub</a>
-    <div class="skins" id="skins" role="radiogroup" data-i18n-aria="skin">
-      <button role="radio" data-skin="studio" data-i18n-title="skinStudio"><i></i><span data-i18n="skinStudio"></span></button><button role="radio" data-skin="field" data-i18n-title="skinField"><i></i><span data-i18n="skinField"></span></button><button role="radio" data-skin="pop" data-i18n-title="skinPop"><i></i><span data-i18n="skinPop"></span></button>
+    <button class="btn ghost installBtn" hidden data-i18n="install" data-i18n-title="installTitle"></button>
+    <div class="skins" id="skins" role="radiogroup">
+      <button role="radio" data-skin="studio"><i></i><span></span></button><button role="radio" data-skin="field"><i></i><span></span></button><button role="radio" data-skin="pop"><i></i><span></span></button>
     </div>
     <button class="btn ghost" id="lang" data-i18n="lang" data-i18n-title="langTitle"></button>
   </header>
@@ -762,10 +756,30 @@ body.recording .editor { border-color: var(--c-err); }
   </main>
 
   <footer class="status" id="status" role="status"></footer>
+
+  <dialog id="shareDlg" class="sharedlg" aria-labelledby="shareH">
+    <div class="sh-head"><h2 id="shareH" data-i18n="shareTitle2"></h2><button class="btn ghost sh-close" data-i18n="guideClose"></button></div>
+    <section>
+      <h3 data-i18n="shareLink"></h3>
+      <p data-i18n="shareLinkD"></p>
+      <div class="sh-row"><button class="btn sh-send" data-i18n="shareSend"></button><button class="btn sh-copy" data-i18n="shareCopy"></button></div>
+    </section>
+    <section class="sh-rec">
+      <h3 data-i18n="shareAudio"></h3>
+      <p data-i18n="shareAudioD"></p>
+      <div class="sh-row"><button class="btn" data-bars="4" data-i18n="shareB4"></button><button class="btn" data-bars="8" data-i18n="shareB8"></button><button class="btn" data-bars="16" data-i18n="shareB16"></button><button class="btn" data-bars="song" data-i18n="shareWhole"></button><button class="btn sh-stop" hidden data-i18n="shareStop"></button></div>
+      <p class="sh-state" aria-live="polite"></p>
+      <div class="sh-out" hidden><span></span><button class="btn sh-fsend" data-i18n="shareSendFile"></button><button class="btn sh-save" data-i18n="shareSave"></button></div>
+    </section>
+    <p class="sh-hint" data-i18n="shareHint"></p>
+    <p class="sh-msg" aria-live="polite"></p>
+  </dialog>
 </div>
 
 <script>
 /*I18N*/
+/*SKIN*/
+/*PWA*/
 /*KIT*/
 /*ENGINE*/
 /*GEN*/
@@ -783,5 +797,6 @@ body.recording .editor { border-color: var(--c-err); }
 /*SOUNDS*/
 /*HAND*/
 /*UI*/
+/*SHARE*/
 /*VIZ*/
 </script>

@@ -1,0 +1,38 @@
+/* Skins shared by the welcome page and the instrument (build.py puts this file into both).
+   Each skin is a set of tokens; each page then styles its own parts with them. The choice lives in localStorage
+   ('tactus-skin'), which both pages read, so picking a skin on one page carries over to the other. */
+:root[data-skin="field"] {
+  --body: #e2e3df; --panel: #ebecea; --raised: #f8f8f6; --line: #a9aca7; --fg: #000; --dim: #50534f; --faint: #858884;
+  --k-orange: #ff4f00; --k-blue: #0057ff; --k-green: #00a669; --k-yellow: #ffc400; --k-pink: #ff3f7a; --k-violet: #6a5cff;
+  --on-key: #fff; --shadow: none; --key-edge: #000; --key-depth: 0px; --arm: #ff4f00; --go: #0057ff;
+  --scr: #000; --scr-2: #0a0a0a; --scr-line: #2a2a2a; --scr-fg: #f4f4f4; --scr-dim: #8f8f8f; --scr-faint: #565656;
+  --c-name: #ffffff; --c-glob: #6f9bff; --c-num: #00d18a; --c-op: #ff6a1f; --c-inst: #b9c8ff; --c-err: #ff3f7a; --c-gen: #ffc400;
+  --f-ui: "Archivo", "IBM Plex Sans KR", "Apple SD Gothic Neo", "Noto Sans KR", system-ui, sans-serif;
+  --f-code: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  --f-lcd: "Doto", "IBM Plex Mono", ui-monospace, monospace;
+  --r-xs: 2px; --r-s: 3px; --r-m: 4px; --r-l: 5px; --r-xl: 6px;
+  color-scheme: light;
+}
+:root[data-skin="pop"] {
+  --body: #d9e1ff; --panel: #f3f5ff; --raised: #ffffff; --line: #c2cbef; --fg: #241f4f; --dim: #59568a; --faint: #8b88b3;
+  --k-orange: #ff7b29; --k-blue: #3b7bff; --k-green: #1bbf77; --k-yellow: #ffbf2e; --k-pink: #ff5a8f; --k-violet: #8b6bff;
+  --on-key: #fff; --shadow: none; --key-edge: #b3bde6; --key-depth: 4px; --arm: #ff9f1c; --go: #1bbf77; --bezel: #ff5a6e;
+  --scr: #1f1a45; --scr-2: #251f52; --scr-line: #3b3573; --scr-fg: #f5f3ff; --scr-dim: #aaa5da; --scr-faint: #6f69a3;
+  --c-name: #ffd166; --c-glob: #7ec8ff; --c-num: #6ff0b0; --c-op: #ff9f5a; --c-inst: #c6aaff; --c-err: #ff6b8e; --c-gen: #ffe066;
+  --f-ui: "Nunito", "Gowun Dodum", "Apple SD Gothic Neo", "Noto Sans KR", system-ui, sans-serif;
+  --r-xs: 6px; --r-s: 10px; --r-m: 12px; --r-l: 16px; --r-xl: 22px;
+  color-scheme: light;
+}
+
+/* ---- the skin picker ---- */
+.skins { display: inline-flex; gap: 2px; padding: 2px; border-radius: var(--r-m); background: var(--panel); border: 1px solid var(--line); }
+.skins button { display: inline-flex; align-items: center; gap: 6px; border: 0; background: transparent; color: var(--dim); font-size: 11.5px; font-weight: 600; padding: 4px 8px 4px 5px; border-radius: var(--r-s); cursor: pointer; transition: transform .09s; }
+.skins button[aria-checked="true"] { background: var(--raised); color: var(--fg); box-shadow: var(--shadow); }
+.skins i { width: 14px; height: 14px; border-radius: 50%; flex: none; box-shadow: inset 0 0 0 1px rgba(0,0,0,.25); }
+.skins [data-skin="studio"] i { background: conic-gradient(#ff7a3c 0 25%, #17191e 0 75%, #a48bff 0); }
+.skins [data-skin="field"] i { background: conic-gradient(#ff4f00 0 25%, #e2e3df 0 75%, #000 0); border-radius: 3px; }
+.skins [data-skin="pop"] i { background: conic-gradient(#ff5a6e 0 25%, #ffc53d 0 50%, #1fc77e 0 75%, #3b7bff 0); }
+
+/* ---- a short note from the page (install help) ---- */
+.pwa-tip { position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%); z-index: 80; max-width: min(460px, calc(100vw - 32px)); padding: 12px 16px; border-radius: var(--r-l, 12px);
+  background: var(--fg); color: var(--body); font-size: 14px; line-height: 1.45; box-shadow: 0 10px 30px rgba(0,0,0,.35); }

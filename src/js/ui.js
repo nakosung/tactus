@@ -16,14 +16,17 @@ function applyI18n() {
   document.querySelectorAll('[data-i18n-aria]').forEach(el => { el.setAttribute('aria-label', t(el.dataset.i18nAria)); });
   syncPlayBtn();
 }
-$('#lang').addEventListener('click', () => {
-  const other = LANG === 'ko' ? 'en' : 'ko';
+function switchLang(other) {
+  if (other === LANG || !['ko', 'en'].includes(other)) return;
   const cur = PRESETS.find(p => srcEl.value === presetText(p, LANG));
   if (cur) srcEl.value = presetText(cur, other);
   LANG = other;
   try { localStorage.setItem('pulse-lang', LANG); } catch (e) { }
-  applyI18n(); buildSlots(); buildPresets(); syncHandsUI(); buildChips(); evaluate('bar'); renderPads(true); renderGestureCards();
-});
+  applyI18n(); skinLabels(); buildSlots(); buildPresets(); syncHandsUI(); buildChips(); evaluate('bar'); renderPads(true); renderGestureCards();
+}
+$('#lang').addEventListener('click', () => switchLang(LANG === 'ko' ? 'en' : 'ko'));
+// the welcome page shares the language: a switch there, in another tab, switches here too
+const onSharedLang = switchLang;
 
 // ---------- evaluation ----------
 function evaluate(mode = 'bar', opts = {}) {
@@ -994,22 +997,8 @@ document.addEventListener('pointerdown', e => {
   addEventListener('pointerup', up, true); addEventListener('pointercancel', up, true);
 }, true);
 
-// ---------- skins ----------
-const SKINS = ['studio', 'field', 'pop'];
-function setSkin(k) {
-  if (!SKINS.includes(k)) k = 'studio';
-  document.documentElement.dataset.skin = k;
-  document.querySelectorAll('#skins [data-skin]').forEach(b => b.setAttribute('aria-checked', b.dataset.skin === k));
-  try { localStorage.setItem('tactus-skin', k); } catch (e) { }
-  // canvases read the skin's colours each time they draw, and pictures use the colour variables, so nothing redraws
-}
-$('#skins').addEventListener('click', e => { const b = e.target.closest('[data-skin]'); if (b) setSkin(b.dataset.skin); });
-$('#skins').addEventListener('keydown', e => {
-  if (!/^Arrow(Left|Right)$/.test(e.key)) return;
-  const i = SKINS.indexOf(document.documentElement.dataset.skin), k = SKINS[mod(i + (e.key === 'ArrowRight' ? 1 : -1), 3)];
-  setSkin(k); $(`#skins [data-skin="${k}"]`).focus(); e.preventDefault();
-});
-setSkin(document.documentElement.dataset.skin);
+skinInit();
+pwaInit();
 
 // ---------- animation loop ----------
 const posEl = $('#pos'), pipsEl = [...document.querySelectorAll('.pip')];
