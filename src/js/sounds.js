@@ -114,7 +114,7 @@ async function sndLoadSaved() {
   if (rows.length) { sndRender(); evaluate('bar'); }
 }
 
-// ---------- the guide's "my sounds" group, and dropping files on the page ----------
+// ---------- the "my sounds" group in the sound list, and dropping files on the page ----------
 function sndRender() {
   const box = document.getElementById('mySounds'); if (!box) return;
   const names = [...USER_SOUNDS.keys()];

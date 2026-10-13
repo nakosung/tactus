@@ -568,7 +568,8 @@ $('#padCode').addEventListener('click', () => {
 });
 
 // ---------- control surface tabs ----------
-const TABS = ['perform', 'compose', 'loops', 'guide'];
+// perform, record (voice and loops, with the mic settings they share), sounds (hear every instrument), guide
+const TABS = ['perform', 'record', 'sounds', 'guide'];
 function showTab(name) {
   for (const n of TABS) { $('#tab-' + n).setAttribute('aria-selected', n === name); $('#pane-' + n).hidden = n !== name; }
   try { localStorage.setItem('pulse-tab', name); } catch (e) { }
@@ -579,7 +580,12 @@ $('.tabs').addEventListener('keydown', e => {
   const d = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0; if (!d) return;
   e.preventDefault(); const n = TABS[mod(i + d, TABS.length)]; showTab(n); $('#tab-' + n).focus();
 });
-$('#composeBtn').addEventListener('click', () => { showTab('compose'); $('#cmpGo').focus(); });
+// composing a whole song starts a piece, like picking an example, so it opens from the top bar next to them
+const cmpBtn = $('#composeBtn'), cmpPop = $('#cmpPop');
+function cmpOpen(on) { cmpPop.hidden = !on; cmpBtn.setAttribute('aria-expanded', on); if (on) $('#cmpGo').focus(); }
+cmpBtn.addEventListener('click', () => cmpOpen(cmpPop.hidden));
+document.addEventListener('pointerdown', e => { if (!cmpPop.hidden && !e.target.closest('.cmpwrap')) cmpOpen(false); });
+cmpPop.addEventListener('keydown', e => { if (e.key === 'Escape') { e.stopPropagation(); cmpOpen(false); cmpBtn.focus(); } });
 
 // ---------- GPU status and benchmark ----------
 function syncGpu() {
@@ -1117,7 +1123,8 @@ presetEl.addEventListener('change', () => {
 });
 applyI18n();
 buildChips();
-try { const tb = localStorage.getItem('pulse-tab'); if (TABS.includes(tb)) showTab(tb); } catch (e) { }
+// tabs saved by an older version: compose and loops live in record now
+try { const tb = { compose: 'record', loops: 'record' }[localStorage.getItem('pulse-tab')] || localStorage.getItem('pulse-tab'); if (TABS.includes(tb)) showTab(tb); } catch (e) { }
 buildSlots();
 buildPresets();
 buildArr();

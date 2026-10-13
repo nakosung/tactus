@@ -371,6 +371,16 @@ body.recording .editor { border-color: var(--c-err); }
 .knob:is(.press, :active) { box-shadow: var(--shadow), 0 0 0 var(--key-edge); transform: translateY(1px); }
 
 /*SKINS*/
+/* ---- composing a whole song: a pop-over under its button ---- */
+.cmpwrap { position: relative; flex: none; }
+#composeBtn::after { content: ''; display: inline-block; width: 0; height: 0; margin-left: 7px; vertical-align: 2px; border-left: 4px solid transparent; border-right: 4px solid transparent; border-top: 5px solid currentColor; }
+#composeBtn[aria-expanded="true"]::after { transform: rotate(180deg); }
+.cmppop { position: absolute; top: calc(100% + 8px); left: 0; z-index: 45; width: 360px; display: grid; gap: 10px; padding: 14px; border-radius: var(--r-l); background: var(--panel); border: 1px solid var(--line); box-shadow: 0 18px 40px rgba(0,0,0,.35); }
+[data-skin="field"] .cmppop { border-color: #000; box-shadow: 6px 6px 0 #000; }
+[data-skin="pop"] .cmppop { border: 2px solid var(--line); box-shadow: 0 6px 0 var(--key-edge), 0 18px 40px rgba(40,30,90,.2); }
+@media (max-width: 900px) { .cmppop { position: fixed; top: 76px; left: 16px; right: 16px; width: auto; } }
+.micbox { display: grid; gap: 6px; padding: 10px; border-radius: var(--r-l); border: 1px solid var(--line); background: var(--panel); }
+.sndcredit { font-size: 11px; }
 /* ---- voice to code ---- */
 .vxbox { display: grid; gap: 8px; }
 .vxrow { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
@@ -546,7 +556,22 @@ body.recording .editor { border-color: var(--c-err); }
       <div class="cell"><label data-i18n="barLbl">BAR</label><div class="row"><output id="pos">1.1</output><span class="pips" aria-hidden="true"><i class="pip"></i><i class="pip"></i><i class="pip"></i><i class="pip"></i></span></div></div>
     </div>
     <select class="preset" id="preset" data-i18n-aria="presetLabel" data-i18n-title="presetLabel"></select>
-    <button class="btn" id="composeBtn" data-i18n="composeBtn"></button>
+    <div class="cmpwrap">
+      <button class="btn" id="composeBtn" aria-expanded="false" aria-controls="cmpPop" data-i18n="composeBtn"></button>
+      <div class="cmppop" id="cmpPop" role="dialog" aria-labelledby="cmpH" hidden>
+        <h2 class="sec-h" id="cmpH"><span data-i18n="cmpTitle"></span></h2>
+        <p class="note" data-i18n="cmpIntro"></p>
+        <div class="chips" id="cmpStyles" role="group" data-i18n-aria="cmpStyle"></div>
+        <div class="seedrow">
+          <label for="cmpSeed">SEED<input type="number" id="cmpSeed" value="1" min="0" max="999999"></label>
+          <button class="btn" id="cmpDice" data-i18n="cmpDice" data-i18n-title="cmpDiceTitle"></button>
+        </div>
+        <div class="row-btns">
+          <button class="btn go" id="cmpGo" data-i18n="cmpGo"></button>
+          <button class="btn ghost" id="cmpUndo" data-i18n="cmpUndo" disabled></button>
+        </div>
+      </div>
+    </div>
     <button class="btn" id="shareBtn" data-i18n="share" data-i18n-title="shareTitle"></button>
     <div class="queue" id="queue" role="status" hidden><i class="qled"></i><b class="qwhat"></b> <span class="qwhen"></span><span class="qseg" aria-hidden="true"><i></i><i></i><i></i><i></i></span></div>
     <div class="spacer"></div>
@@ -587,8 +612,8 @@ body.recording .editor { border-color: var(--c-err); }
     <aside class="rack">
       <div class="tabs" role="tablist">
         <button role="tab" id="tab-perform" aria-controls="pane-perform" aria-selected="true" data-i18n="tabPerform"></button>
-        <button role="tab" id="tab-compose" aria-controls="pane-compose" aria-selected="false" data-i18n="tabCompose"></button>
-        <button role="tab" id="tab-loops" aria-controls="pane-loops" aria-selected="false" data-i18n="tabLoops"></button>
+        <button role="tab" id="tab-record" aria-controls="pane-record" aria-selected="false" data-i18n="tabRecord"></button>
+        <button role="tab" id="tab-sounds" aria-controls="pane-sounds" aria-selected="false" data-i18n="tabSounds"></button>
         <button role="tab" id="tab-guide" aria-controls="pane-guide" aria-selected="false" data-i18n="tabGuide"></button>
       </div>
 
@@ -612,20 +637,21 @@ body.recording .editor { border-color: var(--c-err); }
         <div class="gstrip" id="gestStrip" data-gestures="mini" hidden></div>
       </section>
 
-      <section class="pane" id="pane-compose" role="tabpanel" aria-labelledby="tab-compose" hidden>
-        <h2 class="sec-h"><span data-i18n="cmpTitle"></span></h2>
-        <p class="note" data-i18n="cmpIntro"></p>
-        <div class="chips" id="cmpStyles" role="group" data-i18n-aria="cmpStyle"></div>
-        <div class="seedrow">
-          <label for="cmpSeed">SEED<input type="number" id="cmpSeed" value="1" min="0" max="999999"></label>
-          <button class="btn" id="cmpDice" data-i18n="cmpDice" data-i18n-title="cmpDiceTitle"></button>
-        </div>
-        <div class="row-btns">
-          <button class="btn go" id="cmpGo" data-i18n="cmpGo"></button>
-          <button class="btn ghost" id="cmpUndo" data-i18n="cmpUndo" disabled></button>
+      <section class="pane" id="pane-record" role="tabpanel" aria-labelledby="tab-record" hidden>
+        <div class="micbox">
+          <h2 class="sec-h"><span data-i18n="micTitle"></span><small data-i18n="micHint"></small></h2>
+          <div class="loopctl">
+            <label class="chk" data-i18n-title="speakerTitle"><input type="checkbox" id="speaker" checked><span data-i18n="speaker"></span></label>
+            <label class="lat" data-i18n-title="latencyTitle"><span data-i18n="latency"></span><input type="number" id="latency" value="0" step="5" min="-200" max="200">ms</label>
+          </div>
+          <div class="loopctl cal">
+            <button class="calbtn" id="calAuto" data-i18n="calAuto" data-i18n-title="calAutoTitle"></button>
+            <button class="calbtn" id="calClap" data-i18n="calClap" data-i18n-title="calClapTitle"></button>
+            <span class="calinfo" id="calInfo"></span>
+          </div>
         </div>
         <div class="vxbox" id="vxBox">
-          <h2 class="sec-h"><span data-i18n="vxTitle"></span><small data-i18n="vxSmall"></small></h2>
+          <h2 class="sec-h"><span data-i18n="vxTitle"></span></h2>
           <p class="note" data-i18n="vxIntro"></p>
           <div class="vxrow">
             <div class="seg" id="vxMode" role="group" data-i18n-aria="vxModeLbl"><button data-m="beat" data-i18n="vxBeat"></button><button data-m="hum" data-i18n="vxHum"></button></div>
@@ -638,37 +664,22 @@ body.recording .editor { border-color: var(--c-err); }
           <div class="row-btns" id="vxActs" hidden><button class="btn go" id="vxInsert" data-i18n="vxInsert"></button><button class="btn ghost" id="vxUndo" data-i18n="vxUndo"></button></div>
           <p class="note vxmsg" id="vxMsg" aria-live="polite"></p>
         </div>
-        <h2 class="sec-h"><span data-i18n="genTitle"></span></h2>
-        <dl class="gens">
-          <dt><code>~beat four</code></dt><dd data-i18n="genBeat"></dd>
-          <dt><code>~bass offbeat</code></dt><dd data-i18n="genBass"></dd>
-          <dt><code>~melody</code></dt><dd data-i18n="genMelody"></dd>
-          <dt><code>~chords stab</code></dt><dd data-i18n="genChords"></dd>
-          <dt><code>~arp broken</code></dt><dd data-i18n="genArp"></dd>
-          <dt><code>prog ~gen 4</code></dt><dd data-i18n="genProg"></dd>
-          <dt><code>seed 42</code></dt><dd data-i18n="genSeed"></dd>
-          <dt><code>dens evolve bars</code></dt><dd data-i18n="genParams"></dd>
-          <dt><code>Ctrl+B</code></dt><dd data-i18n="genBake"></dd>
-        </dl>
-      </section>
-
-      <section class="pane" id="pane-loops" role="tabpanel" aria-labelledby="tab-loops" hidden>
         <h2 class="sec-h"><span data-i18n="loops"></span><small data-i18n="loopsHint"></small></h2>
         <div class="loopctl">
           <span class="seg" data-i18n-title="srcTitle"><button id="srcMic" data-i18n="srcMic" aria-pressed="false"></button><button id="srcOut" data-i18n="srcOut" aria-pressed="true"></button></span>
-          <label class="chk" data-i18n-title="speakerTitle"><input type="checkbox" id="speaker" checked><span data-i18n="speaker"></span></label>
-          <label class="lat" data-i18n-title="latencyTitle"><span data-i18n="latency"></span><input type="number" id="latency" value="0" step="5" min="-200" max="200">ms</label>
-        </div>
-        <div class="loopctl cal">
-          <button class="calbtn" id="calAuto" data-i18n="calAuto" data-i18n-title="calAutoTitle"></button>
-          <button class="calbtn" id="calClap" data-i18n="calClap" data-i18n-title="calClapTitle"></button>
-          <span class="calinfo" id="calInfo"></span>
         </div>
         <div class="slots" id="slots"></div>
         <div class="loopio">
           <label for="file"><span data-i18n="loadFile"></span><input type="file" id="file" accept="audio/*"></label>
           <button id="export" data-i18n="exportZip"></button>
         </div>
+      </section>
+
+      <section class="pane" id="pane-sounds" role="tabpanel" aria-labelledby="tab-sounds" hidden>
+        <h2 class="sec-h"><span data-i18n="h27t"></span></h2>
+        <p class="note" data-i18n="h27d"></p>
+        <div id="sounds" class="sounds"></div>
+        <p class="note sndcredit" data-i18n="h28d"></p>
       </section>
 
       <section class="pane help" id="pane-guide" role="tabpanel" aria-labelledby="tab-guide" hidden>
@@ -771,9 +782,20 @@ body.recording .editor { border-color: var(--c-err); }
           <dt>Q W E R</dt><dd data-i18n="h17d"></dd>
           <dt>Space · T · Esc</dt><dd data-i18n="h15d"></dd>
         </dl>
+        <h3 data-i18n="genTitle"></h3>
+        <dl class="gens">
+          <dt><code>~beat four</code></dt><dd data-i18n="genBeat"></dd>
+          <dt><code>~bass offbeat</code></dt><dd data-i18n="genBass"></dd>
+          <dt><code>~melody</code></dt><dd data-i18n="genMelody"></dd>
+          <dt><code>~chords stab</code></dt><dd data-i18n="genChords"></dd>
+          <dt><code>~arp broken</code></dt><dd data-i18n="genArp"></dd>
+          <dt><code>prog ~gen 4</code></dt><dd data-i18n="genProg"></dd>
+          <dt><code>seed 42</code></dt><dd data-i18n="genSeed"></dd>
+          <dt><code>dens evolve bars</code></dt><dd data-i18n="genParams"></dd>
+          <dt><code>Ctrl+B</code></dt><dd data-i18n="genBake"></dd>
+        </dl>
         <h3 data-i18n="hgSamples"></h3>
         <dl>
-          <dt data-i18n="h27t"></dt><dd><span data-i18n="h27d"></span><div id="sounds" class="sounds"></div></dd>
           <dt data-i18n="h28t"></dt><dd data-i18n="h28d"></dd>
         </dl>
       </section>

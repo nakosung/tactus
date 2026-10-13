@@ -149,7 +149,7 @@ function pvHide() { if (PV.card) PV.card.hidden = true; }
 
 // ---------- where previews start ----------
 function pvInit() {
-  // the guide's sound list
+  // the sound list (its own tab)
   const box = document.getElementById('sounds');
   if (box) {
     box.innerHTML = PV_GROUPS.map(([k, list]) => `<div class="sgrp"><h4 data-i18n="${k}">${esc(t(k))}</h4><div>${list.map(n => `<button class="snd" data-inst="${n}">${n}</button>`).join('')}</div></div>`).join('');
