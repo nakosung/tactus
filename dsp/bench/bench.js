@@ -10,8 +10,7 @@ globalThis.AudioWorkletProcessor = class { constructor() { this.port = {}; } };
 let Syn; globalThis.registerProcessor = (n, c) => { if (n === 'pulse-synth') Syn = c; };
 new Function(code)();
 // the engine's wavetables, made by the same code the app uses
-const wtSrc = /(const WT_SHAPE[\s\S]*?)\nfunction wkNode/.exec(src)[1];
-const WT = new Function(wtSrc + '; return wtBuild();')();
+const WT = require('../../src/js/wavetables.js').wtBuild();
 // engine notes: analog with sync and unison, wavetable with a scan lfo and vowel, FM with feedback, mono with glide
 function vsP(over) {
   const p = new Float32Array(96);

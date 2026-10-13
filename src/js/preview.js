@@ -8,7 +8,7 @@ const PV = { last: '', lastAt: 0, thumbs: new Map(), card: null };
 const PV_SUSTAIN = new Set(['pad', 'swarm', 'choir', 'bowed', 'flute']);
 const PV_LOW = new Set(['bass', 'mono', 'acid', 'upright', 'sine']);
 const PV_GROUPS = [
-  ['sndSynth', ['sine', 'tri', 'saw', 'square', 'supersaw', 'pad', 'bass', 'mono', 'acid', 'pluck', 'bell', 'flute', 'bowed', 'epiano', 'zither']],
+  ['sndSynth', ['sine', 'tri', 'saw', 'square', 'supersaw', 'pad', 'bass', 'mono', 'analog', 'wt', 'fmsynth', 'acid', 'pluck', 'bell', 'flute', 'bowed', 'epiano', 'zither']],
   ['sndSampled', ['piano', 'upright', 'vibes', 'harp', 'sax', 'harpsi', 'marimba', 'kalimba', 'dantranh']],
   ['sndGpu', ['swarm', 'choir', 'plate', 'membrane', 'nsax']],
   ['sndDrums', ['kick', 'snare', 'clap', 'hat', 'ohat', 'rim', 'tom', 'ride', 'crash', 'shaker']],

@@ -564,6 +564,9 @@ body.recording .editor { border-color: var(--c-err); }
 .bk-more:hover { color: var(--fg); border-color: var(--fg); }
 /* ---- voice to code ---- */
 .vxbox { display: grid; gap: 8px; }
+.smbox { margin-bottom: 14px; padding-bottom: 12px; border-bottom: 1px dashed var(--line); }
+.smbox.drop { outline: 2px dashed var(--k-blue); outline-offset: 4px; border-radius: var(--r-m); }
+.smfile { cursor: pointer; }
 .vxrow { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .vxunit { font-size: 12px; color: var(--dim); }
 .vxrec { margin-left: auto; }
@@ -867,6 +870,18 @@ body.recording .editor { border-color: var(--c-err); }
       </section>
 
       <section class="pane" id="pane-sounds" role="tabpanel" aria-labelledby="tab-sounds" hidden>
+        <div class="vxbox smbox" id="smBox">
+          <h2 class="sec-h"><span data-i18n="smTitle"></span></h2>
+          <p class="note" data-i18n="smIntro"></p>
+          <div class="vxrow">
+            <button class="btn vxrec" id="smRec"></button>
+            <label class="btn ghost smfile"><span data-i18n="smFile"></span><input type="file" id="smFile" accept="audio/*" hidden></label>
+          </div>
+          <canvas class="vxview" id="smView" hidden aria-hidden="true"></canvas>
+          <pre class="vxout" id="smOut" hidden></pre>
+          <div class="row-btns" id="smActs" hidden><button class="btn" id="smHear" data-i18n="smHear"></button><button class="btn go" id="smInsert" data-i18n="smInsert"></button><button class="btn ghost" id="smUndo" data-i18n="vxUndo"></button></div>
+          <p class="note vxmsg" id="smMsg" aria-live="polite"></p>
+        </div>
         <h2 class="sec-h"><span data-i18n="h27t"></span></h2>
         <p class="note" data-i18n="h27d"></p>
         <div id="sounds" class="sounds"></div>
@@ -922,6 +937,10 @@ body.recording .editor { border-color: var(--c-err); }
           <dt>cut k1(300,6000)</dt><dd data-i18n="h8d"></dd>
           <dt>duck .8</dt><dd data-i18n="h9d"></dd>
           <dt>gain pan oct cut res env</dt><dd data-i18n="h10d"></dd>
+          <dt>lfo cut 1/8 tri 800 · lfo pan 2</dt><dd data-i18n="h60d"></dd>
+          <dt>ftype ladder fatk .2 fdec .4 fsus .3 · penv 12 pdec .05</dt><dd data-i18n="h61d"></dd>
+          <dt>voices 5 detune 30 width .8 · noise .2 · vowel &lt;a o&gt;</dt><dd data-i18n="h62d"></dd>
+          <dt>analog pw .3 sync 2 ring .5 · wt table growl scan .4 · fmsynth fm 3 ratio 2 fb .2</dt><dd data-i18n="h63d"></dd>
           <dt>master default loud warm open</dt><dd data-i18n="h37d"></dd>
           <dt>chop 0 3 x 2 | loop1</dt><dd data-i18n="h16d"></dd>
         </dl>
@@ -1026,6 +1045,7 @@ body.recording .editor { border-color: var(--c-err); }
 /*AUDIO*/
 /*MIX*/
 /*DSPWASM*/
+/*WAVETABLES*/
 /*SYNTH*/
 /*SAMPLES*/
 /*MUSICAL*/
@@ -1038,6 +1058,7 @@ body.recording .editor { border-color: var(--c-err); }
 /*UI*/
 /*SHARE*/
 /*VXDSP*/
+/*MATCH*/
 /*VOICE*/
 /*BLOCKS*/
 /*VIZ*/

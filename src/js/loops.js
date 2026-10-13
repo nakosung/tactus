@@ -150,6 +150,7 @@ function onChunk(f, l, r) {
     if (b > a) pr.L.set(l.subarray(a - f, b - f), a - pr.f0);
   }
   if (VX.take) vxChunk(f, l);
+  if (SM.take) smChunk(f, l);
   const tk = LS.take; if (!tk) return;
   const total = tk.bars * tk.barFrames;
   const a = Math.max(f, tk.f0), b = Math.min(f + l.length, tk.f0 + total);

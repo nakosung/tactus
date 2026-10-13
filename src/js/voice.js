@@ -33,6 +33,7 @@ function vxRestore() { if (VX.take && VX.take.silent && S.ctx) { const g = A.out
 function vxCancel() { vxRestore(); VX.take = null; if (!LS.take && LS.capOn) LS.capOn(false); vxRender(); }
 // called by the animation loop: finish when the last bar (and the audio still in flight) has arrived
 function vxTick(now) {
+  smTick(now);
   const tk = VX.take; if (!tk) return;
   if (!S.playing) { vxCancel(); return; }
   if (now < tk.endT) return;
@@ -61,9 +62,14 @@ function vxTick(now) {
 function vxInsert() {
   const res = VX.result; if (!res || !res.lines.length) return;
   VX.undo = srcEl.value;
+  codeInsertLines(res.lines);
+  vxSay(t('vxInserted'), 'ok'); vxRender();
+}
+// shared with sound match: put {name, pat, params} lines into the code
+function codeInsertLines(add) {
   let lines = srcEl.value.split('\n');
   const has = n => lines.some(l => new RegExp(`^\\s*${n}\\s`).test(l));
-  for (let { name, pat, params } of res.lines) {
+  for (let { name, pat, params } of add) {
     // the song's own drum names: a beatboxed snare goes to its clap if it has no snare
     if (name === 'snare' && !has('snare') && has('clap')) name = 'clap';
     const re = new RegExp(`^(\\s*${name}\\s+)([^|]*?)(\\s*\\|.*)?$`);
@@ -80,7 +86,6 @@ function vxInsert() {
   }
   srcEl.value = lines.join('\n');
   evaluate('bar'); render();
-  vxSay(t('vxInserted'), 'ok'); vxRender();
 }
 function vxUndo() { if (VX.undo == null) return; srcEl.value = VX.undo; VX.undo = null; evaluate('bar'); render(); vxSay(t('vxUndone'), 'ok'); vxRender(); }
 
@@ -141,3 +146,106 @@ function vxInit() {
   vxRender();
 }
 vxInit();
+
+// ===================== Sound match: one note in, a wavetable line out =====================
+// Play or sing one held note into the mic, or drop a short file, and match.js finds the wavetable frame, filter and
+// envelopes that sound closest. The line is a "wt" synth, so it can be heard and changed like any other.
+const SM = { take: null, result: null, undo: null, busy: false };
+const SM_SEC = 3;
+function smChunk(f, l) {
+  const tk = SM.take, a = Math.max(f, tk.f0), b = Math.min(f + l.length, tk.f0 + tk.L.length);
+  if (b > a) { tk.L.set(l.subarray(a - f, b - f), a - tk.f0); tk.got = Math.max(tk.got, b - tk.f0); }
+}
+async function smRecord() {
+  if (SM.take) { smStop(); return; }
+  if (LS.take || LS.cal || VX.take) { smSay(t('vxBusy'), 'bad'); return; }
+  initAudio(); await S.ctx.resume();
+  const r = await ensureMic();
+  if (r !== 'ok') { smSay(t(r === 'blocked' ? 'micBlocked' : 'micDenied'), 'bad'); return; }
+  await ensureCapture();
+  connectCapture('mic'); LS.capOn(true);
+  const ctx = S.ctx, sr = ctx.sampleRate, t0 = ctx.currentTime + 0.05;
+  SM.take = { sr, f0: Math.round(t0 * sr), L: new Float32Array(Math.round(SM_SEC * sr)), got: 0, endT: t0 + SM_SEC + 0.2 };
+  SM.result = null; smSay(t('smListen'), ''); smRender();
+}
+function smStop() {
+  const tk = SM.take; if (!tk) return;
+  SM.take = null; if (!LS.take && !VX.take) LS.capOn(false);
+  smRun(tk.L.subarray(0, Math.max(0, tk.got)), tk.sr);
+}
+function smTick(now) { if (SM.take && now >= SM.take.endT) smStop(); }
+async function smFileIn(file) {
+  if (!file) return;
+  initAudio();
+  try {
+    const buf = await S.ctx.decodeAudioData(await file.arrayBuffer());
+    // the first few seconds, mixed to mono: one note is all it looks at
+    const n = Math.min(buf.length, Math.round(4 * buf.sampleRate)), x = new Float32Array(n);
+    for (let c = 0; c < buf.numberOfChannels; c++) { const d = buf.getChannelData(c); for (let i = 0; i < n; i++) x[i] += d[i] / buf.numberOfChannels; }
+    smRun(x, buf.sampleRate);
+  } catch (e) { smSay(t('smBad'), 'bad'); }
+}
+function smRun(x, sr) {
+  SM.busy = true; smSay(t('smWorking'), ''); smRender();
+  // give the page a frame to show the message: the fit takes about a second
+  setTimeout(() => {
+    let r; try { r = smFit(smAnalyze(x, sr)); } catch (e) { r = { ok: false, why: 'bad' }; console.warn(e); }
+    SM.busy = false;
+    if (!r.ok) { SM.result = null; smSay(t({ quiet: 'vxQuiet', short: 'smShort', pitch: 'smPitch' }[r.why] || 'smBad'), 'bad'); smRender(); return; }
+    SM.result = r;
+    smSay(t('smDone', { note: r.note, table: r.P.table, scan: r.P.scan, err: r.err.toFixed(1) }), 'ok');
+    smRender();
+  }, 30);
+}
+function smName() { const has = n => srcEl.value.split('\n').some(l => new RegExp(`^\\s*${n}\\s`).test(l)); let n = 'match', k = 2; while (has(n)) n = 'match' + k++; return n; }
+function smLine(r, name) { const i = r.code.indexOf('|'); return { name, pat: r.pat, params: r.code.slice(i + 1).trim() }; }
+function smHear() {
+  const r = SM.result; if (!r) return;
+  const l = smLine(r, 'smpv'), c = compile(`${l.name} ${l.pat} | ${l.params}`), def = c.tracks.get('smpv');
+  if (def) previewDef({ ...def, name: '__pv' }, 'sm:' + r.code);
+}
+function smInsert() {
+  const r = SM.result; if (!r) return;
+  SM.undo = srcEl.value; codeInsertLines([smLine(r, smName())]);
+  smSay(t('vxInserted'), 'ok'); smRender();
+}
+function smUndo() { if (SM.undo == null) return; srcEl.value = SM.undo; SM.undo = null; evaluate('bar'); render(); smSay(t('vxUndone'), 'ok'); smRender(); }
+function smSay(m, cls = '') { const el = vxEl('smMsg'); if (el) { el.textContent = m; el.className = 'note vxmsg ' + cls; } }
+function smRender() {
+  const rec = vxEl('smRec'); if (!rec) return;
+  rec.textContent = t(SM.take ? 'smRecOn' : 'smRec'); rec.classList.toggle('on', !!SM.take); rec.disabled = SM.busy;
+  const r = SM.result, out = vxEl('smOut');
+  out.hidden = !r;
+  if (r) { const l = smLine(r, smName()); out.innerHTML = `<span class="nmn">${esc(l.name.padEnd(6))}</span> ${esc(l.pat)} <span class="pipe">|</span> <span class="in">${esc(l.params)}</span>`; }
+  vxEl('smActs').hidden = !r && SM.undo == null;
+  vxEl('smHear').hidden = vxEl('smInsert').hidden = !r;
+  vxEl('smUndo').hidden = SM.undo == null;
+  vxEl('smView').hidden = !r;
+  if (r) smDraw(r);
+}
+// the heard harmonics (bars) against the matched sound (dots), loudest at the top, 0 to -60 dB
+function smDraw(r) {
+  const cv = vxEl('smView'), dpr = devicePixelRatio || 1, w = cv.clientWidth * dpr, h = cv.clientHeight * dpr;
+  cv.width = w; cv.height = h;
+  const g = cv.getContext('2d'), cs = getComputedStyle(document.documentElement), col = v => cs.getPropertyValue(v).trim();
+  g.clearRect(0, 0, w, h);
+  const N = 24, bw = w / N, Y = d => Math.min(1, Math.max(0, -d / 60)) * (h - 6 * dpr) + 3 * dpr;
+  g.fillStyle = col('--scr-line'); for (let d = 0; d >= -60; d -= 20) g.fillRect(0, Math.round(Y(d)), w, dpr);
+  g.fillStyle = col('--scr-faint');
+  r.meas.slice(0, N).forEach((v, i) => { if (v == null) return; const y = Y(v); g.fillRect(i * bw + bw * 0.2, y, bw * 0.6, h - y); });
+  g.fillStyle = col('--k-green');
+  r.model.slice(0, N).forEach((v, i) => { g.beginPath(); g.arc(i * bw + bw / 2, Y(v), 3.2 * dpr, 0, 7); g.fill(); });
+}
+function smInit() {
+  const box = vxEl('smBox'); if (!box) return;
+  vxEl('smRec').addEventListener('click', smRecord);
+  vxEl('smFile').addEventListener('change', e => { smFileIn(e.target.files[0]); e.target.value = ''; });
+  vxEl('smHear').addEventListener('click', smHear);
+  vxEl('smInsert').addEventListener('click', smInsert);
+  vxEl('smUndo').addEventListener('click', smUndo);
+  box.addEventListener('dragover', e => { e.preventDefault(); box.classList.add('drop'); });
+  box.addEventListener('dragleave', () => box.classList.remove('drop'));
+  box.addEventListener('drop', e => { e.preventDefault(); box.classList.remove('drop'); const f = [...e.dataTransfer.files].find(f => /^audio\//.test(f.type) || /\.(wav|mp3|ogg|flac|m4a|aac|webm)$/i.test(f.name)); if (f) smFileIn(f); });
+  smRender();
+}
+smInit();
