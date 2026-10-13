@@ -4,7 +4,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wdth,wght@75..100,400..700&family=Spline+Sans+Mono:wght@400;500;700&family=IBM+Plex+Sans+KR:wght@400;500;600&family=Archivo:wdth,wght@62..125,400..800&family=IBM+Plex+Mono:wght@400;500;600&family=Doto:wght@600..900&family=Nunito:wght@500..900&family=Gowun+Dodum&display=swap">
-<script>try { document.documentElement.dataset.skin = localStorage.getItem('tactus-skin') || 'studio'; } catch (e) { document.documentElement.dataset.skin = 'studio'; }</script>
+<script>try { document.documentElement.dataset.skin = localStorage.getItem('tactus-skin') || 'field'; } catch (e) { document.documentElement.dataset.skin = 'field'; }</script>
 <style>
 /* Layout: a groovebox. A machined body frames one dark screen (the code) on the left and a control surface on the right:
    pads, macros, loops, compose and the guide sit behind tabs so the surface stays one screen tall. Keycap colours say what a pad does. */
@@ -344,8 +344,9 @@ body.recording .editor { border-color: var(--c-err); }
   .preset { max-width: 100%; }
 }
 /* ================= Skins and feel =================
-   Three bodies for the same instrument. Studio is the default dark rack gear (light with the OS); Field is a light
-   aluminium sampler with black ink and a dot-matrix display; Pop is a handheld toy with candy keys and a thick bezel.
+   Three bodies for the same instrument. Field, the default, is a light
+   aluminium sampler with black ink and a dot-matrix display; Studio is dark rack gear (light with the OS); Pop is a
+   handheld toy with candy keys and a thick bezel.
    Every skin keeps the code screen dark: track colours and visualizations are drawn for a dark screen.
    Keys travel when pressed (the .press class is set on pointer down, so a quick tap is still seen), and anything armed
    for the next bar blinks on the music's own beat (the root's .tick class, set by the animation loop). */
@@ -554,7 +555,7 @@ body.recording .editor { border-color: var(--c-err); }
     <a class="btn ghost" id="srcLink" href="https://github.com/nakosung/tactus" target="_blank" rel="noopener" data-i18n-title="srcTitle">GitHub</a>
     <button class="btn ghost installBtn" hidden data-i18n="install" data-i18n-title="installTitle"></button>
     <div class="skins" id="skins" role="radiogroup">
-      <button role="radio" data-skin="studio"><i></i><span></span></button><button role="radio" data-skin="field"><i></i><span></span></button><button role="radio" data-skin="pop"><i></i><span></span></button>
+      <button role="radio" data-skin="field"><i></i><span></span></button><button role="radio" data-skin="studio"><i></i><span></span></button><button role="radio" data-skin="pop"><i></i><span></span></button>
     </div>
     <button class="btn ghost" id="lang" data-i18n="lang" data-i18n-title="langTitle"></button>
   </header>

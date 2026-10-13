@@ -24,7 +24,7 @@ MANIFEST = {
     'name': 'Tactus', 'short_name': 'Tactus', 'lang': 'ko', 'dir': 'ltr',
     'description': '코드로 연주하는 라이브 코딩 악기. A live-coding music instrument.',
     'id': './play/', 'start_url': './play/', 'scope': './', 'display': 'standalone', 'display_override': ['window-controls-overlay', 'standalone'],
-    'background_color': '#17191e', 'theme_color': '#17191e', 'categories': ['music', 'entertainment', 'education'],
+    'background_color': '#e2e3df', 'theme_color': '#e2e3df', 'categories': ['music', 'entertainment', 'education'],
     'icons': [{'src': 'icon-192.png', 'sizes': '192x192', 'type': 'image/png'},
               {'src': 'icon-512.png', 'sizes': '512x512', 'type': 'image/png'},
               {'src': 'icon-maskable-512.png', 'sizes': '512x512', 'type': 'image/png', 'purpose': 'maskable'},
@@ -71,7 +71,7 @@ def page(body, head_extra, desc):
     """Wrap a page body in a full HTML document (the sources start with <title> and inline <style>)."""
     head = ('<!doctype html>\n<html lang="ko">\n<head>\n<meta charset="utf-8">\n'
             '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">\n'
-            f'<meta name="description" content="{desc}">\n' + head_extra + '<meta name="theme-color" content="#17191e">\n')
+            f'<meta name="description" content="{desc}">\n' + head_extra + '<meta name="theme-color" content="#e2e3df">\n')
     first = body.find('<div class="')
     return head + body[:first] + '</head>\n<body>\n' + body[first:] + '\n</body>\n</html>\n'
 

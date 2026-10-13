@@ -3,9 +3,10 @@
 // a skin picked on one page is there on the other, and an open tab follows a change made in another tab.
 // A tiny inline script in each page's head sets the skin before the first paint; this file wires up the picker.
 
-const SKINS = ['studio', 'field', 'pop'];
+// Field (the light aluminium sampler) is what a first visit sees; Studio is the dark rack, Pop the handheld toy
+const SKINS = ['field', 'studio', 'pop'], SKIN_DEFAULT = 'field';
 const SKIN_KEY = 'tactus-skin';
-function skinNow() { return document.documentElement.dataset.skin || 'studio'; }
+function skinNow() { return document.documentElement.dataset.skin || SKIN_DEFAULT; }
 // the browser's title bar (and an installed app's window) takes the skin's body colour
 function skinThemeColor() {
   const m = document.querySelector('meta[name="theme-color"]'); if (!m) return;
@@ -21,7 +22,7 @@ function skinLabels() {
   document.querySelectorAll('.skins').forEach(g => g.setAttribute('aria-label', t('skin')));
 }
 function setSkin(k, save = true) {
-  if (!SKINS.includes(k)) k = 'studio';
+  if (!SKINS.includes(k)) k = SKIN_DEFAULT;
   document.documentElement.dataset.skin = k;
   document.querySelectorAll('.skins [data-skin]').forEach(b => { b.setAttribute('aria-checked', b.dataset.skin === k); b.tabIndex = b.dataset.skin === k ? 0 : -1; });
   if (save) try { localStorage.setItem(SKIN_KEY, k); } catch (e) { }
