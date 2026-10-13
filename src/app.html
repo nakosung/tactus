@@ -465,7 +465,6 @@ body.recording .editor { border-color: var(--c-err); }
 .bk-bar.add, .bk-bar.del { color: var(--fg); font-size: 14px; }
 .bk-barlbl { font-size: 11px; color: var(--faint); margin-left: 4px; }
 .bk-rules { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; }
-.bk-rules:has(.bk-rule) { padding: 6px 7px; margin: 0 -4px; border-radius: var(--r-m); background: color-mix(in srgb, var(--k-violet) 9%, transparent); border-left: 4px solid var(--k-violet); }
 .bk-rule { display: inline-flex; align-items: center; gap: 4px; padding: 3px 3px 3px 9px; border-radius: 6px 14px 14px 6px; background: var(--k-violet); color: var(--on-key); font-size: 12px; font-weight: 700; }
 .bk-rule select { font: 700 12px/1 var(--f-ui); color: inherit; background: color-mix(in srgb, #fff 18%, transparent); border: 0; border-radius: 4px; padding: 3px 4px; cursor: pointer; }
 .bk-rule select option { color: #111; }
@@ -492,6 +491,41 @@ body.recording .editor { border-color: var(--c-err); }
 .bk-carbtn button { width: 20px; height: 22px; padding: 0; border: 0; background: transparent; color: var(--dim); cursor: pointer; font-size: 10px; }
 .bk-carbtn button:disabled { opacity: .25; cursor: default; }
 .bk-row2 { display: flex; gap: 6px; }
+.bk-hint { margin: 0; font-size: 11.5px; color: var(--faint); }
+[data-sort] { touch-action: pan-y; }
+.sorting { position: relative; z-index: 5; transform: scale(1.03); box-shadow: 0 12px 28px rgba(0,0,0,.28) !important; cursor: grabbing; transition: transform .12s, box-shadow .12s; }
+.bk-cards > .sorting { transform: scale(1.01); }
+.bk-symrow { display: grid; grid-template-columns: repeat(16, minmax(0, 1fr)); gap: 3px; touch-action: none; }
+.bk-symadd { height: 34px; font-size: 13px; color: var(--faint); }
+.bk-sym { position: relative; display: flex; align-items: center; gap: 2px; min-width: 0; height: 34px; padding: 0 12px 0 4px; border-radius: var(--r-s); background: var(--tc); color: var(--on-key); }
+.bk-sym select { flex: 1; min-width: 0; font: 700 13px/1 var(--f-ui); color: inherit; background: transparent; border: 0; cursor: pointer; }
+.bk-sym select option { color: #111; }
+.bk-sym .bk-pick, .bk-sym .bk-rx { color: color-mix(in srgb, var(--on-key) 75%, transparent); flex: none; }
+.bk-grip { position: absolute; right: 0; top: 0; bottom: 0; width: 10px; cursor: ew-resize; border-radius: 0 var(--r-s) var(--r-s) 0; background: color-mix(in srgb, #000 22%, transparent); touch-action: none; }
+.bk-car { position: relative; padding-right: 14px; justify-content: flex-start; }
+.bk-car-rs { position: absolute; right: 0; top: 0; bottom: 0; width: 10px; cursor: ew-resize; border-radius: 0 var(--r-m) var(--r-m) 0; background: color-mix(in srgb, var(--pc) 55%, transparent); touch-action: none; }
+@media (hover: hover) {
+  :is(.bk-chord, .bk-piece, .bk-car, .bk-sym) .bk-rx, .bk-card header .bk-x { opacity: 0; transition: opacity .12s; }
+  :is(.bk-chord, .bk-piece, .bk-car, .bk-sym, .bk-card header):is(:hover, :focus-within) :is(.bk-rx, .bk-x) { opacity: 1; }
+  .bk-grip, .bk-car-rs { opacity: .35; transition: opacity .12s; }
+  :is(.bk-sym, .bk-car):hover :is(.bk-grip, .bk-car-rs) { opacity: 1; }
+}
+@media (hover: none) { :is(.bk-chord, .bk-piece, .bk-car, .bk-sym) .bk-rx { opacity: .55; } }
+.bk-pick { font: 700 13px/1 var(--f-ui); color: inherit; background: transparent; border: 0; padding: 6px 6px; border-radius: var(--r-s); cursor: pointer; white-space: nowrap; }
+.bk-pick:hover, .bk-pick:focus-visible { background: color-mix(in srgb, var(--fg) 10%, transparent); }
+.bk-pick.piece, .bk-pick.carname { font-family: var(--f-code); }
+.bk-pick.carbars { font-weight: 600; color: var(--dim); }
+.bk-sym .bk-pick { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; text-align: left; }
+.bk-menu { position: fixed; z-index: 90; display: grid; grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); gap: 3px; width: max-content; max-width: min(320px, calc(100vw - 16px)); max-height: 50vh; overflow: auto; padding: 5px; border-radius: var(--r-l); background: var(--raised); border: 1px solid var(--line); box-shadow: 0 14px 36px rgba(0,0,0,.3); }
+.bk-menu button { font: 700 13px/1 var(--f-ui); padding: 9px 10px; border: 0; border-radius: var(--r-s); background: transparent; color: var(--fg); cursor: pointer; text-align: center; white-space: nowrap; }
+.bk-menu button:hover, .bk-menu button:focus-visible { background: color-mix(in srgb, var(--k-blue) 16%, transparent); outline: none; }
+.bk-menu button[aria-selected="true"] { background: var(--fg); color: var(--body); }
+[data-skin="field"] .bk-menu { border-color: #000; box-shadow: 5px 5px 0 #000; }
+[data-skin="pop"] .bk-menu { border-width: 2px; box-shadow: 0 6px 0 var(--key-edge), 0 14px 36px rgba(40,30,90,.2); }
+.bk-foot { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.bk-foot .bk-why { flex: 1 1 200px; }
+.bk-more { max-width: 120px; font-size: 12px; font-weight: 600; border: 1px dashed var(--line); background: transparent; color: var(--dim); border-radius: 999px; padding: 4px 8px; cursor: pointer; }
+.bk-more:hover { color: var(--fg); border-color: var(--fg); }
 /* ---- voice to code ---- */
 .vxbox { display: grid; gap: 8px; }
 .vxrow { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
