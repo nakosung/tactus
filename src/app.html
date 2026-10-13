@@ -797,7 +797,19 @@ body.mob .vizbar.open { left: 8px; right: 8px; max-width: none; justify-content:
 body.mob .bk-fold { display: inline-grid; place-items: center; border: 0; background: transparent; color: var(--dim); font-size: 15px; width: 30px; height: 30px; cursor: pointer; order: -1; }
 body.mob .bk-card.fold > :not(header) { display: none; }
 body.mob .bk-card.fold > header { cursor: pointer; }
-body.mob .bk-card.fold { padding-block: 5px; }
+body.mob .bk-card.fold { padding-block: 5px; transition: background-color .12s; }
+body.mob .bk-card.fold .bk-nm small { display: none; }
+body.mob .bk-card.fold .bk-ico { display: inline-block; transform-origin: 50% 70%; }
+body.mob .bk-card.fold.sounding { background: color-mix(in srgb, var(--tc) 16%, var(--raised)); }
+body.mob .bk-card.fold.muted .bk-mini { opacity: .35; }
+.bk-mini { display: none; }
+body.mob .bk-card.fold .bk-mini { display: grid; grid-template-columns: repeat(16, 1fr); gap: 2px; flex: 1 1 96px; max-width: 150px; height: 14px; margin-inline: 6px auto; align-self: center; }
+body.mob .bk-mini i { border-radius: 2px; background: color-mix(in srgb, var(--fg) 8%, transparent); }
+body.mob .bk-mini i[data-b] { background: color-mix(in srgb, var(--fg) 14%, transparent); }
+body.mob .bk-mini i.on { background: color-mix(in srgb, var(--tc) 85%, var(--fg)); }
+body.mob .bk-mini i.cur { background: var(--fg); }
+body.mob .bk-mini i.on.cur { background: var(--tc); box-shadow: 0 0 0 1.5px var(--fg); }
+body.mob .bk-mini.free { display: none; }
 body.mob:not(.mland) .brand { display: none; }
 html:has(body.mob) { scroll-padding-top: calc(var(--mtop, 0px) + 8px); scroll-padding-bottom: calc(var(--mtab, 0px) + 8px); }
 /* the status line: only news (an error, a done) and then just above the tab bar, where it is seen */

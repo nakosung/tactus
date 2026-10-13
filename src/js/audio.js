@@ -724,6 +724,9 @@ function duckAt(time, kickName, s) {
   }
   mixDuck(time, s);
 }
+// every note as it is scheduled, for the pictures that show what is sounding (folded block cards); read and emptied
+// by whoever turned it on, a little after each note's own time
+const NOTE_LOG = { on: false, q: [] };
 function playEvents(def, pa, pb, off) {
   const now = S.ctx.currentTime;
   if (!audible(def.name)) return;
@@ -749,6 +752,7 @@ function playEvents(def, pa, pb, off) {
     stripAt(r, P, time);
     let dur = ev.d / S.cps * P.len;
     if (off !== 0 && S.stutter) dur = Math.min(dur, S.stutter.len / S.cps);
+    if (NOTE_LOG.on && NOTE_LOG.q.length < 1024) NOTE_LOG.q.push({ n: def.name, t: time, d: dur, v: vel });
     if (def.kind === 'loop') {
       if (def.chop) playChop(def, ev, time, dur, { ...P, gain: P.gain * vel });
     } else if (def.kind === 'drum') {

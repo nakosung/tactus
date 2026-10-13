@@ -613,7 +613,7 @@ function bkRender() {
     // on a phone the cards are folded to their name row; one tap opens a card
     const fold = document.body.classList.contains('mob') && !BK.unfold.has(name);
     cards.push(`<article class="bk-card${fold ? ' fold' : ''}${err ? ' bad' : ''}${m ? ' muted' : ''}${L.rules.length ? ' ruled' : ''}" data-i="${i}" data-sort="card" style="--tc:${col}">
-      <header><span class="bk-ico" aria-hidden="true">${BK_ICON(def.inst)}</span><span class="bk-nm"><b>${esc(name)}</b><small>${esc(bkName(def.inst))}</small></span>
+      <header><span class="bk-ico" aria-hidden="true">${BK_ICON(def.inst)}</span><span class="bk-nm"><b>${esc(name)}</b><small>${esc(bkName(def.inst))}</small></span>${fold ? bkMiniHTML(L) : ''}
         <button class="bk-fold" data-act="fold" aria-expanded="${!fold}" aria-label="${esc(t(fold ? 'bkUnfold' : 'bkFold'))} ${esc(name)}">${fold ? '▸' : '▾'}</button><button class="bk-tg${m ? ' on' : ''}" data-act="mute" aria-pressed="${m}" title="${esc(t('bkMute'))}">M</button><button class="bk-tg${so ? ' on' : ''}" data-act="solo" aria-pressed="${so}" title="${esc(t('bkSolo'))}">S</button><button class="bk-x" data-act="del" title="${esc(t('bkDel'))}" aria-label="${esc(t('bkDel'))} ${esc(name)}">×</button></header>
       ${err ? `<p class="bk-err">${esc(err.msg)}</p>` : ''}${body}${synOpen ? bkSynHTML(L) : ''}
       <div class="bk-foot">${synBtn}${rules ? `<span class="bk-rules" title="${esc(t('bkRuleHint'))}">${rules}</span>` : ''}${st}${more}</div>
@@ -1145,6 +1145,7 @@ function bkView(v, save = true) {
 function bkTick(c) {
   if (BK.view === 'code' || !boardEl) return;
   if (BK.synOpen.size) bkScopes();
+  bkHits(c);
   const k = c < 0 ? -1 : Math.floor(mod(c, 1) * BK_STEPS), pb = c < 0 ? -1 : Math.floor(c - patOrigin(c) + 1e-9);
   const cur = c >= 0 ? sceneNameAt(c) : null, sig = `${k}|${pb}|${cur ? cur.name + (cur.part ? S.song.parts.indexOf(cur.part) : '') : ''}`;
   if (sig === BK.nowSig) return;
@@ -1304,6 +1305,53 @@ function bkSynInit() {
   boardEl.addEventListener('pointermove', e => { if (BK.synDrag) bkSynMove(BK.synDrag, e); });
   const end = () => { const d = BK.synDrag; if (!d) return; BK.synDrag = null; BK.busy = false; bkRender(); if (d.moved) { const L = BK.items.find(x => x.name === d.L.name); if (L) bkSynHear(L); } };
   boardEl.addEventListener('pointerup', end); boardEl.addEventListener('pointercancel', end);
+}
+
+// ---------- folded cards show what is playing ----------
+// A folded card keeps a strip of the bar's steps (lit where the pattern has a note, with the step now playing) and
+// lights up on each note as it is heard, for as long as it sounds, so a phone's list of cards still shows the music.
+function bkMiniBars(L) {
+  if (!L.grid || !(L.tok || L.notes)) return null;
+  const bars = Array.from({ length: L.bars }, () => new Set());
+  if (L.tok) L.tok.forEach((v, k) => { if (v !== '.' && v !== '_') bars[Math.floor(k / BK_STEPS)]?.add(k % BK_STEPS); });
+  else for (const o of L.notes) bars[Math.floor(o.s / BK_STEPS)]?.add(o.s % BK_STEPS);
+  return bars;
+}
+function bkMiniHTML(L) {
+  L.mini = bkMiniBars(L);
+  const on = L.mini ? L.mini[0] : null;
+  return `<span class="bk-mini${on ? '' : ' free'}" aria-hidden="true">${on ? Array.from({ length: BK_STEPS }, (_, k) => `<i${on.has(k) ? ' class="on"' : ''}${(k & 3) === 0 ? ' data-b="1"' : ''}></i>`).join('') : '<i></i>'}</span>`;
+}
+function bkHits(c) {
+  const folded = BK.view !== 'code' && boardEl.querySelector('.bk-card.fold');
+  NOTE_LOG.on = !!folded;
+  if (!folded) { NOTE_LOG.q.length = 0; return; }
+  const now = S.ctx ? S.ctx.currentTime : 0, q = NOTE_LOG.q, keep = [];
+  BK.lit = BK.lit || new Map();
+  for (const h of q) {
+    if (h.t > now) { keep.push(h); continue; }
+    if (now - h.t > 0.25) continue;
+    const L = BK.items.find(x => x.name === h.n), card = L && boardEl.querySelector(`.bk-card.fold[data-i="${L.i}"]`); if (!card) continue;
+    const ico = card.querySelector('.bk-ico'), a = Math.min(1.35, 1.08 + 0.2 * Math.min(1, h.v));
+    if (ico && ico.animate) ico.animate([{ transform: `scale(${a})` }, { transform: 'scale(1)' }], { duration: 200, easing: 'cubic-bezier(.2,.8,.2,1)' });
+    BK.lit.set(L.name, Math.max(BK.lit.get(L.name) || 0, h.t + Math.max(0.09, Math.min(h.d, 4))));
+    card.classList.add('sounding');
+  }
+  NOTE_LOG.q = keep;
+  for (const [n, until] of BK.lit) if (now > until) { BK.lit.delete(n); const L = BK.items.find(x => x.name === n), card = L && boardEl.querySelector(`.bk-card[data-i="${L.i}"]`); if (card) card.classList.remove('sounding'); }
+  // the strip: the bar being played and the step now
+  if (c < 0) return;
+  const k = Math.floor(mod(c, 1) * BK_STEPS), pb = Math.floor(c - patOrigin(c) + 1e-9);
+  for (const L of BK.items) {
+    if (!L.mini) continue;
+    const strip = boardEl.querySelector(`.bk-card.fold[data-i="${L.i}"] .bk-mini`); if (!strip) continue;
+    const bar = mod(pb, L.bars), sig = bar + ':' + k; if (strip.dataset.sig === sig) continue;
+    if (strip.dataset.bar !== String(bar)) { strip.dataset.bar = bar; const on = L.mini[bar]; [...strip.children].forEach((x, j) => x.classList.toggle('on', on.has(j))); }
+    strip.dataset.sig = sig;
+    // its own class: bkTick clears every .ph when the step moves
+    const ph = strip.querySelector('.cur'); if (ph) ph.classList.remove('cur');
+    strip.children[k] && strip.children[k].classList.add('cur');
+  }
 }
 bkInit();
 bkSynInit();
