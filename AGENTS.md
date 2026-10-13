@@ -7,7 +7,8 @@ You are working on Tactus, a browser live-coding music instrument. Read this bef
 - `src/app.html` is the app page: markup, all CSS, and `/*NAME*/` placeholders where `build.py` inlines the scripts.
 - `src/landing.html` is the landing page.
 - `src/js/` holds the scripts, loaded in this order (later files use names from earlier ones; there are no modules):
-  `i18n, skin, pwa, kit, engine, gen, presets, audio, mix, dsp_wasm, synth, samples, musical, nsax_net, gpu, loops, preview, sounds, hand, ui, share, vxdsp, voice, viz`.
+  `i18n, skin, pwa, kit, engine, gen, presets, audio, mix, dsp_wasm, synth, samples, musical, nsax_net, gpu, loops, preview, sounds, hand, ui, share, vxdsp, voice, blocks, viz`.
+- `blocks.js` is the block view: cards drawn from the code. The code is the only source of truth; a card edit rewrites just the pattern or the one value it touched, so keep `bkSplit`/`bkJoin` lossless when you change the line format.
 - `vxdsp.js` turns a voice recording into patterns (beatbox to kick/snare/hat, humming to a melody). It is pure, like `engine.js`, and `tests/voice.test.js` runs it on synthesized voices.
 - `src/skins.css` and `src/js/skin.js` are shared by both pages: the skin is kept in localStorage (`tactus-skin`), so a choice on one page carries to the other.
 - `src/sw.js` is the service worker and `build.py` writes `manifest.webmanifest`; together they make the site installable and usable offline. The single-file build (`dist/tactus.html`) has neither.

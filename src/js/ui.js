@@ -82,6 +82,7 @@ function evaluate(mode = 'bar', opts = {}) {
     applyState(state);
   }
   render(); buildArr();
+  if (typeof bkSoon === 'function') bkSoon();
 }
 let padSig = '';
 function scheduleEval() {
@@ -1019,7 +1020,7 @@ function frame() {
     posEl.textContent = `${Math.floor(c) + 1}.${Math.floor((c % 1) * 4) + 1}`;
     const ph = Math.floor(c) % 4;
     pipsEl.forEach((p, i) => p.classList.toggle('on', i === ph));
-    drawArm(c, now);
+    drawArm(c, now); bkTick(c);
     if (S.vis.length) {
       const keep = [];
       for (const v of S.vis) {
@@ -1033,7 +1034,7 @@ function frame() {
       }
       S.vis = keep;
     }
-  } else drawArm(-1, now);
+  } else { drawArm(-1, now); bkTick(-1); }
   // recording banner: a visual metronome for speaker mode
   const tk = LS.take, cal = LS.cal;
   const st = cal ? 'cal' : tk && S.playing ? (transport(now) < tk.startC ? 'count' : 'rec') : '';
