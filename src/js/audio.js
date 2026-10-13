@@ -276,7 +276,8 @@ const INST = {
   pad: { lvl: 0.2, oct: 3, cut: 2200, res: 0.8, env: 0.12, atk: 0.4, dec: 0.9, sus: 0.85, rel: 1.4, detune: 24, gain: 0.5, slope: 24, hpf: 160, width: 1, vib: 4 },
   bass: { lvl: 0.33, oct: 1, cut: 650, res: 2.5, env: 0.5, atk: 0.003, dec: 0.18, sus: 0.6, rel: 0.08, slope: 24, drive: 0.15, width: 0 },
   // an analog mono bass: saw (or square, or between: wave) with a second saw a few cents off and a square sub an
-  // octave down (sub), into a 24 dB low-pass that snaps open with each note; one note at a time, gliding (glide)
+  // octave down (sub), into a 24 dB low-pass that snaps open with each note; one note at a time, gliding (glide).
+  // It plays in the Rust worklet voice (a ladder filter, synth.js / dsp/src/lib.rs); this WebAudio voice is the fallback
   mono: { lvl: 0.36, oct: 2, cut: 800, res: 1.6, env: 0.65, atk: 0.003, dec: 0.15, sus: 0.4, rel: 0.05, slope: 24, drive: 0.25, width: 0, detune: 7, hpf: 25 },
   acid: { lvl: 0.32, oct: 2, cut: 380, res: 14, env: 0.9, atk: 0.003, dec: 0.16, sus: 0.2, rel: 0.06, gain: 0.7, slope: 24, drive: 0.35, hpf: 40, width: 0 },
   pluck: { lvl: 0.3, oct: 4, cut: 2600, res: 2, env: 0.8, atk: 0.002, dec: 0.16, sus: 0, rel: 0.25, gain: 0.6, slope: 24, hpf: 120, width: 0.5 },

@@ -6,6 +6,8 @@
 //! - Karplus-Strong plucked string (gayageum, koto, guitar, harp), up to 16 at once
 //! - a TB-303 style mono voice: polyBLEP saw/square into a saturating 4-pole ladder,
 //!   with slide (glide into the next note) and accent
+//! - an analog mono bass: two detuned polyBLEP saws (or squares, or a blend) and a square sub an octave
+//!   down, into the same kind of ladder with its own envelope, an ADSR, and glide
 //!
 //! `no_std` and no allocator: every buffer is fixed, so nothing allocates on the audio thread.
 #![no_std]
@@ -96,16 +98,27 @@ struct Acid {
     cut: f64, k: f64, env: f64, acc: bool, dec: f64, gain: f64, square: bool, drive: f64,
 }
 
+struct Mono {
+    on: bool, ph: f64, ph2: f64, phs: f64, f: f64, target: f64, gk: f64, y: [f64; 4], fenv: f64, fd: f64,
+    amp: f64, attack: bool, ainc: f64, dk: f64, sus: f64, rk: f64, gate: bool, off: u64,
+    cut: f64, kt: f64, k: f64, env: f64, gain: f64, wave: f64, sub: f64, det: f64, drive: f64,
+}
+const MONO0: Mono = Mono { on: false, ph: 0.0, ph2: 0.0, phs: 0.0, f: 110.0, target: 110.0, gk: 1.0, y: [0.0; 4], fenv: 0.0, fd: 0.999,
+    amp: 0.0, attack: false, ainc: 0.01, dk: 0.001, sus: 0.5, rk: 0.01, gate: false, off: 0,
+    cut: 800.0, kt: 1.0, k: 0.0, env: 0.0, gain: 0.0, wave: 0.0, sub: 0.0, det: 1.0, drive: 1.0 };
+
 struct Dsp {
     sr: f32, now: u64, seed: u32,
     ks: [Ks; KS_VOICES], ks_next: usize,
     ac: Acid,
+    mo: Mono,
     out_l: [f32; BLOCK], out_r: [f32; BLOCK],
 }
 static mut D: Dsp = Dsp {
     sr: 48000.0, now: 0, seed: 0x9e37_79b9,
     ks: [KS0; KS_VOICES], ks_next: 0,
     ac: Acid { on: false, ph: 0.0, f: 110.0, target: 110.0, y: [0.0; 4], fenv: 0.0, amp: 0.0, gate: false, off: 0, slide: false, cut: 800.0, k: 0.0, env: 0.0, acc: false, dec: 0.999, gain: 0.0, square: false, drive: 1.0 },
+    mo: MONO0,
     out_l: [0.0; BLOCK], out_r: [0.0; BLOCK],
 };
 // string delay lines live apart from the rest so they stay zero-filled memory instead of bytes in the module
@@ -126,13 +139,14 @@ pub extern "C" fn init(sr: f32, seed: u32) {
     d.sr = sr; d.now = 0; d.seed = seed | 1;
     for v in d.ks.iter_mut() { v.on = false }
     d.ac.on = false;
+    d.mo = MONO0;
 }
 #[unsafe(no_mangle)]
 pub extern "C" fn out_l() -> *const f32 { d().out_l.as_ptr() }
 #[unsafe(no_mangle)]
 pub extern "C" fn out_r() -> *const f32 { d().out_r.as_ptr() }
 #[unsafe(no_mangle)]
-pub extern "C" fn active() -> u32 { let d = d(); d.ks.iter().filter(|v| v.on).count() as u32 + d.ac.on as u32 }
+pub extern "C" fn active() -> u32 { let d = d(); d.ks.iter().filter(|v| v.on).count() as u32 + d.ac.on as u32 + d.mo.on as u32 }
 
 /// pluck a string now. dur and the decay are in samples / seconds like the JS voice
 #[unsafe(no_mangle)]
@@ -181,12 +195,43 @@ pub extern "C" fn acid_on(f: f32, dur: u32, slide: u32, acc: u32, cut: f32, res:
     v.gain = gain; v.square = wave > 0.5; v.drive = 1.0 + drive * 3.0;
 }
 
-/// a knob turned while the acid line plays
+/// start a note on the mono bass. cut is the track's cut, kt the note's key tracking (cut × kt is where the
+/// filter rests); det is the second oscillator's frequency ratio; times are in seconds.
+/// Each note opens the filter again and restarts the envelope from where it is (no click); with glide and a
+/// voice still sounding, the pitch slides in from the last note
+#[unsafe(no_mangle)]
+pub extern "C" fn mono_on(f: f32, dur: u32, cut: f32, kt: f32, res: f32, env: f32, dec: f32, atk: f32, sus: f32, rel: f32, gain: f32, wave: f32, sub: f32, det: f32, drive: f32, glide: f32) {
+    let d = d();
+    let srd = d.sr as f64;
+    let v = &mut d.mo;
+    let f = f as f64;
+    if !v.on { *v = MONO0; v.on = true; v.f = f; }
+    let sounding = v.amp > 1e-4;
+    v.target = f;
+    let glide = glide as f64;
+    if glide > 0.0 && sounding { v.gk = 1.0 - expd(-1.0 / (glide / 3.0 * srd)); } else { v.f = f; v.gk = 1.0; }
+    v.gate = true; v.off = d.now + dur as u64; v.attack = true; v.fenv = 1.0;
+    let dec = (dec as f64).max(0.01);
+    v.ainc = 1.0 / ((atk as f64).max(0.002) * srd);
+    v.dk = 1.0 - expd(-1.0 / (dec / 3.0 * srd));
+    v.fd = expd(-1.0 / (dec / 3.0 * srd));
+    v.rk = 1.0 - expd(-1.0 / ((rel as f64).max(0.02) / 4.0 * srd));
+    v.sus = (sus as f64).clamp(0.0, 1.0);
+    v.cut = cut as f64; v.kt = kt as f64; v.k = (res as f64 / 4.0).min(3.9); v.env = env as f64;
+    v.gain = gain as f64; v.wave = (wave as f64).clamp(0.0, 1.0); v.sub = (sub as f64).clamp(0.0, 1.0); v.det = det as f64; v.drive = 1.0 + drive as f64 * 3.0;
+}
+
+/// a knob turned while the line plays (the acid line and the mono bass)
 #[unsafe(no_mangle)]
 pub extern "C" fn live(cut: f32, res: f32) {
-    let v = &mut d().ac;
-    if cut >= 0.0 { v.cut = cut as f64 }
-    if res >= 0.0 { v.k = (res as f64 / 4.0).min(3.9) }
+    let d = d();
+    if cut >= 0.0 { d.ac.cut = cut as f64; d.mo.cut = cut as f64 }
+    if res >= 0.0 { d.ac.k = (res as f64 / 4.0).min(3.9); d.mo.k = (res as f64 / 4.0).min(3.9) }
+}
+#[inline(always)]
+fn sqd(ph: f64, dt: f64) -> f64 {
+    let mut p2 = ph + 0.5; if p2 >= 1.0 { p2 -= 1.0 }
+    (if ph < 0.5 { 1.0 } else { -1.0 }) + blepd(ph, dt) - blepd(p2, dt)
 }
 
 /// render n (<= 128) samples into out_l / out_r
@@ -273,6 +318,40 @@ pub extern "C" fn render(n: u32) {
             let o = (v.y[3] * v.amp * v.gain * (1.0 + k * 0.35)) as f32;
             l += o; r += o;
             if !v.gate && v.amp < 1e-5 && fr > v.off + (sr as u64) { v.on = false }
+        }
+        let m = &mut d.mo;
+        if m.on {
+            let srd = sr as f64;
+            if m.gate && fr >= m.off { m.gate = false }
+            m.f += (m.target - m.f) * m.gk;
+            let dt = m.f / srd; let dt2 = dt * m.det; let dts = dt * 0.5;
+            m.ph += dt; if m.ph >= 1.0 { m.ph -= 1.0 }
+            m.ph2 += dt2; if m.ph2 >= 1.0 { m.ph2 -= 1.0 }
+            m.phs += dts; if m.phs >= 1.0 { m.phs -= 1.0 }
+            let mut osc = 0.0;
+            if m.wave < 1.0 { osc += (1.0 - m.wave) * (0.62 * (2.0 * m.ph - 1.0 - blepd(m.ph, dt)) + 0.32 * (2.0 * m.ph2 - 1.0 - blepd(m.ph2, dt2))); }
+            if m.wave > 0.0 { osc += m.wave * (0.5 * sqd(m.ph, dt) + 0.25 * sqd(m.ph2, dt2)); }
+            if m.sub > 0.0 { osc += m.sub * 0.22 * sqd(m.phs, dts); }
+            m.fenv *= m.fd;
+            let fc = (m.cut * m.kt * (1.0 + m.env * 10.0 * m.fenv)).clamp(30.0, srd * 0.42);
+            let g = 1.0 - expd(-core::f64::consts::TAU * fc / srd);
+            let k = m.k;
+            let x = thd(osc * m.drive * 0.8 - k * m.y[3]);
+            let t0 = thd(m.y[0]);
+            m.y[0] += g * (x - t0);
+            let t0 = thd(m.y[0]); let t1 = thd(m.y[1]);
+            m.y[1] += g * (t0 - t1);
+            let t1 = thd(m.y[1]); let t2 = thd(m.y[2]);
+            m.y[2] += g * (t1 - t2);
+            let t2 = thd(m.y[2]); let t3 = thd(m.y[3]);
+            m.y[3] += g * (t2 - t3);
+            if m.gate {
+                if m.attack { m.amp += m.ainc; if m.amp >= 1.0 { m.amp = 1.0; m.attack = false } }
+                else { m.amp += (m.sus - m.amp) * m.dk }
+            } else { m.amp -= m.amp * m.rk }
+            let o = (m.y[3] * m.amp * m.gain * (1.0 + k * 0.35)) as f32;
+            l += o; r += o;
+            if !m.gate && m.amp < 1e-5 && fr > m.off + (sr as u64) { m.on = false }
         }
         d.out_l[i] += l; d.out_r[i] += r;
     }

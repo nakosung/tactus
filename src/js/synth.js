@@ -1,6 +1,7 @@
 // ===================== Tactus audio-thread synths (AudioWorklet) =====================
 // zither: Karplus-Strong plucked string (gayageum, koto, harp). acid: TB-303 style mono voice with
-// a saturating 4-pole ladder filter, slide (glide into the next note) and accent.
+// a saturating 4-pole ladder filter, slide (glide into the next note) and accent. mono: an analog mono bass,
+// two detuned saws (or squares) and a square sub into the same kind of ladder, with an ADSR and glide.
 // Events carry an exact sample frame, so timing is sample-accurate. The voices run in Rust compiled to
 // WebAssembly (dsp/src/lib.rs); the JavaScript voices below are the fallback when WASM is unavailable,
 // and if worklets can't load at all, both fall back to the WebAudio voices.
@@ -28,7 +29,11 @@ class Syn extends AudioWorkletProcessor {
         return;
       }
       if (m.t === 'end') { this.dead = true; return; }
-      if (m.t === 'live') { if (this.x) { this.x.live(m.cut != null ? m.cut : -1, m.res != null ? m.res : -1); return; } if (this.ac) { if (m.cut != null) this.ac.cut = m.cut; if (m.res != null) this.ac.k = Math.min(3.9, m.res / 4); } return; }
+      if (m.t === 'live') {
+        if (this.x) { this.x.live(m.cut != null ? m.cut : -1, m.res != null ? m.res : -1); return; }
+        for (const v of [this.ac, this.mo]) if (v) { if (m.cut != null) v.cut = m.cut; if (m.res != null) v.k = Math.min(3.9, m.res / 4); }
+        return;
+      }
       this.q.push(m); this.q.sort((a, b) => a.frame - b.frame);
     };
   }
@@ -59,6 +64,20 @@ class Syn extends AudioWorkletProcessor {
     v.dec = Math.exp(-1 / (Math.max(0.02, m.dec) * (m.acc ? 0.6 : 1) * sampleRate));
     v.gain = m.gain; v.wave = m.wave; v.drive = 1 + m.drive * 3;
   }
+  moOn(m) {
+    const sr = sampleRate;
+    // a fresh voice after silence, as the Rust voice starts one
+    if (!this.mo || !this.mo.on) this.mo = { on: true, ph: 0, ph2: 0, phs: 0, f: m.f, target: m.f, gk: 1, y0: 0, y1: 0, y2: 0, y3: 0, fenv: 0, fd: 0.999, amp: 0, attack: false, gate: false, off: 0 };
+    const v = this.mo, sounding = v.amp > 1e-4;
+    v.target = m.f;
+    if (m.glide > 0 && sounding) v.gk = 1 - Math.exp(-1 / (m.glide / 3 * sr)); else { v.f = m.f; v.gk = 1; }
+    v.gate = true; v.off = m.frame + m.dur; v.attack = true; v.fenv = 1;
+    const dec = Math.max(0.01, m.dec);
+    v.ainc = 1 / (Math.max(0.002, m.atk) * sr); v.dk = 1 - Math.exp(-1 / (dec / 3 * sr)); v.fd = Math.exp(-1 / (dec / 3 * sr));
+    v.rk = 1 - Math.exp(-1 / (Math.max(0.02, m.rel) / 4 * sr)); v.sus = Math.max(0, Math.min(1, m.sus));
+    v.cut = m.cut; v.kt = m.kt; v.k = Math.min(3.9, m.res / 4); v.env = m.env;
+    v.gain = m.gain; v.wave = Math.max(0, Math.min(1, m.wave)); v.sub = Math.max(0, Math.min(1, m.sub)); v.det = m.det; v.drive = 1 + m.drive * 3;
+  }
   process(_, outputs) {
     const out = outputs[0], L = out[0], R = out[1] || out[0], N = L.length, sr = sampleRate;
     if (this.x) {
@@ -71,6 +90,7 @@ class Syn extends AudioWorkletProcessor {
         while (q.length && q[0].frame <= base + pos) {
           const m = q.shift();
           if (m.kind === 'ks') x.ks_on(m.f, m.gain, m.pan, m.bright, m.t60, m.vib || 0, m.dur);
+          else if (m.kind === 'mono') x.mono_on(m.f, m.dur, m.cut, m.kt, m.res, m.env, m.dec, m.atk, m.sus, m.rel, m.gain, m.wave, m.sub, m.det, m.drive, m.glide);
           else x.acid_on(m.f, m.dur, m.slide ? 1 : 0, m.acc ? 1 : 0, m.cut, m.res, m.env, m.dec, m.gain, m.wave, m.drive);
         }
       }
@@ -80,7 +100,7 @@ class Syn extends AudioWorkletProcessor {
     const fmax = sr * 0.42;
     for (let i = 0; i < N; i++) {
       const fr = currentFrame + i;
-      while (this.q.length && this.q[0].frame <= fr) { const m = this.q.shift(); if (m.kind === 'ks') this.ksOn(m); else this.acOn(m); }
+      while (this.q.length && this.q[0].frame <= fr) { const m = this.q.shift(); if (m.kind === 'ks') this.ksOn(m); else if (m.kind === 'mono') this.moOn(m); else this.acOn(m); }
       let l = 0, r = 0;
       for (const v of this.ks) {
         let d = v.base;
@@ -114,6 +134,30 @@ class Syn extends AudioWorkletProcessor {
         v.amp += (target - v.amp) * (v.gate ? aAtk : aRel);
         const o = v.y3 * v.amp * v.gain * (1 + k * 0.35);
         l += o; r += o;
+      }
+      const m = this.mo;
+      if (m && m.on) {
+        if (m.gate && fr >= m.off) m.gate = false;
+        m.f += (m.target - m.f) * m.gk;
+        const dt = m.f / sr, dt2 = dt * m.det, dts = dt * 0.5;
+        m.ph += dt; if (m.ph >= 1) m.ph -= 1;
+        m.ph2 += dt2; if (m.ph2 >= 1) m.ph2 -= 1;
+        m.phs += dts; if (m.phs >= 1) m.phs -= 1;
+        const sq = (ph, d) => { let p2 = ph + 0.5; if (p2 >= 1) p2 -= 1; return (ph < 0.5 ? 1 : -1) + blep(ph, d) - blep(p2, d); };
+        let osc = 0;
+        if (m.wave < 1) osc += (1 - m.wave) * (0.62 * (2 * m.ph - 1 - blep(m.ph, dt)) + 0.32 * (2 * m.ph2 - 1 - blep(m.ph2, dt2)));
+        if (m.wave > 0) osc += m.wave * (0.5 * sq(m.ph, dt) + 0.25 * sq(m.ph2, dt2));
+        if (m.sub > 0) osc += m.sub * 0.22 * sq(m.phs, dts);
+        m.fenv *= m.fd;
+        const fc = Math.min(fmax, Math.max(30, m.cut * m.kt * (1 + m.env * 10 * m.fenv)));
+        const g = 1 - Math.exp(-TAU * fc / sr), k = m.k;
+        const x = th(osc * m.drive * 0.8 - k * m.y3);
+        m.y0 += g * (x - th(m.y0)); m.y1 += g * (th(m.y0) - th(m.y1)); m.y2 += g * (th(m.y1) - th(m.y2)); m.y3 += g * (th(m.y2) - th(m.y3));
+        if (m.gate) { if (m.attack) { m.amp += m.ainc; if (m.amp >= 1) { m.amp = 1; m.attack = false; } } else m.amp += (m.sus - m.amp) * m.dk; }
+        else m.amp -= m.amp * m.rk;
+        const o = m.y3 * m.amp * m.gain * (1 + k * 0.35);
+        l += o; r += o;
+        if (!m.gate && m.amp < 1e-5 && fr > m.off + sr) m.on = false;
       }
       L[i] = l; R[i] = r;
     }
@@ -188,12 +232,20 @@ function wkNode(name) {
   }
   return r.wk;
 }
+// the mono bass's level against its WebAudio fallback (measured: same RMS on the same line)
+const MONO_GAIN = 0.65;
 // returns true when the worklet took the note
 function wkPlay(def, notes, time, dur, P) {
-  if (!WK.ok || (def.inst !== 'acid' && def.inst !== 'zither')) return false;
+  if (!WK.ok || (def.inst !== 'acid' && def.inst !== 'zither' && def.inst !== 'mono')) return false;
   const sr = S.ctx.sampleRate, frame = Math.round(time * sr), dFr = Math.max(1, Math.round(dur * sr));
   const node = wkNode(def.name);
-  if (def.inst === 'acid') {
+  if (def.inst === 'mono') {
+    // one note at a time: a chord gives its lowest note. The cut tracks the key and the velocity as the WebAudio voices do
+    // (× 1.4: a ladder sounds darker than the WebAudio filters at the same cut; measured against the bass this voice was made from)
+    const midi = Math.min(...notes), f = mtof(midi), vel = P._vel ?? 1, kt = 1.4 * Math.pow(f / 261.6, 0.3) * (0.62 + 0.38 * Math.min(1.6, vel));
+    node.port.postMessage({ kind: 'mono', frame, dur: dFr, f, cut: Math.max(40, Math.min(18000, P.cut)), kt, res: P.res, env: P.env, dec: P.dec, atk: P.atk, sus: P.sus, rel: P.rel,
+      gain: P.gain * MONO_GAIN, wave: P.wave || 0, sub: P.sub || 0, det: Math.pow(2, (P.detune || 0) / 1200), drive: (P.drive || 0) + (P.shape || 0), glide: Math.max(0, Math.min(2, P.glide || 0)) });
+  } else if (def.inst === 'acid') {
     node.port.postMessage({ kind: 'acid', frame, dur: dFr, f: mtof(notes[notes.length - 1]), slide: P.slide > 0.5, acc: P.acc > 0.5,
       cut: Math.max(40, P.cut), res: P.res, env: P.env, dec: P.dec, gain: P.gain * 0.27, wave: P.wave || 0, drive: (P.drive || 0) + (P.shape || 0) });
   } else {

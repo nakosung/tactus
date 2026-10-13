@@ -78,7 +78,7 @@ function playNotes(def, notes, time, dur, P, vel, r) {
     for (const m of miss) registerVoice(r, SAMPLE_PITCHED.has(fb) ? playSamplePitched(fb, m, time, dur, P, vel * 0.8, r.input) : playSynth(fb, m, time, dur, { ...P, cut: Math.min(P.cut, INST[fb].cut) }, vel * 0.8, r.input));
     return;
   }
-  if (wkPlay(def, notes, time, dur, { ...P, gain: P.gain * vel })) return;
+  if (wkPlay(def, notes, time, dur, { ...P, gain: P.gain * vel, _vel: vel })) return;
   for (const m of notes) registerVoice(r, playSynth(def.inst === 'zither' ? 'pluck' : def.inst, m, time, dur, P, vel, r.input));
 }
 
