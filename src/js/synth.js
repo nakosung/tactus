@@ -122,6 +122,23 @@ class Syn extends AudioWorkletProcessor {
   }
 }
 registerProcessor('pulse-synth', Syn);
+// at the head of every channel strip: a NaN or Infinity from any voice becomes silence here, before it can reach a
+// filter (a biquad that takes in a NaN keeps it in its state and stays silent until the page reloads)
+class Guard extends AudioWorkletProcessor {
+  constructor() { super(); this.t = -1e9; }
+  process(ins, outs) {
+    const i = ins[0], o = outs[0];
+    if (!i || !i.length) return true;
+    let bad = 0;
+    for (let c = 0; c < o.length; c++) {
+      const a = i[c] || i[0], b = o[c];
+      for (let k = 0; k < b.length; k++) { const v = a[k]; if (v - v !== 0 || v > 64 || v < -64) { b[k] = 0; bad++; } else b[k] = v; }
+    }
+    if (bad && currentFrame - this.t > sampleRate) { this.t = currentFrame; this.port.postMessage(bad); }
+    return true;
+  }
+}
+registerProcessor('tactus-guard', Guard);
 `;
 const WK = { ok: null, loading: null, mod: null, dsp: 'js' };
 // decode the Rust DSP once; each worklet node compiles its own instance from these bytes
@@ -142,7 +159,7 @@ function ensureSynthWorklet() {
   WK.loading = (async () => {
     const urls = [URL.createObjectURL(new Blob([SYN_CODE], { type: 'text/javascript' })), 'data:text/javascript;charset=utf-8,' + encodeURIComponent(SYN_CODE)];
     dspModule();
-    for (const u of urls) { try { await S.ctx.audioWorklet.addModule(u); WK.ok = true; dspProbe(); return true; } catch (e) { } }
+    for (const u of urls) { try { await S.ctx.audioWorklet.addModule(u); WK.ok = true; dspProbe(); for (const r of S.rt.values()) stripGuard(r); return true; } catch (e) { } }
     WK.ok = false; return false;
   })();
   return WK.loading;

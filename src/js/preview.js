@@ -92,7 +92,7 @@ async function pvThumb(inst) {
   if (PV.thumbs.has(inst)) return PV.thumbs.get(inst);
   const def = pvDefFor(inst); if (!def) return null;
   if (!KIT.ready && loadKit()) await loadKit();
-  const sr = 22050, len = Math.round(sr * 2.6), off = new OfflineAudioContext(2, len, sr);
+  const sr = 44100, len = Math.round(sr * 2.6), off = new OfflineAudioContext(2, len, sr);   // full rate: voices set filters up to 18 kHz
   const real = S.ctx, wk = WK.ok, out = off.createGain();
   out.connect(off.destination);
   try {

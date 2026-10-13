@@ -184,7 +184,18 @@ function makeStrip(dest) {
   r.distG.connect(r.crush); r.crush.connect(r.comp); r.comp.connect(r.modIn); r.modIn.connect(r.dry); r.dry.connect(r.duck);
   r.duck.connect(dest); r.duck.connect(r.dS); r.duck.connect(r.rS);
   r.dS.connect(A.dIn); r.rS.connect(A.rIn);
+  stripGuard(r);
   return r;
+}
+// put the NaN guard (synth.js) between a strip's input and its first filter, once the worklet module is loaded;
+// strips made before that get theirs when it loads
+function stripGuard(r) {
+  if (r.guard || WK.ok !== true || !(S.ctx instanceof AudioContext)) return;
+  try {
+    const gd = new AudioWorkletNode(S.ctx, 'tactus-guard', { numberOfInputs: 1, numberOfOutputs: 1, outputChannelCount: [2], channelCount: 2, channelCountMode: 'explicit', channelInterpretation: 'speakers' });
+    gd.port.onmessage = e => console.warn(`Tactus: a voice produced ${e.data} broken samples (NaN or Infinity); they were silenced`);
+    r.input.disconnect(r.hpf); r.input.connect(gd); gd.connect(r.hpf); r.guard = gd;
+  } catch (e) { }
 }
 // stereo chorus: two delays swept by slow sines in opposite phase, one per side
 function stripChorus(r) {
