@@ -740,6 +740,71 @@ body.recording .editor { border-color: var(--c-err); }
   .go-flash, .queue.go { animation-duration: .01s !important; }
   #fxLayer { display: none; }
 }
+
+/* ================= Small screens: one module at a time (mobile.js) =================
+   A thin top bar that stays put, a tab bar at the bottom (a rail on the right when held sideways), and the chosen
+   module filling the room between them. */
+.mtabs, .mmore, .mempty, .bk-fold { display: none; }
+.mmax { margin-left: auto; border: 1px solid var(--line); background: var(--panel); color: var(--dim); border-radius: var(--r-s); font-size: 14px; line-height: 1; padding: 4px 7px; cursor: pointer; }
+.rack .tabs:has(.mmax) { grid-template-columns: repeat(4, 1fr) auto; }
+.rack .tabs .mmax { margin: 0; border: 0; background: transparent; }
+.mmax[aria-pressed="true"] { color: var(--fg); background: var(--raised); }
+body[data-max="work"] :is(.rack, .arr) { display: none; }
+body[data-max="work"] .stage { grid-template-columns: minmax(0, 1fr); }
+body[data-max="rack"] :is(.work, .arr) { display: none; }
+body[data-max="rack"] .stage { grid-template-columns: minmax(0, 1fr); }
+body[data-max="rack"] .pads { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+body[data-max="rack"] .pad { min-height: 96px; }
+
+body.mob { overflow: auto; }
+body.mob .app { height: auto; min-height: 100dvh; padding: 0 12px calc(var(--mtab, 0px) + 12px); gap: 8px; }
+body.mob.mland .app { padding-right: 76px; padding-bottom: 12px; }
+body.mob .top { position: sticky; top: 0; z-index: 40; margin: 0 -12px; padding: 8px 12px; gap: 8px; background: var(--body); border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+body.mob:not(.mmore-on) .top > :not(.brand, .play, .lcd, .mmore, .queue) { display: none; }
+body.mob.mmore-on .top > .spacer { display: none; }
+body.mob .brand .build, body.mob .brand .dsp { display: none; }
+body.mob .brand b { font-size: 16px; }
+body.mob .play { width: 38px; height: 38px; }
+body.mob .lcd { flex: 1 1 auto; min-width: 0; }
+body.mob .lcd .cell { padding: 4px 8px; min-width: 0; }
+body.mob .lcd output { font-size: 14px; }
+body.mob .mmore { display: inline-grid; place-items: center; font-size: 20px; line-height: 1; padding: 6px 10px; }
+body.mob .queue { order: 9; flex-basis: 100%; }
+body.mob .mtabs { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); position: fixed; left: 0; right: 0; bottom: 0; z-index: 50;
+  padding: 6px 6px calc(6px + env(safe-area-inset-bottom)); gap: 3px; background: var(--panel); border-top: 1px solid var(--line); }
+body.mob .mtabs button { border: 0; background: transparent; color: var(--dim); font: inherit; font-size: 11.5px; font-weight: 700; padding: 9px 0; border-radius: var(--r-s); cursor: pointer; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+body.mob .mtabs button[aria-selected="true"] { background: var(--raised); color: var(--fg); box-shadow: var(--shadow); }
+body.mob.mland .mtabs { left: auto; top: 0; width: 70px; grid-template-columns: 1fr; grid-auto-rows: 1fr; padding: 6px 4px calc(6px + env(safe-area-inset-bottom)); border-top: 0; border-left: 1px solid var(--line); }
+/* which module: the code side, the side panel or the song */
+body.mob .stage { display: block; }
+body.mob .viewbar, body.mob .rack .tabs, body.mob .mmax { display: none; }
+body.mob .arr { display: none; }
+body.mob[data-mt="song"] .arr:not([hidden]) { display: flex; }
+body.mob[data-mt="song"] #arr[hidden] + .mempty { display: block; padding: 24px 4px; }
+body.mob:not([data-mt="code"]):not([data-mt="blocks"]) .work { display: none; }
+body.mob:is([data-mt="code"], [data-mt="blocks"], [data-mt="song"]):not(.msplit) .rack { display: none; }
+body.mob .editor { height: calc(100dvh - var(--mtop, 0px) - var(--mtab, 0px) - 22px); min-height: 220px; }
+body.mob.msplit .stage { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 42%); gap: 10px; }
+body.mob.msplit .rack { max-height: calc(100dvh - var(--mtop, 0px) - 22px); overflow: auto; position: sticky; top: calc(var(--mtop, 0px) + 8px); }
+body.mob.msplit .pads { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+body.mob.msplit .pad > span, body.mob .pad kbd { display: none; }
+body.mob .pads { gap: 8px; }
+body.mob .pad { min-height: 78px; }
+/* the visualization menu: one button until it is tapped */
+body.mob .vizbar:not(.open) > :not([aria-pressed="true"]) { display: none; }
+body.mob .vizbar.open { left: 8px; right: 8px; max-width: none; justify-content: flex-start; }
+/* block cards fold to their name row */
+body.mob .bk-fold { display: inline-grid; place-items: center; border: 0; background: transparent; color: var(--dim); font-size: 15px; width: 30px; height: 30px; cursor: pointer; order: -1; }
+body.mob .bk-card.fold > :not(header) { display: none; }
+body.mob .bk-card.fold > header { cursor: pointer; }
+body.mob .bk-card.fold { padding-block: 5px; }
+body.mob:not(.mland) .brand { display: none; }
+html:has(body.mob) { scroll-padding-top: calc(var(--mtop, 0px) + 8px); scroll-padding-bottom: calc(var(--mtab, 0px) + 8px); }
+/* the status line: only news (an error, a done) and then just above the tab bar, where it is seen */
+body.mob .status:not(.bad):not(.ok) { display: none; }
+body.mob .status { position: fixed; left: 0; right: 0; bottom: var(--mtab, 0px); z-index: 45; padding: 6px 12px; background: var(--panel); border-top: 1px solid var(--line); }
+body.mob.mland .status { right: 70px; bottom: 0; }
+body.mob.mland .pad { min-height: 60px; }
 </style>
 
 <div class="app">
@@ -1074,4 +1139,5 @@ body.recording .editor { border-color: var(--c-err); }
 /*VOICE*/
 /*BLOCKS*/
 /*VIZ*/
+/*MOBILE*/
 </script>

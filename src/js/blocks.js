@@ -16,7 +16,7 @@
 // (a change waits for the next bar to be heard, but the cards follow the code at once).
 
 // var, not const: evaluate() in ui.js asks for a redraw, and the first evaluate runs before this file does
-var BK = { picks: [], view: 'code', busy: false, items: [], drag: null, flashLine: -1, step: -1, timer: 0, raf: 0, pages: new Map(), minBars: new Map(), brush: 1, sel: null, lastLen: new Map(), rowSpan: new Map(), clicks: (() => { try { return localStorage.getItem('tactus-bkclick') !== '0'; } catch (e) { return true; } })(), key: { root: 9, scale: 'minor' }, prog: null, song: null, scenes: [], synOpen: new Set() };
+var BK = { picks: [], view: 'code', busy: false, items: [], drag: null, flashLine: -1, step: -1, timer: 0, raf: 0, pages: new Map(), minBars: new Map(), brush: 1, sel: null, lastLen: new Map(), rowSpan: new Map(), clicks: (() => { try { return localStorage.getItem('tactus-bkclick') !== '0'; } catch (e) { return true; } })(), key: { root: 9, scale: 'minor' }, prog: null, song: null, scenes: [], synOpen: new Set(), unfold: new Set() };
 const BK_STEPS = 16, BK_MAXBARS = 16;
 const BK_STICKERS = [
   { k: 'gain', min: 0, max: 1.2, step: 0.01, def: 0.8 },
@@ -610,9 +610,11 @@ function bkRender() {
     const syn = kind !== 'drum' && kind !== 'loop' && SYNTHS.includes(def.inst), synOpen = syn && BK.synOpen.has(name);
     const synBtn = syn ? `<button class="bk-synbtn" data-act="syn" aria-expanded="${synOpen}">〰 ${esc(t('bkSyn'))}</button>` : '';
     const m = S.muted.has(name), so = S.solo.has(name);
-    cards.push(`<article class="bk-card${err ? ' bad' : ''}${m ? ' muted' : ''}${L.rules.length ? ' ruled' : ''}" data-i="${i}" data-sort="card" style="--tc:${col}">
+    // on a phone the cards are folded to their name row; one tap opens a card
+    const fold = document.body.classList.contains('mob') && !BK.unfold.has(name);
+    cards.push(`<article class="bk-card${fold ? ' fold' : ''}${err ? ' bad' : ''}${m ? ' muted' : ''}${L.rules.length ? ' ruled' : ''}" data-i="${i}" data-sort="card" style="--tc:${col}">
       <header><span class="bk-ico" aria-hidden="true">${BK_ICON(def.inst)}</span><span class="bk-nm"><b>${esc(name)}</b><small>${esc(bkName(def.inst))}</small></span>
-        <button class="bk-tg${m ? ' on' : ''}" data-act="mute" aria-pressed="${m}" title="${esc(t('bkMute'))}">M</button><button class="bk-tg${so ? ' on' : ''}" data-act="solo" aria-pressed="${so}" title="${esc(t('bkSolo'))}">S</button><button class="bk-x" data-act="del" title="${esc(t('bkDel'))}" aria-label="${esc(t('bkDel'))} ${esc(name)}">×</button></header>
+        <button class="bk-fold" data-act="fold" aria-expanded="${!fold}" aria-label="${esc(t(fold ? 'bkUnfold' : 'bkFold'))} ${esc(name)}">${fold ? '▸' : '▾'}</button><button class="bk-tg${m ? ' on' : ''}" data-act="mute" aria-pressed="${m}" title="${esc(t('bkMute'))}">M</button><button class="bk-tg${so ? ' on' : ''}" data-act="solo" aria-pressed="${so}" title="${esc(t('bkSolo'))}">S</button><button class="bk-x" data-act="del" title="${esc(t('bkDel'))}" aria-label="${esc(t('bkDel'))} ${esc(name)}">×</button></header>
       ${err ? `<p class="bk-err">${esc(err.msg)}</p>` : ''}${body}${synOpen ? bkSynHTML(L) : ''}
       <div class="bk-foot">${synBtn}${rules ? `<span class="bk-rules" title="${esc(t('bkRuleHint'))}">${rules}</span>` : ''}${st}${more}</div>
     </article>`);
@@ -1020,6 +1022,8 @@ function bkInit() {
     if (s.type === 'range') { BK.busy = false; bkRender(); }
   });
   boardEl.addEventListener('click', e => {
+    // a folded card's name row opens it, as its ▸ does
+    const nm = !e.target.closest('button') && e.target.closest('.bk-card.fold > header'); if (nm) { const L = bkLine(nm); if (L) { toggleSet(BK.unfold, L.name); bkRender(); } return; }
     const b = e.target.closest('button'); if (!b) return;
     if (b.dataset.pick != null) { bkMenu(b); return; }
     if (b.dataset.act === 'clicks') { BK.clicks = !BK.clicks; try { localStorage.setItem('tactus-bkclick', BK.clicks ? '1' : '0'); } catch (err) { } b.setAttribute('aria-pressed', BK.clicks); b.textContent = BK.clicks ? '🔊' : '🔈'; if (BK.clicks) bkClick('on'); return; }
@@ -1055,6 +1059,7 @@ function bkInit() {
     if (b.dataset.rx != null) { const r = L.rules[+b.dataset.rx]; bkWrite(L.i, p => { p.params = bkReplace(p.params, r, ''); }); return; }
     if (b.dataset.pdel != null) { const tr = L.train.slice(); tr.splice(+b.dataset.pdel, 1); bkWriteTrain(L, tr); return; }
     if (b.dataset.act === 'padd') { bkWriteTrain(L, [...L.train, L.train[L.train.length - 1]]); return; }
+    if (b.dataset.act === 'fold') { toggleSet(BK.unfold, L.name); bkRender(); return; }
     if (b.dataset.act === 'syn') { toggleSet(BK.synOpen, L.name); bkRender(); return; }
     if (b.dataset.ft != null) { bkWrite(L.i, p => { p.params = bkSetWord(p.params, 'ftype', b.dataset.ft); }); bkSynHear(L); return; }
     if (b.dataset.act === 'mute') { toggleSet(S.muted, L.name); syncLoopVols(); render(); bkRender(); }
