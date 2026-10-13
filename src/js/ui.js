@@ -913,8 +913,106 @@ function drawArr(now) {
   if (name !== shownScene) { shownScene = name; render(); }
 }
 
+const queueEl = $('#queue');
+// ---------- armed: what waits for the next bar, and the moment it lands ----------
+// Everything armed blinks on the music's own beat: the root carries .tick for the first half of each beat (each
+// eighth in the last beat, to say "now"). The chip counts what is left: bars while more than one, then beats.
+const editorEl = document.querySelector('.editor'), qWhat = queueEl.querySelector('.qwhat'), qWhen = queueEl.querySelector('.qwhen'), qSeg = queueEl.querySelector('.qseg'), qSegs = [...qSeg.children];
+const ARM = { tick: false, prev: null, goAt: null, goT: 0, shown: '' };
+function armList(c) {
+  const out = [];
+  if (S.pending) out.push({ at: S.pending.applyAt, what: t('armCode'), code: true });
+  if (S.nextScene) out.push({ at: S.nextScene.at, what: S.nextScene.name });
+  if (S.songJump) out.push({ at: S.songJump.at, what: (S.song && S.song.parts[S.songJump.i] || {}).name || t('armSong') });
+  else if (S.song && S.songMode && c < S.songFrom && isFinite(S.songFrom)) out.push({ at: S.songFrom, what: t('armSong') });
+  return out.sort((a, b) => a.at - b.at);
+}
+function flashGo(el) { if (!el || matchMedia('(prefers-reduced-motion: reduce)').matches) return; el.classList.remove('go-flash'); void el.offsetWidth; el.classList.add('go-flash'); }
+function drawArm(c, now) {
+  const list = c < 0 ? [] : armList(c), a = list[0];
+  // it landed: the scheduler takes it a moment early, so the flash waits for the bar itself
+  if (ARM.prev && !a && c >= 0 && timeOf(ARM.prev.at) - now < 0.4) ARM.goAt = ARM.prev;
+  ARM.prev = a ? { at: a.at, code: list.some(x => x.code) } : null;
+  if (ARM.goAt && c >= ARM.goAt.at - 1e-4) {
+    const g = ARM.goAt; ARM.goAt = null; ARM.goT = now;
+    queueEl.hidden = false; queueEl.classList.add('go'); queueEl.classList.remove('last');
+    qWhat.textContent = ''; qWhen.textContent = t('armGo'); qSeg.classList.remove('bars'); qSegs.forEach(i => i.classList.add('on'));
+    if (g.code) flashGo(editorEl);
+    flashGo(scenesEl.querySelector('.scn.on')); flashGo(tlEl.querySelector('.part.on'));
+  }
+  const going = queueEl.classList.contains('go') && now - ARM.goT < 0.55;
+  if (!going) queueEl.classList.remove('go');
+  editorEl.classList.toggle('armed', !!(a && list.some(x => x.code)));
+  let tick = false;
+  if (a) {
+    const left = a.at - c, beats = left * 4, last = left <= 0.25 + 1e-6;
+    const ph = mod(c * 4, 1);
+    tick = last ? mod(ph * 2, 1) < 0.5 : ph < 0.5;
+    if (!going) {
+      queueEl.hidden = false;
+      queueEl.classList.toggle('last', last);
+      const key = a.what + '|' + (left > 1 + 1e-6 ? 'b' + Math.ceil(left - 1e-6) : 'q' + Math.ceil(beats - 1e-6));
+      if (key !== ARM.shown) {
+        ARM.shown = key;
+        qWhat.textContent = a.what;
+        const bars = left > 1 + 1e-6, n = bars ? Math.ceil(left - 1e-6) : Math.max(1, Math.ceil(beats - 1e-6));
+        qWhen.textContent = bars ? t('armIn', { n }) : n === 4 ? t('armNext') : t('armBeat', { n });
+        qSeg.classList.toggle('bars', bars);
+        qSegs.forEach((el, i) => el.classList.toggle('on', i < Math.min(4, n)));
+      }
+    }
+  } else if (!going) { queueEl.hidden = true; queueEl.classList.remove('last'); ARM.shown = ''; }
+  if (tick !== ARM.tick) { ARM.tick = tick; document.documentElement.classList.toggle('tick', tick); }
+}
+
+// ---------- the feel of a press ----------
+// Keys get .press on pointer down (and keep it a moment, so a quick tap still shows), and the skin draws something at
+// the finger: a ring, a square, or a burst of sparks. Pads draw theirs whenever they light, from a hand, a key or code.
+const fxLayer = document.createElement('div'); fxLayer.id = 'fxLayer'; fxLayer.setAttribute('aria-hidden', 'true'); document.body.appendChild(fxLayer);
+const KEYSEL = '.btn, .chip, .calbtn, .songbtn, .scn, .skip, .snd, .sndx, .part, .play, .tabs button, .seg button, .skins button, .loopio button, .loopio label, .sm, .slot .rec, .knob, .tap, .vizbar button';
+function tapFx(el, x, y) {
+  if (fxLayer.childElementCount > 24 || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const r = el.getBoundingClientRect();
+  if (x === undefined) { x = r.left + r.width / 2; y = r.top + r.height / 2; }
+  const cs = getComputedStyle(el), c = cs.getPropertyValue('--kc').trim() || (el.classList.contains('play') ? cs.backgroundColor : getComputedStyle(document.documentElement).getPropertyValue('--k-orange').trim());
+  const fx = document.createElement('span'); fx.className = 'tfx';
+  fx.style.cssText = `--x:${x}px;--y:${y}px;--c:${c}`;
+  const n = 9, big = el.classList.contains('pad') ? 46 : 30;
+  fx.innerHTML = Array.from({ length: n }, (_, i) => `<i style="--a:${Math.round(i * 360 / n + Math.random() * 24)}deg;--d:${Math.round(big * (0.7 + Math.random() * 0.5))}px"></i>`).join('');
+  fxLayer.appendChild(fx);
+  setTimeout(() => fx.remove(), 650);
+}
+document.addEventListener('pointerdown', e => {
+  const el = e.target.closest(KEYSEL);
+  if (!el || el.disabled || e.button > 0) return;
+  el.classList.add('press'); el.dataset.pressAt = performance.now();
+  tapFx(el, e.clientX, e.clientY);
+  const up = () => {
+    removeEventListener('pointerup', up, true); removeEventListener('pointercancel', up, true);
+    setTimeout(() => el.classList.remove('press'), Math.max(0, 90 - (performance.now() - el.dataset.pressAt)));
+  };
+  addEventListener('pointerup', up, true); addEventListener('pointercancel', up, true);
+}, true);
+
+// ---------- skins ----------
+const SKINS = ['studio', 'field', 'pop'];
+function setSkin(k) {
+  if (!SKINS.includes(k)) k = 'studio';
+  document.documentElement.dataset.skin = k;
+  document.querySelectorAll('#skins [data-skin]').forEach(b => b.setAttribute('aria-checked', b.dataset.skin === k));
+  try { localStorage.setItem('tactus-skin', k); } catch (e) { }
+  // canvases read the skin's colours each time they draw, and pictures use the colour variables, so nothing redraws
+}
+$('#skins').addEventListener('click', e => { const b = e.target.closest('[data-skin]'); if (b) setSkin(b.dataset.skin); });
+$('#skins').addEventListener('keydown', e => {
+  if (!/^Arrow(Left|Right)$/.test(e.key)) return;
+  const i = SKINS.indexOf(document.documentElement.dataset.skin), k = SKINS[mod(i + (e.key === 'ArrowRight' ? 1 : -1), 3)];
+  setSkin(k); $(`#skins [data-skin="${k}"]`).focus(); e.preventDefault();
+});
+setSkin(document.documentElement.dataset.skin);
+
 // ---------- animation loop ----------
-const posEl = $('#pos'), pipsEl = [...document.querySelectorAll('.pip')], queueEl = $('#queue');
+const posEl = $('#pos'), pipsEl = [...document.querySelectorAll('.pip')];
 const recbar = $('#recbar'), recText = $('#rectext'), recCount = $('#reccount'), beatEls = [...recbar.querySelectorAll('.beats i')];
 const scope = $('#scope'), sctx = scope.getContext('2d');
 let scopeBuf = null, lastTakeState = '';
@@ -926,11 +1024,7 @@ function frame() {
     posEl.textContent = `${Math.floor(c) + 1}.${Math.floor((c % 1) * 4) + 1}`;
     const ph = Math.floor(c) % 4;
     pipsEl.forEach((p, i) => p.classList.toggle('on', i === ph));
-    if (S.pending) {
-      const left = S.pending.applyAt - c;
-      queueEl.hidden = false;
-      queueEl.textContent = left <= 1 ? t('queueNext') : t('queueIn', { n: Math.ceil(left) });
-    } else queueEl.hidden = true;
+    drawArm(c, now);
     if (S.vis.length) {
       const keep = [];
       for (const v of S.vis) {
@@ -944,7 +1038,7 @@ function frame() {
       }
       S.vis = keep;
     }
-  } else queueEl.hidden = true;
+  } else drawArm(-1, now);
   // recording banner: a visual metronome for speaker mode
   const tk = LS.take, cal = LS.cal;
   const st = cal ? 'cal' : tk && S.playing ? (transport(now) < tk.startC ? 'count' : 'rec') : '';
@@ -980,7 +1074,11 @@ function frame() {
     { const on = WK.dsp === 'wasm'; $('#dspTag').classList.toggle('on', on); $('#build').title = on ? 'Synth voices run in Rust compiled to WebAssembly' : 'build'; }
     $('#keyo').textContent = S.keySrc;
     renderLoops(); syncGpu();
-    document.querySelectorAll('.pad').forEach(p => p.classList.toggle('on', G.held.has(p.dataset.g) || G.auto.has(p.dataset.g)));
+    document.querySelectorAll('.pad').forEach(p => {
+      const on = G.held.has(p.dataset.g) || G.auto.has(p.dataset.g);
+      if (on && !p.classList.contains('on')) tapFx(p);
+      p.classList.toggle('on', on);
+    });
   }
   // scope
   const w = scope.clientWidth * devicePixelRatio, h = scope.clientHeight * devicePixelRatio;
