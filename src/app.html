@@ -415,6 +415,38 @@ body.recording .editor { border-color: var(--c-err); }
 .bk-cell.on, .bk-steps .bk-cell.on:nth-child(4n+1) { background: var(--tc); border-color: color-mix(in srgb, var(--tc) 70%, #000); }
 .bk-cell.maybe, .bk-steps .bk-cell.maybe:nth-child(4n+1) { background: repeating-linear-gradient(135deg, var(--tc) 0 4px, color-mix(in srgb, var(--tc) 25%, var(--panel)) 4px 8px); }
 .bk-cell.acc { box-shadow: inset 0 0 0 2px color-mix(in srgb, #000 35%, var(--tc)); }
+/* the piano roll: cells underneath, each note one continuous block over the steps it holds */
+.bk-roll { display: grid; gap: 2px; outline: none; border-radius: 4px; }
+.bk-roll:focus-visible { box-shadow: 0 0 0 2px color-mix(in srgb, var(--tc) 60%, transparent); }
+.bk-pr { position: relative; display: grid; grid-template-columns: 30px repeat(16, minmax(0, 1fr)); gap: 2px 3px; touch-action: none; user-select: none; -webkit-user-select: none; }
+.bk-pr .bk-note { align-self: center; }
+.bk-c { display: block; min-width: 0; border-radius: 3px; background: var(--panel); cursor: cell; }
+.bk-c.b { background: color-mix(in srgb, var(--fg) 5%, var(--panel)); }
+.bk-c.ph { background: color-mix(in srgb, var(--tc) 16%, var(--panel)); }
+.bk-nt { position: relative; z-index: 1; display: block; min-width: 0; border-radius: 4px; background: var(--tc); border: 1px solid color-mix(in srgb, var(--tc) 55%, #000); cursor: grab; }
+.bk-nt.ghost { background: color-mix(in srgb, var(--tc) 42%, var(--panel)); border-style: dashed; }
+.bk-nt.acc { box-shadow: inset 0 3px 0 color-mix(in srgb, #fff 55%, transparent); }
+.bk-nt.hov, .bk-nt:hover { filter: brightness(1.1); }
+.bk-nt.sel { z-index: 2; outline: 2px solid var(--fg); outline-offset: 1px; }
+.bk-nt.ph { filter: brightness(1.22) saturate(1.1); }
+.bk-nt .rs { position: absolute; top: -1px; right: -1px; bottom: -1px; width: 9px; border-radius: 0 4px 4px 0; cursor: ew-resize; background: repeating-linear-gradient(90deg, color-mix(in srgb, #000 35%, transparent) 0 1.5px, transparent 1.5px 3.5px) 2px 4px / 6px calc(100% - 8px) no-repeat, color-mix(in srgb, #000 18%, transparent); opacity: 0; transition: opacity .1s; }
+.bk-nt:hover .rs, .bk-nt.sel .rs, .bk-nt.hov .rs { opacity: 1; }
+@media (hover: none) { .bk-nt .rs { opacity: .7; width: 12px; } }
+.bk-chln { z-index: 1; justify-self: start; width: 3px; margin-left: -2px; border-radius: 2px; background: color-mix(in srgb, var(--tc) 70%, #000); pointer-events: none; }
+.bk-marq { z-index: 3; border: 1.5px dashed var(--fg); border-radius: 4px; background: color-mix(in srgb, var(--fg) 8%, transparent); pointer-events: none; }
+.bk-selbar { display: inline-flex; align-items: center; gap: 4px; font-size: 11.5px; }
+.bk-selbar button { height: 22px; padding: 0 8px; border: 1px solid var(--line); border-radius: var(--r-s); background: var(--panel); color: var(--fg); font: 600 11px/1 var(--f-ui); cursor: pointer; }
+/* velocity: a bar per step, taller is louder; the steps where something starts are solid */
+.bk-vel { display: grid; grid-template-columns: 30px repeat(16, minmax(0, 1fr)); gap: 0 3px; height: 26px; margin-top: 3px; touch-action: none; cursor: ns-resize; }
+.bk-vel.drum { grid-template-columns: repeat(16, minmax(0, 1fr)); margin-top: 5px; }
+.bk-vel.drum .bk-vb:nth-child(4n+1):not(:first-child) { margin-left: 4px; }
+.bk-vlbl { align-self: end; padding-right: 3px; font: 500 9.5px/1 var(--f-ui); color: var(--faint); text-align: right; }
+.bk-vb { display: flex; align-items: flex-end; min-width: 0; border-bottom: 1px solid var(--line); }
+.bk-vb i { display: block; width: 100%; border-radius: 2px 2px 0 0; background: color-mix(in srgb, var(--tc) 22%, transparent); }
+.bk-vb.on i { background: color-mix(in srgb, var(--tc) 80%, var(--fg)); }
+.bk-vb.ph i { filter: brightness(1.2); }
+.bk-vel.ro { display: flex; align-items: center; gap: 6px; height: auto; cursor: default; }
+.bk-vro { font-size: 11px; color: var(--faint); }
 /* the playhead: a soft wash down the column it is on, and the notes it plays light up; no frame, so it reads as light passing, not a selection */
 .bk-cell.ph:not(.on), .bk-steps .bk-cell.ph:not(.on):nth-child(4n+1), .bk-row:nth-child(even) .bk-cell.ph:not(.on) { background: color-mix(in srgb, var(--tc) 16%, var(--panel)); }
 .bk-cell.ph.on { filter: brightness(1.18) saturate(1.1); }
