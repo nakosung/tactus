@@ -16,7 +16,7 @@
 // (a change waits for the next bar to be heard, but the cards follow the code at once).
 
 // var, not const: evaluate() in ui.js asks for a redraw, and the first evaluate runs before this file does
-var BK = { picks: [], view: 'code', busy: false, items: [], drag: null, flashLine: -1, step: -1, timer: 0, raf: 0, pages: new Map(), minBars: new Map(), poly: new Map(), key: { root: 9, scale: 'minor' }, prog: null, song: null, scenes: [] };
+var BK = { picks: [], view: 'code', busy: false, items: [], drag: null, flashLine: -1, step: -1, timer: 0, raf: 0, pages: new Map(), minBars: new Map(), brush: 1, clicks: (() => { try { return localStorage.getItem('tactus-bkclick') !== '0'; } catch (e) { return true; } })(), key: { root: 9, scale: 'minor' }, prog: null, song: null, scenes: [] };
 const BK_STEPS = 16, BK_MAXBARS = 16;
 const BK_STICKERS = [
   { k: 'gain', min: 0, max: 1.2, step: 0.01, def: 0.8 },
@@ -51,13 +51,13 @@ function bkJoin(p) {
   if (p.comment) s += (/\s$/.test(s) ? '' : ' ') + p.comment;
   return s;
 }
-// the pattern as steps, 16 per bar, one bar or a few that repeat (the bars of <[...] [...]>); null when it does not fit
-// a note (a scale degree or a note name), and a chord symbol (0^7 follows the prog line; Am7 is a named chord)
-const BK_NOTE_RE = /^(-?\d+|[a-g][#b]?\d)$/;
-const bkIsSym = v => /^-?\d+[#b]*\^\d*$/.test(v) || !!parseChord(v);
+// What a melodic step can hold, as written: a degree (3), a chord on a degree (3^ is the triad built on 3, 3^7 adds
+// the seventh), a note name (e5), a named chord (Am7), or several of these struck together (3,5 written [3,5]);
+// a trailing ' is an accent. Degrees and note names make two kinds of lane, so a pattern uses one or the other.
+const BK_DEG_RE = /^-?\d+(\^(7|9)?)?'*$/, BK_NAME_RE = /^[a-g][#b]?\d'*$/;
+const bkAtomMode = a => BK_DEG_RE.test(a) ? 'deg' : BK_NAME_RE.test(a) || parseChord(a.replace(/'+$/, '')) ? 'name' : null;
 // the pattern as steps, 16 per bar, one bar or a few that repeat (the bars of <[...] [...]>); null when it does not fit.
-// A step holds one value: a drum hit, a note, notes struck together ("c5,e5,c6", written [c5,e5,c6]) or a chord
-// symbol; the lane says which of the last two kinds the pattern is made of.
+// A step holds the written value ("3^", "c5,e5,c6"); the lane draws the notes it sounds.
 function bkGrid(patSrc, kind) {
   const src = patSrc.trim();
   if (!src || /[~$]/.test(src)) return null;
@@ -75,7 +75,7 @@ function bkGrid(patSrc, kind) {
     for (const e of bar(b)) {
       const k = (e.s - b) * BK_STEPS, len = e.d * BK_STEPS;
       if (Math.abs(k - Math.round(k)) > 1e-6 || k < 0 || k >= BK_STEPS) return null;
-      if (kind !== 'drum' && Math.abs(len - Math.round(len)) > 1e-6) return null;
+      if (kind !== 'drum' && (Math.abs(len - Math.round(len)) > 1e-6 || Math.round(k) + Math.round(len) > BK_STEPS)) return null;   // a note that holds into the next bar (<0^ 3^>/2) is code
       const kk = Math.round(k);
       if (!at.has(kk)) at.set(kk, []);
       at.get(kk).push({ v: e.v, len: Math.round(len) });
@@ -84,15 +84,13 @@ function bkGrid(patSrc, kind) {
       const i = b * BK_STEPS + kk;
       if (tok[i] !== '.') return null;   // starts while another note still sounds: two lines over each other
       if (kind === 'drum') { if (g.length > 1 || !/^[xXq]$/.test(g[0].v)) return null; tok[i] = g[0].v === 'q' ? 'x?' : g[0].v; continue; }
-      const here = g.length === 1 && bkIsSym(g[0].v) ? 'sym' : g.every(x => BK_NOTE_RE.test(x.v)) ? 'note' : null;
-      if (!here || (lane && lane !== here)) return null;
+      for (const x of g) { const m = bkAtomMode(x.v); if (!m || (lane && lane !== m)) return null; lane = m; }
       if (g.some(x => x.len !== g[0].len)) return null;   // notes struck together that end at different times
-      lane = here;
       tok[i] = g.map(x => x.v).join(',');
-      for (let j = 1; j < g[0].len && kk + j < BK_STEPS; j++) tok[i + j] = '_';
+      for (let j = 1; j < g[0].len; j++) tok[i + j] = '_';
     }
   }
-  return { tok, bars, lane: lane || 'note' };
+  return { tok, bars, lane: lane || 'deg' };
 }
 // a value after | as a plain number, or null if it is something else (a knob, a sweep, a pattern)
 function bkParam(params, k) {
@@ -298,7 +296,7 @@ function bkLoad(L, src, kind) {
   // bars added here that are still copies of others
   const want = BK.minBars.get(L.key) || 0;
   if (want > bars && want % bars === 0) { tok = Array.from({ length: want / bars }, () => tok).flat(); bars = want; }
-  L.tok = tok; L.bars = bars; L.lane = g.lane; L.items = items && items.length === bars ? items : null;
+  L.tok = tok; L.bars = bars; L.lane = g.lane; L.mode = g.lane === 'drum' ? null : g.lane; L.items = items && items.length === bars ? items : null;
   L.orig = Array.from({ length: bars }, (_, b) => bkBarTok(L, b).join(' '));
   L.page = Math.min(BK.pages.get(L.key) || 0, bars - 1);
   return true;
@@ -306,28 +304,73 @@ function bkLoad(L, src, kind) {
 
 // ---------- the board ----------
 const boardEl = document.getElementById('board');
-function bkScaleRows(tokens, mode, oct) {
-  tokens = tokens.flatMap(v => v.split(','));
-  // rows: the notes of the song's scale that the melody uses, with room above and below
+// The lane's rows. A degree lane counts in degrees of the song's scale; a note-name lane counts in MIDI notes and shows
+// the scale's notes, plus any note the code spells its own way (g#5 in F major keeps that spelling, so lane and code agree).
+function bkScaleRows(L, nums) {
   const key = BK.key, sc = (SCALES[key.scale] || SCALES.major), n = sc.length;
-  if (mode === 'deg') {
-    const ds = tokens.filter(v => /^-?\d+$/.test(v)).map(Number);
-    let lo = ds.length ? Math.min(...ds) - 1 : -1, hi = ds.length ? Math.max(...ds) + 2 : n + 1;
+  if (L.mode === 'deg') {
+    let lo = nums.length ? Math.min(...nums) - 1 : -1, hi = nums.length ? Math.max(...nums) + 2 : n + 1;
     if (hi - lo < n + 1) { const add = n + 1 - (hi - lo); lo -= Math.floor(add / 2); hi += Math.ceil(add / 2); }
     hi = Math.min(hi, lo + 15);
-    return Array.from({ length: hi - lo + 1 }, (_, j) => hi - j).map(d => ({ v: String(d), midi: key.root + 12 * (oct + 1) + sc[mod(d, n)] + 12 * Math.floor(d / n) }));
+    return Array.from({ length: hi - lo + 1 }, (_, j) => hi - j).map(d => ({ n: d, midi: key.root + 12 * (L.oct + 1) + sc[mod(d, n)] + 12 * Math.floor(d / n) }));
   }
-  // a note the code spells its own way (g#5 in F major) keeps that spelling, so the lane and the code agree
-  const spelled = new Map(); for (const v of tokens) if (/^[a-g]/.test(v)) spelled.set(atomNotes(v, 0, 'major', 4, 0)[0], v);
-  const ms = [...spelled.keys()];
-  const lo = (ms.length ? Math.min(...ms) : 57) - 2, hi = (ms.length ? Math.max(...ms) : 69) + 3, rows = [], flat = vxFlatKey(key.root, key.scale);
-  for (let m = hi; m >= lo; m--) if (sc.includes(mod(m - key.root, 12)) || spelled.has(m)) rows.push({ v: spelled.get(m) || vxNoteName(m, flat), midi: m, own: spelled.get(m) });
+  const lo = (nums.length ? Math.min(...nums) : 57) - 2, hi = (nums.length ? Math.max(...nums) : 69) + 3, rows = [];
+  for (let m = hi; m >= lo; m--) if (sc.includes(mod(m - key.root, 12)) || L.spell.has(m)) rows.push({ n: m, midi: m, own: L.spell.get(m) });
+  // more than fits: keep the notes that sound, trimming the room around them
+  while (rows.length > 16 && rows[0].n > Math.max(...nums, -Infinity)) rows.shift();
+  while (rows.length > 16 && rows[rows.length - 1].n < Math.min(...nums, Infinity)) rows.pop();
   return rows.slice(0, 16);
+}
+// one written atom as the numbers it sounds: degrees in a degree lane, MIDI notes in a note-name lane (the chord
+// tones as the engine builds them: 3^ is 3 5 7, Am7 sits in the track's octave)
+function bkAtom(a, L) {
+  const s = a.replace(/'+$/, '');
+  if (L.mode === 'deg') {
+    const m = /^(-?\d+)(\^(7|9)?)?$/.exec(s); if (!m) return [];
+    const d = +m[1]; return !m[2] ? [d] : [d, d + 2, d + 4, ...(m[3] ? [d + 6] : []), ...(m[3] === '9' ? [d + 8] : [])];
+  }
+  return atomNotes(s, 0, 'major', BK_NAME_RE.test(s) ? 4 : L.oct, 0) || [];
+}
+// a step's value as { ns: the numbers it sounds, acc: its accent mark, chord: true when it is one chord symbol }
+function bkVals(v, L) {
+  const atoms = v.split(','), acc = (/'+$/.exec(atoms[0]) || [''])[0];
+  return { ns: [...new Set(atoms.flatMap(a => bkAtom(a, L)))], acc, chord: atoms.length === 1 && (/\^/.test(v) || (L.mode === 'name' && !BK_NAME_RE.test(v))) };
+}
+const bkSpell = (L, m) => (L.spell && L.spell.get(m)) || vxNoteName(m, vxFlatKey(BK.key.root, BK.key.scale));
+// numbers back to a value, written the short way when they make one: stacked thirds on a degree are d^ (d^7, d^9),
+// and notes that are exactly a chord of the key (or one the line already names) are its name
+function bkCompact(ns, L, acc = '') {
+  ns = [...new Set(ns)];
+  const up = ns.slice().sort((a, b) => a - b);
+  if (L.mode === 'deg') {
+    // with a prog of named chords, 0^ takes that chord's own tones, which [0,2,4] does not: keep the notes
+    const thirds = up.length >= 3 && up.length <= 5 && up.every((x, j) => !j || x - up[j - 1] === 2) && !(up[0] === 0 && BK.prog && BK.prog.names);
+    return thirds ? `${up[0]}^${['', '7', '9'][up.length - 3]}${acc}` : ns.map(x => x + acc).join(',');
+  }
+  if (up.length >= 3) {
+    const named = new Set(L.tok.flatMap(v => v.split(',')).map(a => a.replace(/'+$/, '')).filter(a => !BK_NAME_RE.test(a) && parseChord(a)));
+    for (const c of bkChordList(BK.key)) named.add(c.name), named.add(c.seventh);
+    for (const nm of named) { const m = atomNotes(nm, 0, 'major', L.oct, 0); if (m && m.length === up.length && m.every((x, j) => x === up[j])) return nm + acc; }
+  }
+  return ns.map(x => bkSpell(L, x) + acc).join(',');
+}
+// a note of the key moved by some steps of the scale (a note outside the scale keeps its distance to the one below)
+function bkScaleMove(m, dd) {
+  const sc = SCALES[BK.key.scale] || SCALES.major, n = sc.length, at = x => BK.key.root + sc[mod(x, n)] + 12 * Math.floor(x / n);
+  let D = Math.floor((m - BK.key.root) / 12) * n; while (at(D + 1) <= m) D++; while (at(D) > m) D--;
+  return at(D + dd) + (m - at(D));
+}
+// steps of the scale between two notes of the lane
+const bkStepsBetween = (L, a, b) => { if (L.mode === 'deg') return b - a; let d = 0; while (bkScaleMove(a, d) < b && d < 40) d++; while (bkScaleMove(a, d) > b && d > -40) d--; return d; };
+// a chord built on a row of the lane, as the brush makes it: the triad (or seventh) of the key on that note
+function bkBrushChord(L, n, size) {
+  const ns = Array.from({ length: size }, (_, j) => L.mode === 'deg' ? n + 2 * j : bkScaleMove(n, 2 * j));
+  return bkCompact(ns, L);
 }
 // note names as the key spells them (G# in A major, Ab in F minor)
 const bkLabel = midi => { const s = vxNoteName(midi, vxFlatKey(BK.key.root, BK.key.scale)); return s[0].toUpperCase() + s.slice(1); };
 // for each step, the notes sounding there (a list: notes can be struck together)
-function bkOwn(tok) { const own = []; let cur = null; tok.forEach((v, k) => { if (v === '_' && cur) own[k] = cur; else if (v !== '.' && v !== '_') { cur = v.split(','); own[k] = cur; } else { cur = null; own[k] = null; } }); return own; }
+function bkOwn(tok, L) { const own = []; let cur = null; tok.forEach((v, k) => { if (v === '_' && cur) own[k] = cur; else if (v !== '.' && v !== '_') { cur = bkVals(v, L).ns; own[k] = cur; } else { cur = null; own[k] = null; } }); return own; }
 // the step where the note sounding at k began, or -1
 function bkStartOf(bar, k) { for (let j = k; j >= 0; j--) { if (bar[j] === '_') continue; return bar[j] === '.' ? -1 : j; } return -1; }
 // a held note's length: holds after s up to len, stopping at the next note
@@ -337,17 +380,23 @@ function bkSetLen(bar, s, len) {
 }
 const bkBarOf = L => L.tok.slice(L.page * BK_STEPS, (L.page + 1) * BK_STEPS);
 function bkPutBar(L, bar) { const tok = L.tok.slice(); tok.splice(L.page * BK_STEPS, BK_STEPS, ...bar); L.tok = tok; }
-// chord symbols: degrees as Roman numerals (they follow the prog line, so a fixed name would be wrong), names as written
+// a chord step's name: with no chord progression, the chord of the key (3^ in C major is F); with one, a Roman
+// numeral, since the chord then moves with the progression
 const BK_ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII'];
-function bkSymLabel(v) {
-  const m = /^(-?\d+)([#b]*)\^(\d*)$/.exec(v); if (!m) return v;
-  const n = (SCALES[BK.key.scale] || SCALES.major).length, d = +m[1];
-  return m[2].replace('#', '♯').replace('b', '♭') + BK_ROMAN[mod(d, n)] + (d < 0 ? '↓' : d >= n ? '↑' : '') + ({ '7': '⁷', '9': '⁹' }[m[3]] || m[3]);
+function bkChordLabel(v) {
+  const s = v.replace(/'+$/, ''), m = /^(-?\d+)\^(\d*)$/.exec(s); if (!m) return s;
+  const n = (SCALES[BK.key.scale] || SCALES.major).length, d = +m[1], q = m[2];
+  if (BK.prog && BK.prog.i >= 0) return BK_ROMAN[mod(d, n)] + (d < 0 ? '↓' : d >= n ? '↑' : '') + ({ '7': '⁷', '9': '⁹' }[q] || q);
+  const c = bkChordList(BK.key)[mod(d, n)]; return q ? c.seventh + (q === '9' ? '(9)' : '') : c.name;
 }
-function bkSymOptions(L) {
-  const names = L.tok.some(v => /^[A-G]/.test(v)), ch = bkChordList(BK.key), out = [];
-  if (names) for (const c of ch) out.push({ v: c.name, l: c.name }, { v: c.seventh, l: c.seventh });
-  else ch.forEach((c, d) => out.push({ v: `${d}^`, l: bkSymLabel(`${d}^`) }, { v: `${d}^7`, l: bkSymLabel(`${d}^7`) }));
+// what a chord step can become: the key's chords on each degree, as triads and sevenths, in the octave it is in
+function bkChordOpts(L, v) {
+  const acc = (/'+$/.exec(v) || [''])[0], ch = bkChordList(BK.key), out = [];
+  if (L.mode === 'deg') {
+    const d0 = +/^-?\d+/.exec(v)[0], base = d0 - mod(d0, ch.length);
+    ch.forEach((c, j) => { for (const q of ['', '7']) { const w = `${base + j}^${q}${acc}`; out.push({ v: w, l: bkChordLabel(w) }); } });
+  } else for (const c of ch) for (const nm of [c.name, c.seventh]) out.push({ v: nm + acc, l: nm });
+  if (!out.some(o => o.v === v)) out.push({ v, l: bkChordLabel(v) });
   return out;
 }
 // one quiet "+" per card, for everything that can be added to it: a rule, a sticker, another bar
@@ -377,7 +426,7 @@ function bkMenu(btn) {
   const r = btn.getBoundingClientRect(), w = m.offsetWidth, h = m.offsetHeight;
   m.style.left = Math.max(8, Math.min(innerWidth - w - 8, r.left)) + 'px';
   m.style.top = (r.bottom + h + 8 > innerHeight ? Math.max(8, r.top - h - 4) : r.bottom + 4) + 'px';
-  m.addEventListener('click', e => { const b = e.target.closest('[data-v]'); if (b) { bkMenuClose(); P.apply(b.dataset.v); } });
+  m.addEventListener('click', e => { const b = e.target.closest('[data-v]'); if (b) { bkClick('on'); bkMenuClose(); P.apply(b.dataset.v); } });
   m.addEventListener('keydown', e => {
     const bs = [...m.querySelectorAll('button')], i = bs.indexOf(document.activeElement);
     if (e.key === 'Escape') { bkMenuClose(); btn.focus(); }
@@ -386,31 +435,29 @@ function bkMenu(btn) {
   (m.querySelector('[aria-selected="true"]') || m.querySelector('button')).focus();
   setTimeout(() => document.addEventListener('pointerdown', bkMenuOutside, true));
 }
-function bkSymHTML(L) {
-  const bar = bkBarOf(L), opts = bkSymOptions(L), cells = [];
-  for (let k = 0; k < BK_STEPS;) {
-    if (bar[k] === '.' || bar[k] === '_') { cells.push(`<button class="bk-cell bk-symadd" style="grid-column:${k + 1}" data-k="${k}" aria-label="${esc(t('bkSymAdd'))} ${k + 1}">+</button>`); k++; continue; }
-    let len = 1; while (k + len < BK_STEPS && bar[k + len] === '_') len++;
-    const v = bar[k], list = opts.some(o => o.v === v) ? opts : [...opts, { v, l: bkSymLabel(v) }];
-    const kk = k;
-    cells.push(`<div class="bk-sym" style="grid-column:${k + 1} / span ${len}" data-k="${k}">${bkPick('sym', bkSymLabel(v), t('bkChords') + ' ' + (k + 1), list, v, val => { const b2 = bkBarOf(L); b2[kk] = val; bkPutBar(L, b2); bkWritePat(L, false); })}<button class="bk-rx" data-symdel="${k}" aria-label="${esc(t('bkRuleDel'))}">×</button><span class="bk-grip" data-rs="${k}" title="${esc(t('bkSymResize'))}" aria-hidden="true"></span></div>`);
-    k += len;
-  }
-  return `<div class="bk-symrow" data-strip="1">${cells.join('')}</div>${/^-?\d/.test(bar.find(v => v !== '.' && v !== '_') || '') && BK.prog && BK.prog.i >= 0 ? `<p class="bk-why">${esc(t('bkSymFollow'))}</p>` : ''}`;
-}
 function bkGridHTML(L, p, def) {
   const pg = L.page, off = pg * BK_STEPS, tok = L.tok.slice(off, off + BK_STEPS);
   const tabs = L.bars < 2 ? '' : `<div class="bk-bars" role="group" aria-label="${esc(t('bkBar'))}">${Array.from({ length: L.bars }, (_, b) => `<button class="bk-bar${b === pg ? ' sel' : ''}" data-bar="${b}" aria-pressed="${b === pg}">${b + 1}</button>`).join('')}${L.bars < BK_MAXBARS ? `<button class="bk-bar add" data-act="baradd" title="${esc(t('bkBarAdd'))}" aria-label="${esc(t('bkBarAdd'))}">+</button>` : ''}${L.bars > 1 ? `<button class="bk-bar del" data-act="bardel" title="${esc(t('bkBarDel'))}" aria-label="${esc(t('bkBarDel'))}">−</button>` : ''}<span class="bk-barlbl">${esc(t('bkBar'))}</span></div>`;
-  if (L.lane === 'sym') return tabs + bkSymHTML(L);
   if (L.kind === 'drum') return tabs + `<div class="bk-steps">${tok.map((v, k) => `<button class="bk-cell${v !== '.' ? ' on' : ''}${v === 'X' ? ' acc' : ''}${v === 'x?' ? ' maybe' : ''}" data-k="${k}" aria-label="${k + 1}${v === 'x?' ? ' ' + esc(t('bkMaybe')) : ''}" aria-pressed="${v !== '.'}" title="${esc(t('bkTapHint'))}"></button>`).join('')}</div>`;
-  // the octave the track really plays in, so the lane's note names are true
-  const oct = Math.round((p && bkParam(p.params, 'oct')) ?? (def && INST[def.inst] && INST[def.inst].oct) ?? 4);
-  const mode = L.tok.some(v => /^[a-g]/.test(v)) ? 'name' : 'deg', rows = bkScaleRows(L.tok, mode, oct), own = bkOwn(tok);
-  L.mode = mode;
-  return tabs + `<div class="bk-lane">` + rows.map(row => `<div class="bk-row" data-v="${esc(row.v)}"><span class="bk-note">${row.own ? row.own[0].toUpperCase() + row.own.slice(1) : bkLabel(row.midi)}</span>${tok.map((v, k) => {
-    const hit = !!own[k] && own[k].includes(row.v), start = hit && tok[k] !== '_';
+  // the octave the track really plays in, so the lane's note names (and where a named chord sits) are true
+  L.oct = Math.round((p && bkParam(p.params, 'oct')) ?? (def && INST[def.inst] && INST[def.inst].oct) ?? 4);
+  L.spell = new Map();
+  if (L.mode === 'name') for (const v of L.tok) for (const a of v.split(',')) { const s = a.replace(/'+$/, ''); if (BK_NAME_RE.test(s)) L.spell.set(atomNotes(s, 0, 'major', 4, 0)[0], s); }
+  const all = bkOwn(L.tok, L), rows = bkScaleRows(L, [...new Set(all.flat().filter(x => x != null))]), own = all.slice(off, off + BK_STEPS);
+  // a new note can be one note or a chord built on it (the "brush")
+  const brush = `<span class="bk-brush" role="radiogroup" aria-label="${esc(t('bkBrush'))}" title="${esc(t('bkBrushHint'))}">${[1, 3, 4].map(z => `<button role="radio" data-brush="${z}" aria-checked="${BK.brush === z}">${esc(t('bkBrush' + z))}</button>`).join('')}</span>`;
+  // chords written as one symbol (3^, Am7) get a name above their notes, to swap for another chord or take out
+  const chs = [];
+  for (let k = 0; k < BK_STEPS; k++) {
+    const v = tok[k]; if (v === '.' || v === '_' || !bkVals(v, L).chord) continue;
+    let len = 1; while (k + len < BK_STEPS && tok[k + len] === '_') len++;
+    chs.push(`<span class="bk-chl" style="grid-column:${k + 2} / span ${len}">${bkPick('chl', bkChordLabel(v), t('bkChordPick') + ' ' + (k + 1), bkChordOpts(L, v), v, val => { const b2 = bkBarOf(L); b2[k] = val; bkPutBar(L, b2); bkWritePat(L, false); bkHear(L, val, len); })}<button class="bk-rx" data-chdel="${k}" aria-label="${esc(t('bkRuleDel'))}">×</button></span>`);
+  }
+  const follow = chs.length && L.mode === 'deg' && BK.prog && BK.prog.i >= 0 ? `<p class="bk-why">${esc(t('bkSymFollow'))}</p>` : '';
+  return `<div class="bk-tools">${tabs}${brush}</div><div class="bk-lane">` + (chs.length ? `<div class="bk-row bk-chrow"><span></span>${chs.join('')}</div>` : '') + rows.map(row => `<div class="bk-row" data-n="${row.n}"><span class="bk-note">${row.own ? row.own[0].toUpperCase() + row.own.slice(1) : bkLabel(row.midi)}</span>${tok.map((v, k) => {
+    const hit = !!own[k] && own[k].includes(row.n), start = hit && tok[k] !== '_';
     return `<button class="bk-cell${hit ? ' on' : ''}${start ? ' start' : ''}" data-k="${k}" aria-label="${bkLabel(row.midi)} ${k + 1}" aria-pressed="${hit}"></button>`;
-  }).join('')}</div>`).join('') + `</div>`;
+  }).join('')}</div>`).join('') + `</div>` + follow;
 }
 function bkRender() {
   if (!boardEl || BK.view === 'code') return;
@@ -429,7 +476,7 @@ function bkRender() {
     if (p && p.let) {
       // a phrase: a piece made once and used many times
       const us = uses.get(p.name) || [], d0 = us[0] && us[0].def, kind = d0 ? d0.kind : /x/i.test(p.pat) ? 'drum' : 'synth';
-      const key = '$' + p.name, L = { i, name: p.name, key, kind, phrase: true, inst: d0 ? d0.inst : kind === 'drum' ? 'kick' : 'piano' };
+      const key = '$' + p.name, L = { i, name: p.name, key, kind, phrase: true, inst: d0 ? d0.inst : kind === 'drum' ? 'kick' : 'piano', def: d0 };
       const g = bkLoad(L, p.pat, kind);
       BK.items.push(L);
       const body = g ? bkGridHTML(L, null, d0) : `<div class="bk-chip"><code>${esc(p.pat.trim())}</code><button class="bk-link" data-act="goto">${esc(t('bkInCode'))}</button></div>`;
@@ -441,7 +488,7 @@ function bkRender() {
     const name = r.lineNames.get(i), def = name && r.tracks.get(name);
     const err = r.errors.get(i);
     if (!def || def.line !== i) { if (stripComment(ln).trim() && !/^\s*(bpm|key|scale|swing|prog|scene|song|let)\b/.test(ln)) other++; return; }
-    const kind = def.kind, key = name, L = { i, name, key, inst: def.inst, kind };
+    const kind = def.kind, key = name, L = { i, name, key, inst: def.inst, kind, def };
     const ci = r.order.indexOf(name), col = TRACK_COLORS[(ci < 0 ? 0 : ci) % TRACK_COLORS.length];
     BK.items.push(L);
     let body;
@@ -496,6 +543,7 @@ function bkRender() {
   boardEl.innerHTML = `<p class="bk-hint">${esc(t('bkHint'))}</p><div class="bk-top">
       <label class="bk-tempo"><span aria-hidden="true">🐢</span><input type="range" id="bkBpm" min="60" max="180" step="1" value="${bpm}" aria-label="${esc(t('bkTempo'))}"><span aria-hidden="true">🐇</span><b>${bpm}</b></label>
       <span class="bk-key"><select id="bkRoot" aria-label="${esc(t('bkRoot'))}">${roots}</select><span class="seg">${moods}</span><select id="bkScale" aria-label="${esc(t('bkScale'))}">${scales}</select></span>
+      <button class="bk-snd" data-act="clicks" aria-pressed="${BK.clicks}" title="${esc(t('bkClicks'))}" aria-label="${esc(t('bkClicks'))}">${BK.clicks ? '🔊' : '🔈'}</button>
     </div>
     <div class="bk-chords"><b>${esc(t('bkChords'))}</b>${chordRow}</div>
     <div class="bk-cards">${cards.join('') || `<p class="bk-empty">${esc(t('bkEmpty'))}</p>`}</div>
@@ -514,6 +562,7 @@ function bkLift(arm) {
   const item = arm.item, box = item.parentElement, kind = item.dataset.sort;
   const items = [...box.children].filter(x => x.dataset && x.dataset.sort === kind);
   if (items.length < 2) { BK.drag = null; return; }
+  bkClick('lift');
   BK.busy = true; BK.drag = { kind: 'sort', sort: kind, box, items, from: items.indexOf(item), to: items.indexOf(item), item };
   item.classList.add('sorting'); bkBuzz();
   try { boardEl.setPointerCapture(arm.id); } catch (e) { }
@@ -529,7 +578,7 @@ function bkSortMove(e) {
 function bkSortEnd(d) {
   d.items.forEach(x => x.classList.remove('sorting', 'drop-before', 'drop-after'));
   // the release of a lift is not a tap: the click it makes (on a select or a button) is swallowed
-  if (d.kind === 'sort') BK.noClick = performance.now() + 350;
+  if (d.kind === 'sort') { BK.noClick = performance.now() + 350; bkClick('drop'); }
   if (d.to === d.from) return;
   const move = arr => { const a = arr.slice(), [x] = a.splice(d.from, 1); a.splice(d.to, 0, x); return a; };
   if (d.sort === 'car') bkWriteSong(move(BK.song.parts.map(p => ({ name: p.name, bars: p.bars }))), BK.song.line);
@@ -542,6 +591,36 @@ function bkSortEnd(d) {
     lines.splice(b, 0, ln);   // after the target when moving down (it shifted up by one), before it when moving up
     srcEl.value = lines.join('\n'); BK.flashLine = b; bkApply();
   }
+}
+
+// ---------- hearing it ----------
+// Stopped, an edit plays what it made (the note, the chord, the drum hit) on the track's own sound, so a lane can be
+// played like a keyboard. Playing, the loop itself plays the change at the next bar, so nothing extra sounds.
+function bkHear(L, v, steps = 1) {
+  if (!BK.clicks || !v || !L || !L.def || S.playing) return;
+  initAudio(); S.ctx.resume();
+  const def = { ...L.def, name: '__pv' };
+  if (!KIT.ready && (SAMPLE_PITCHED.has(def.inst) || SAMPLE_HITS.has(def.inst))) { const l = loadKit(); if (l) { l.then(() => bkHear(L, v, steps)); return; } }
+  const now = S.ctx.currentTime, cps = (S.bpm || 120) / 240, t0 = now + 0.035, r = pvStrip();
+  // the last one stops where this one starts
+  const g = A.pvIn.gain; g.cancelScheduledValues(now); g.setTargetAtTime(0, now, 0.006); g.setValueAtTime(0, t0 - 0.004); g.setValueAtTime(1, t0 - 0.003);
+  const e = { v, s: 0, d: Math.min(1, Math.max(steps / BK_STEPS, 0.22 * cps)), loc: {} };
+  try { pvPlayEvent(def, e, t0, cps, L.page || 0, r, r.input); } catch (err) { }
+}
+// a small sound for a press, in the skin's character: a light tick, a relay click, a bubble. Straight to the speakers,
+// so it never lands in a recording; quieter while the music plays. The speaker button on the board turns it off.
+function bkClick(kind = 'tap') {
+  if (!BK.clicks || BK.view === 'code') return;
+  try { initAudio(); } catch (e) { return; }
+  const ctx = S.ctx; if (ctx.state !== 'running') ctx.resume();
+  const skin = typeof skinNow === 'function' ? skinNow() : 'field', at = ctx.currentTime + 0.004;
+  const f0 = { tap: 1, on: 1.25, off: 0.72, lift: 0.6, drop: 0.85 }[kind] || 1;
+  const voice = { field: { type: 'triangle', f: 1800, to: 0.55, len: 0.035 }, studio: { type: 'square', f: 900, to: 0.5, len: 0.022 }, pop: { type: 'sine', f: 700, to: 1.9, len: 0.07 } }[skin] || { type: 'triangle', f: 1800, to: 0.55, len: 0.035 };
+  const o = ctx.createOscillator(), g = ctx.createGain(), lp = ctx.createBiquadFilter(), lvl = (S.playing ? 0.025 : 0.05) * (skin === 'studio' ? 0.5 : 1);
+  lp.type = 'lowpass'; lp.frequency.value = 6000;
+  o.type = voice.type; o.frequency.setValueAtTime(voice.f * f0, at); o.frequency.exponentialRampToValueAtTime(voice.f * f0 * voice.to, at + voice.len);
+  g.gain.setValueAtTime(0, at); g.gain.linearRampToValueAtTime(lvl, at + 0.002); g.gain.exponentialRampToValueAtTime(0.0001, at + voice.len + 0.02);
+  o.connect(lp); lp.connect(g); g.connect(ctx.destination); o.start(at); o.stop(at + voice.len + 0.04);
 }
 
 // ---------- taps ----------
@@ -567,8 +646,8 @@ function bkSetNote(L, k, v, len) {
 }
 function bkPaintMel(card, L) {
   // redraw one lane from L.tok without rebuilding the board (a drag is on)
-  const off = L.page * BK_STEPS, tok = L.tok.slice(off, off + BK_STEPS), own = bkOwn(tok);
-  card.querySelectorAll('.bk-row').forEach(row => row.querySelectorAll('.bk-cell').forEach(c => { const k = +c.dataset.k, hit = !!own[k] && own[k].includes(row.dataset.v); c.classList.toggle('on', hit); c.classList.toggle('start', hit && tok[k] !== '_'); c.setAttribute('aria-pressed', hit); }));
+  const off = L.page * BK_STEPS, tok = L.tok.slice(off, off + BK_STEPS), own = bkOwn(tok, L);
+  card.querySelectorAll('.bk-row[data-n]').forEach(row => row.querySelectorAll('.bk-cell').forEach(c => { const k = +c.dataset.k, hit = !!own[k] && own[k].includes(+row.dataset.n); c.classList.toggle('on', hit); c.classList.toggle('start', hit && tok[k] !== '_'); c.setAttribute('aria-pressed', hit); }));
 }
 function bkRuleEdit(L, j, field, value) {
   const r = L.rules[j]; if (!r) return;
@@ -583,26 +662,13 @@ function bkInit() {
   // edge for a length), and a long press lifts an item to move it (or, on a drum step, makes it "now and then").
   // With a mouse an item also lifts as soon as it is pressed and moved; on touch, moving first scrolls.
   const LONG = 380;
+  // every button and list on the board answers with a tick (the cells make their own sound)
+  boardEl.addEventListener('pointerdown', e => { if (e.button <= 0 && e.target.closest('button:not(.bk-cell), select')) bkClick('tap'); }, true);
   boardEl.addEventListener('pointerdown', e => {
     if (e.button > 0) return;
     const t0 = e.target;
     const crs = t0.closest('.bk-car-rs');
     if (crs) { e.preventDefault(); const car = crs.closest('.bk-car'), lab = car.querySelector('.bk-carbars'); BK.busy = true; BK.drag = { kind: 'carlen', j: +car.dataset.car, x0: e.clientX, b0: +lab.dataset.bars, lab }; boardEl.setPointerCapture(e.pointerId); return; }
-    const add = t0.closest('.bk-symadd'), rs = t0.closest('[data-rs]');
-    if (add || rs) {
-      const L = bkLine(t0); if (!L) return;
-      e.preventDefault(); BK.busy = true;
-      const strip = t0.closest('[data-strip]').getBoundingClientRect(), bar = bkBarOf(L);
-      let s0;
-      if (add) {
-        s0 = +add.dataset.k;
-        const prev = bar.slice(0, s0).reverse().find(v => v !== '.' && v !== '_') || bar.find(v => v !== '.' && v !== '_') || bkSymOptions(L)[0].v;
-        bkSetNote(L, s0, prev, 1);
-      } else s0 = +rs.dataset.rs;
-      let len = 1; while (s0 + len < BK_STEPS && bkBarOf(L)[s0 + len] === '_') len++;
-      BK.drag = { L, kind: 'symlen', s: s0, len, strip };
-      bkRender(); boardEl.setPointerCapture(e.pointerId); return;
-    }
     const cell = t0.closest('.bk-cell');
     if (!cell) {
       // an item that can move: arm it; a long press (or a mouse drag) lifts it
@@ -619,21 +685,25 @@ function bkInit() {
       // tap: on or off; hold: now and then
       const was = L.tok[L.page * BK_STEPS + k], v = was === '.' ? 'x' : '.';
       const d = BK.drag = { L, kind: 'drum', v, done: new Set([k]), cell, k };
-      d.timer = setTimeout(() => { if (BK.drag !== d || d.done.size > 1) return; const m = was === 'x?' ? 'x' : 'x?'; bkPaintDrum(cell, m); bkSetDrum(L, k, m); bkBuzz(); d.held = true; }, LONG);
+      d.timer = setTimeout(() => { if (BK.drag !== d || d.done.size > 1) return; const m = was === 'x?' ? 'x' : 'x?'; bkPaintDrum(cell, m); bkSetDrum(L, k, m); bkBuzz(); bkClick('lift'); d.held = true; }, LONG);
       bkPaintDrum(cell, v); bkSetDrum(L, k, v);
+      if (v === '.') bkClick('off'); else if (S.playing) bkClick('on'); else bkHear(L, v);
     } else {
-      const v = cell.closest('.bk-row').dataset.v, bar = bkBarOf(L), s0 = bkStartOf(bar, k), here = s0 >= 0 ? bar[s0].split(',') : [];
-      if (s0 >= 0 && here.includes(v)) {
-        // a lit cell: drag to move it (up and down) or hold it longer (sideways); a tap turns it off from here
-        BK.drag = { L, kind: 'grab', s: s0, v, k0: k, at: k, moved: false, card, x0: e.clientX, y0: e.clientY, axis: null };
+      const n = +cell.closest('.bk-row').dataset.n, bar = bkBarOf(L), s0 = bkStartOf(bar, k), here = s0 >= 0 ? bkVals(bar[s0], L) : null;
+      if (here && here.ns.includes(n)) {
+        // a lit cell: drag to move it (up and down) or hold it longer (sideways); a tap turns it off from here.
+        // A chord written as one symbol moves as one, up and down the scale (3^ becomes 4^)
+        BK.drag = { L, kind: 'grab', s: s0, n, k0: k, at: k, moved: false, card, x0: e.clientX, y0: e.clientY, axis: null, whole: here.chord && here.ns.length > 1 };
       } else if (s0 === k) {
         // notes start here already: this one joins them (a chord), as long as they are
-        bar[k] = [...here, v].join(','); bkPutBar(L, bar); bkWritePat(L); bkPaintMel(card, L);
-        BK.drag = { L, kind: 'grab', s: k, v, k0: k, at: k, moved: true, card, x0: e.clientX, y0: e.clientY, axis: null };
+        bar[k] = bkCompact([...here.ns, n], L, here.acc); bkPutBar(L, bar); bkWritePat(L); bkPaintMel(card, L); bkHear(L, bar[k], 2);
+        BK.drag = { L, kind: 'grab', s: k, n, k0: k, at: k, moved: true, card, x0: e.clientX, y0: e.clientY, axis: null, whole: false };
       } else {
-        // an empty step (or the tail of another note, which now ends here): a new note; drag right to hold it
+        // an empty step (or the tail of another note, which now ends here): a new note, or a chord on it with the
+        // chord brush; drag right to hold it
+        const v = BK.brush > 1 ? bkBrushChord(L, n, BK.brush) : bkCompact([n], L);
         bkSetNote(L, k, v, 1); BK.drag = { L, kind: 'mel', k, v, len: 1 };
-        bkPaintMel(card, L);
+        bkPaintMel(card, L); bkHear(L, v, 2);
       }
     }
     boardEl.setPointerCapture && boardEl.setPointerCapture(e.pointerId);
@@ -652,30 +722,30 @@ function bkInit() {
       const v = steps[Math.max(0, Math.min(steps.length - 1, i0 + Math.round((e.clientX - d.x0) / 28)))];
       d.lab.firstElementChild.textContent = t('bkBarsN', { n: v }); d.v = v; return;
     }
-    if (d.kind === 'symlen') {
-      const c = Math.max(d.s, Math.min(BK_STEPS - 1, Math.floor((e.clientX - d.strip.left) / (d.strip.width / BK_STEPS))));
-      if (c - d.s + 1 === d.len) return;
-      d.len = c - d.s + 1;
-      const bar = bkBarOf(d.L); bkSetLen(bar, d.s, d.len); bkPutBar(d.L, bar); bkWritePat(d.L); bkRender();
-      d.L = BK.items.find(x => x.i === d.L.i) || d.L; return;
-    }
     const el = document.elementFromPoint(e.clientX, e.clientY), cell = el && el.closest && el.closest('.bk-cell');
     if (!cell || bkLine(cell) !== d.L) return;
     const k = +cell.dataset.k;
     if (d.kind === 'drum') {
       if (d.done.has(k)) return; d.done.add(k); clearTimeout(d.timer);
       bkPaintDrum(cell, d.v); bkSetDrum(d.L, k, d.v);
+      if (d.v === '.') bkClick('off'); else bkHear(d.L, d.v);
     } else if (d.kind === 'grab') {
       // the first clear direction decides: sideways is length, up and down is pitch
       if (!d.axis) { const dx = Math.abs(e.clientX - d.x0), dy = Math.abs(e.clientY - d.y0); if (Math.max(dx, dy) < 6) return; d.axis = dx > dy ? 'x' : 'y'; }
-      const row = cell.closest('.bk-row'), v2 = row && row.dataset.v, bar = bkBarOf(d.L);
+      const row = cell.closest('.bk-row[data-n]'), n2 = row ? +row.dataset.n : null, bar = bkBarOf(d.L);
       let changed = false;
-      if (d.axis === 'y' && v2 && v2 !== d.v) {
-        const notes = bar[d.s].split(',');
-        if (!notes.includes(v2)) { notes[notes.indexOf(d.v)] = v2; bar[d.s] = notes.join(','); d.v = v2; changed = true; }
+      if (d.axis === 'y' && n2 != null && n2 !== d.n) {
+        const cur = bkVals(bar[d.s], d.L);
+        if (d.whole) {
+          const dd = bkStepsBetween(d.L, d.n, n2);
+          if (dd) {
+            bar[d.s] = d.L.mode === 'deg' ? bar[d.s].replace(/^-?\d+/, x => String(+x + dd)) : bkCompact(cur.ns.map(m => bkScaleMove(m, dd)), d.L, cur.acc);
+            d.n = d.L.mode === 'deg' ? d.n + dd : bkScaleMove(d.n, dd); changed = true;
+          }
+        } else if (!cur.ns.includes(n2)) { bar[d.s] = bkCompact(cur.ns.map(x => x === d.n ? n2 : x), d.L, cur.acc); d.n = n2; changed = true; }
       }
       if (d.axis === 'x' && k !== d.at && k >= d.s) { bkSetLen(bar, d.s, k - d.s + 1); d.at = k; changed = true; }
-      if (changed) { d.moved = true; bkPutBar(d.L, bar); bkWritePat(d.L); bkPaintMel(d.card, d.L); }
+      if (changed) { d.moved = true; bkPutBar(d.L, bar); bkWritePat(d.L); bkPaintMel(d.card, d.L); if (d.axis === 'y') bkHear(d.L, d.whole ? bar[d.s] : bkCompact([d.n], d.L), 2); }
     } else if (k >= d.k && k - d.k + 1 !== d.len) {
       d.len = k - d.k + 1; bkSetNote(d.L, d.k, d.v, d.len); bkPaintMel(cell.closest('.bk-card'), d.L);
     }
@@ -692,8 +762,9 @@ function bkInit() {
       // a tap on a lit cell turns the note off from that step: on its first step the note goes, later it ends there
       const bar = bkBarOf(d.L);
       if (d.k0 === d.s) {
-        const notes = bar[d.s].split(',').filter(x => x !== d.v);
-        if (notes.length) { bar[d.s] = notes.join(','); bkPutBar(d.L, bar); bkWritePat(d.L); } else bkSetNote(d.L, d.s, null);
+        const cur = bkVals(bar[d.s], d.L), ns = cur.ns.filter(x => x !== d.n);
+        if (ns.length) { bar[d.s] = bkCompact(ns, d.L, cur.acc); bkPutBar(d.L, bar); bkWritePat(d.L); } else bkSetNote(d.L, d.s, null);
+        bkClick('off');
       } else { bkSetLen(bar, d.s, d.k0 - d.s); bkPutBar(d.L, bar); bkWritePat(d.L); }
     }
     bkRender();
@@ -738,6 +809,8 @@ function bkInit() {
   boardEl.addEventListener('click', e => {
     const b = e.target.closest('button'); if (!b) return;
     if (b.dataset.pick != null) { bkMenu(b); return; }
+    if (b.dataset.act === 'clicks') { BK.clicks = !BK.clicks; try { localStorage.setItem('tactus-bkclick', BK.clicks ? '1' : '0'); } catch (err) { } b.setAttribute('aria-pressed', BK.clicks); b.textContent = BK.clicks ? '🔊' : '🔈'; if (BK.clicks) bkClick('on'); return; }
+    if (b.dataset.brush) { BK.brush = +b.dataset.brush; boardEl.querySelectorAll('[data-brush]').forEach(x => x.setAttribute('aria-checked', +x.dataset.brush === BK.brush)); return; }
     if (b.dataset.add) { bkAdd(b.dataset.add); return; }
     if (b.dataset.scale) { bkKey(BK.key.root, b.dataset.scale); return; }
     if (b.dataset.goto != null) { bkGoto(+b.dataset.goto); return; }
@@ -760,7 +833,7 @@ function bkInit() {
       L.page = Math.max(0, pg - 1); BK.pages.set(L.key, L.page); BK.minBars.set(L.key, L.bars);
       bkWritePat(L, false); bkSoon(); return;
     }
-    if (b.dataset.symdel != null) { bkSetNote(L, +b.dataset.symdel, null); bkSoon(); return; }
+    if (b.dataset.chdel != null) { bkSetNote(L, +b.dataset.chdel, null); bkSoon(); return; }
     if (b.dataset.rx != null) { const r = L.rules[+b.dataset.rx]; bkWrite(L.i, p => { p.params = bkReplace(p.params, r, ''); }); return; }
     if (b.dataset.pdel != null) { const tr = L.train.slice(); tr.splice(+b.dataset.pdel, 1); bkWriteTrain(L, tr); return; }
     if (b.dataset.act === 'padd') { bkWriteTrain(L, [...L.train, L.train[L.train.length - 1]]); return; }
