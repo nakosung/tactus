@@ -177,10 +177,10 @@ function rt(name, drum) {
 function makeStrip(dest) {
   const ctx = S.ctx, bq = (type, f, q = 0.7) => { const b = ctx.createBiquadFilter(); b.type = type; b.frequency.value = f; b.Q.value = q; return b; };
   const g = v => { const n = ctx.createGain(); n.gain.value = v; return n; };
-  const r = { input: g(1), hpf: bq('highpass', 20, 0.6), low: bq('lowshelf', 200), mid: bq('peaking', 1000, 0.8), high: bq('highshelf', 6500), lpf: bq('peaking', 20000, 0.6),
+  const r = { input: g(1), trem: g(1), hpf: bq('highpass', 20, 0.6), low: bq('lowshelf', 200), mid: bq('peaking', 1000, 0.8), high: bq('highshelf', 6500), lpf: bq('peaking', 20000, 0.6),
     dist: ctx.createWaveShaper(), distG: g(1), crush: ctx.createWaveShaper(), comp: ctx.createDynamicsCompressor(), modIn: g(1), dry: g(1), duck: g(1), dS: g(0), rS: g(0), sends: new Map(), dest, st: {} };
   r.comp.threshold.value = 0; r.comp.ratio.value = 1; r.comp.attack.value = 0.005; r.comp.release.value = 0.15; r.comp.knee.value = 6;
-  r.input.connect(r.hpf); r.hpf.connect(r.low); r.low.connect(r.mid); r.mid.connect(r.high); r.high.connect(r.lpf); r.lpf.connect(r.dist); r.dist.connect(r.distG);
+  r.input.connect(r.trem); r.trem.connect(r.hpf); r.hpf.connect(r.low); r.low.connect(r.mid); r.mid.connect(r.high); r.high.connect(r.lpf); r.lpf.connect(r.dist); r.dist.connect(r.distG);
   r.distG.connect(r.crush); r.crush.connect(r.comp); r.comp.connect(r.modIn); r.modIn.connect(r.dry); r.dry.connect(r.duck);
   r.duck.connect(dest); r.duck.connect(r.dS); r.duck.connect(r.rS);
   r.dS.connect(A.dIn); r.rS.connect(A.rIn);
@@ -194,7 +194,7 @@ function stripGuard(r) {
   try {
     const gd = new AudioWorkletNode(S.ctx, 'tactus-guard', { numberOfInputs: 1, numberOfOutputs: 1, outputChannelCount: [2], channelCount: 2, channelCountMode: 'explicit', channelInterpretation: 'speakers' });
     gd.port.onmessage = e => console.warn(`Tactus: a voice produced ${e.data} broken samples (NaN or Infinity); they were silenced`);
-    r.input.disconnect(r.hpf); r.input.connect(gd); gd.connect(r.hpf); r.guard = gd;
+    const h = r.lpan || r.trem; h.disconnect(r.hpf); h.connect(gd); gd.connect(r.hpf); r.guard = gd;
   } catch (e) { }
 }
 // stereo chorus: two delays swept by slow sines in opposite phase, one per side
@@ -240,7 +240,9 @@ function stripAt(r, P, time) {
   r.high.gain.setValueAtTime(clamp(P.high || 0, -24, 12), time);
   if (P.mid || st.mid) { r.mid.gain.setValueAtTime(clamp(P.mid || 0, -24, 12), time); r.mid.frequency.setValueAtTime(clamp(P.midf || 1000, 60, 12000), time); st.mid = !!P.mid; }
   // without lpf the filter is a 0 dB bell, which passes everything untouched
-  if (P.lpf) { if (r.lpf.type !== 'lowpass') r.lpf.type = 'lowpass'; r.lpf.frequency.setValueAtTime(clamp(P.lpf, 60, Math.min(20000, S.ctx.sampleRate * 0.45)), time); }
+  // (an lfo on lpf needs the low-pass even when no lpf is written: it swings around 1500 Hz then)
+  const lpf = P.lpf || (st.lfo && st.lfo.lpf && !st.lfo.lpf.off ? 1500 : 0);
+  if (lpf) { if (r.lpf.type !== 'lowpass') r.lpf.type = 'lowpass'; r.lpf.frequency.setValueAtTime(clamp(lpf, 60, Math.min(20000, S.ctx.sampleRate * 0.45)), time); }
   else if (r.lpf.type !== 'peaking') { r.lpf.type = 'peaking'; r.lpf.gain.value = 0; }
   // distortion and bit crush only touch the waveshaper's curve when the amount changes
   const dk = Math.round(clamp(P.dist || 0, 0, 1) * 20) / 20;
@@ -265,7 +267,8 @@ function stripAt(r, P, time) {
 }
 
 // ---------- params ----------
-const BASE = { gain: 0.8, pan: 0, delay: 0, verb: 0, duck: 0, len: 1, shape: 0, detune: 18, tune: 1, dec: 1, hpf: 20, low: 0, high: 0, drive: 0, width: 0.7, vib: 0, slide: 0, acc: 0, bright: 0.6, wave: 0, sub: 0, glide: 0, vel: 1, nudge: 0, human: 0, swing: 0, sgrid: 16, comp: 0, rate: 16, tr: 0, range: 7 };
+const BASE = { gain: 0.8, pan: 0, delay: 0, verb: 0, duck: 0, len: 1, shape: 0, detune: 18, tune: 1, dec: 1, hpf: 20, low: 0, high: 0, drive: 0, width: 0.7, vib: 0, slide: 0, acc: 0, bright: 0.6, wave: 0, sub: 0, glide: 0,
+  ftype: -1, fatk: 0, fdec: -1, fsus: 0, penv: 0, pdec: 0.05, noise: 0, voices: 1, pw: 0.5, sync: 1, ring: 0, table: 0, scan: 0, fm: 2, ratio: 2, fb: 0, fmdec: 0, vowel: -1, vel: 1, nudge: 0, human: 0, swing: 0, sgrid: 16, comp: 0, rate: 16, tr: 0, range: 7 };
 // slope: filter steepness in dB/octave. hpf: default track high-pass so pads and leads leave room for kick and bass
 const INST = {
   sine: { lvl: 0.42, oct: 4, cut: 9000, res: 0.5, env: 0, atk: 0.005, dec: 0.3, sus: 0.8, rel: 0.15, slope: 12 },
@@ -279,6 +282,10 @@ const INST = {
   // octave down (sub), into a 24 dB low-pass that snaps open with each note; one note at a time, gliding (glide).
   // It plays in the Rust worklet voice (a ladder filter, synth.js / dsp/src/lib.rs); this WebAudio voice is the fallback
   mono: { lvl: 0.36, oct: 2, cut: 800, res: 1.6, env: 0.65, atk: 0.003, dec: 0.15, sus: 0.4, rel: 0.05, slope: 24, drive: 0.25, width: 0, detune: 7, hpf: 25 },
+  // the synth engine's instruments (they play in the audio worklet; these values also drive the WebAudio fallback)
+  analog: { lvl: 0.3, oct: 3, cut: 2400, res: 1, env: 0.4, atk: 0.005, dec: 0.3, sus: 0.6, rel: 0.2, slope: 24, hpf: 30, detune: 14, width: 0.6 },
+  wt: { lvl: 0.32, oct: 3, cut: 6000, res: 0.8, env: 0.2, atk: 0.005, dec: 0.4, sus: 0.7, rel: 0.25, slope: 12, hpf: 30, detune: 12, width: 0.6 },
+  fmsynth: { lvl: 0.4, oct: 3, cut: 9000, res: 0.6, env: 0, atk: 0.003, dec: 0.5, sus: 0.5, rel: 0.3, slope: 12, hpf: 30, detune: 6, width: 0.4, fmdec: 0.3 },
   acid: { lvl: 0.32, oct: 2, cut: 380, res: 14, env: 0.9, atk: 0.003, dec: 0.16, sus: 0.2, rel: 0.06, gain: 0.7, slope: 24, drive: 0.35, hpf: 40, width: 0 },
   pluck: { lvl: 0.3, oct: 4, cut: 2600, res: 2, env: 0.8, atk: 0.002, dec: 0.16, sus: 0, rel: 0.25, gain: 0.6, slope: 24, hpf: 120, width: 0.5 },
   bell: { lvl: 0.34, oct: 5, cut: 9000, res: 0.5, env: 0, atk: 0.002, dec: 1.2, sus: 0, rel: 0.8, gain: 0.45, slope: 12, hpf: 200, width: 0.4 },
@@ -438,6 +445,31 @@ function playDrum(inst, t, vel, P, out) {
     }
   }
 }
+// an lfo's value (-1..1) at cycle c: the shapes of LFO_SHAPES; rand holds a new value each period
+function lfoWave(l, c) {
+  const x = c / l.per, ph = x - Math.floor(x);
+  switch (l.shape) {
+    case 'tri': return 1 - 4 * Math.abs(ph - 0.5);
+    case 'saw': return 2 * ph - 1;
+    case 'ramp': return 1 - 2 * ph;
+    case 'square': return ph < 0.5 ? 1 : -1;
+    case 'rand': return hash01(Math.floor(x) * 7.31 + 0.7) * 2 - 1;
+    default: return Math.sin(2 * Math.PI * ph);
+  }
+}
+// formant peaks of five vowels (Hz), and how loud each is
+const VOWEL_F = [[730, 1090, 2440], [530, 1840, 2480], [270, 2290, 3010], [570, 840, 2410], [300, 870, 2240]];
+function formants(ctx, v) {
+  v = Math.max(0, Math.min(4, v));
+  const i = Math.min(3, Math.floor(v)), f = v - i, input = ctx.createGain(), output = ctx.createGain();
+  output.gain.value = 3.4;   // three narrow peaks keep less of the sound than they let through: bring the level back
+  [1, 0.5, 0.25].forEach((g, k) => {
+    const b = ctx.createBiquadFilter(), gn = ctx.createGain();
+    b.type = 'bandpass'; b.frequency.value = VOWEL_F[i][k] * (1 - f) + VOWEL_F[i + 1][k] * f; b.Q.value = [6, 9, 11][k];
+    gn.gain.value = g; input.connect(b).connect(gn).connect(output);
+  });
+  return { input, output };
+}
 function playSynth(inst, midi, t, dur, P, vel, out) {
   const ctx = S.ctx, def = INST[inst], f = mtof(midi);
   const peak = P.gain * vel * def.lvl;
@@ -448,21 +480,34 @@ function playSynth(inst, midi, t, dur, P, vel, out) {
   // filter: 12 or 24 dB/oct, light key-tracking so high notes stay as bright as low ones
   const kt = Math.pow(f / 261.6, 0.3);
   const cut = Math.max(40, Math.min(18000, P.cut * kt * (0.62 + 0.38 * Math.min(1.6, vel))));
+  // ftype: lp (12 dB), lp24, ladder (24 dB pushed a little harder), hp, bp, notch; unset, the instrument's own slope
+  const ft = Math.round(P.ftype ?? -1), ftype = ['lowpass', 'lowpass', 'lowpass', 'highpass', 'bandpass', 'notch'][ft] || 'lowpass';
+  const steep = ft === 1 || ft === 2 || (ft < 0 && (def.slope || 12) >= 24);
   const filters = [ctx.createBiquadFilter()];
-  filters[0].type = 'lowpass'; filters[0].Q.value = Math.max(0.1, P.res);
-  if ((def.slope || 12) >= 24) { const f2 = ctx.createBiquadFilter(); f2.type = 'lowpass'; f2.Q.value = 0.6; filters[0].connect(f2); filters.push(f2); }
+  filters[0].type = ftype; filters[0].Q.value = Math.max(0.1, P.res * (ft === 2 ? 1.3 : 1));
+  if (steep) { const f2 = ctx.createBiquadFilter(); f2.type = ftype; f2.Q.value = 0.6; filters[0].connect(f2); filters.push(f2); }
+  // the filter envelope: up over fatk, down over fdec (the amp's dec unless set) to fsus of the way, back at release
+  const fatk = Math.max(0, P.fatk || 0), fdec = Math.max(0.01, P.fdec > 0 ? P.fdec : dec), fsus = Math.max(0, Math.min(1, P.fsus || 0));
+  const top = Math.min(18000, cut * (1 + P.env * 10));
   for (const fl of filters) {
-    if (P.env > 0) { fl.frequency.setValueAtTime(Math.min(18000, cut * (1 + P.env * 10)), t); fl.frequency.setTargetAtTime(cut, t + 0.002, dec / 3); }
-    else fl.frequency.setValueAtTime(cut, t);
+    const q = fl.frequency;
+    if (P.env > 0) {
+      if (fatk > 0) { q.setValueAtTime(cut, t); q.linearRampToValueAtTime(top, t + fatk); } else q.setValueAtTime(top, t);
+      q.setTargetAtTime(cut + (top - cut) * fsus, t + fatk + 0.002, fdec / 3);
+      if (fsus > 0) q.setTargetAtTime(cut, tOff, rel / 4);
+    } else q.setValueAtTime(cut, t);
   }
   let input = filters[0];
-  const drive = (P.drive || 0) + (P.shape || 0);
+  const drive = (P.drive || 0) + (P.shape || 0) + (ft === 2 ? 0.2 : 0);
   if (drive > 0) { const ws = ctx.createWaveShaper(); ws.curve = curve(drive); ws.oversample = '2x'; ws.connect(filters[0]); input = ws; }
   const amp = ctx.createGain(), a = amp.gain;
   a.setValueAtTime(0, t); a.linearRampToValueAtTime(peak, t + atk);
   a.setTargetAtTime(peak * sus, t + atk, dec / 3);
   a.setTargetAtTime(0, tOff, rel / 4);
-  filters[filters.length - 1].connect(amp); amp.connect(panTo(out, P.pan));
+  // vowel: three formant peaks after the filter (a e i o u, or anything between)
+  if (P.vowel >= 0) { const fb = formants(ctx, P.vowel); filters[filters.length - 1].connect(fb.input); fb.output.connect(amp); }
+  else filters[filters.length - 1].connect(amp);
+  amp.connect(panTo(out, P.pan));
   const oscs = [];
   const osc = (type, freq, cents = 0, gain = 1, pan = 0, dest = input) => {
     const o = ctx.createOscillator(); o.type = type; o.frequency.value = freq; o.detune.value = cents + drift;
@@ -537,7 +582,41 @@ function playSynth(inst, midi, t, dur, P, vel, out) {
       tine.frequency.value = f * 14; envExp(tg.gain, t, 0.05, 0.08); tine.connect(tg).connect(input); oscs.push(tine);
       break;
     }
-    default: osc({ sine: 'sine', tri: 'triangle', saw: 'sawtooth', square: 'square' }[inst] || 'triangle', f);
+    // without the audio worklet the engine's instruments fall back to these: analog and wt to saws (and pulses),
+    // fmsynth to a two-operator FM pair
+    case 'fmsynth': {
+      const n = Math.max(1, Math.min(7, Math.round(P.voices || 1)));
+      for (let k = 0; k < n; k++) {
+        const x = n > 1 ? k / (n - 1) - 0.5 : 0, c = osc('sine', f, (P.detune || 0) * x, 0.9 / Math.sqrt(n), x * 2 * W), m = ctx.createOscillator(), mg = ctx.createGain();
+        m.frequency.value = f * Math.max(0.01, P.ratio || 2); m.detune.value = c.detune.value;
+        const idx = Math.max(0, P.fm || 0) * f * Math.max(0.01, P.ratio || 2);
+        mg.gain.setValueAtTime(idx, t); if (P.fmdec > 0) mg.gain.setTargetAtTime(idx * 0.2, t, P.fmdec / 3);
+        m.connect(mg).connect(c.frequency); oscs.push(m);
+      }
+      break;
+    }
+    default: {
+      const type = { sine: 'sine', tri: 'triangle', saw: 'sawtooth', square: 'square', analog: 'sawtooth', wt: 'sawtooth' }[inst] || 'triangle';
+      // unison: voices oscillators spread over detune cents and across the stereo width
+      const n = Math.max(1, Math.min(7, Math.round(P.voices || 1)));
+      if (n === 1) osc(type, f);
+      else for (let k = 0; k < n; k++) { const x = k / (n - 1) - 0.5; osc(type, f, (P.detune || 0) * x, 1 / Math.sqrt(n), x * 2 * W); }
+      if (inst === 'analog' && P.wave > 0) osc('square', f, 0, Math.min(1, P.wave));
+    }
+  }
+  if (P.sub > 0 && inst !== 'mono') osc('square', f / 2, 0, 0.55 * Math.min(1, P.sub));
+  // noise, mixed in before the filter
+  if (P.noise > 0) { const nz = ctx.createBufferSource(), ng = ctx.createGain(); nz.buffer = A.noise; nz.loop = true; ng.gain.value = Math.min(1, P.noise) * 0.6; nz.connect(ng).connect(input); nz._offset = Math.random(); oscs.push(nz); }
+  // pitch envelope: penv semitones above (or below) at the start, back to the note over pdec
+  if (P.penv) for (const o of oscs) if (o instanceof OscillatorNode) { const base = o.detune.value; o.detune.setValueAtTime(base + P.penv * 100, t); o.detune.setTargetAtTime(base, t, Math.max(0.005, P.pdec) / 3); }
+  // the note's lfos: cut and pitch move inside the note, locked to the tempo
+  for (const l of P._lfos || []) {
+    if (l.target !== 'cut' && l.target !== 'pitch') continue;
+    const cs = ctx.createConstantSource(), len = tEnd - t, n = Math.max(2, Math.ceil(len * 200)), cv = new Float32Array(n), cps = S.cps || (S.bpm || 120) / 240;
+    for (let i = 0; i < n; i++) { const v = l.depth * lfoWave(l, (P._c || 0) + i / (n - 1) * len * cps); cv[i] = l.target === 'cut' ? Math.max(v, 30 - cut) : v; }
+    cs.offset.value = 0; cs.offset.setValueCurveAtTime(cv, t, len);
+    if (l.target === 'cut') filters.forEach(fl => cs.connect(fl.frequency)); else oscs.forEach(o => { if (o instanceof OscillatorNode) cs.connect(o.detune); });
+    cs.start(t); cs.stop(tEnd);
   }
   // vibrato fades in after the attack, like a player settling into the note
   if (P.vib > 0) {
@@ -657,6 +736,7 @@ function playEvents(def, pa, pb, off) {
     if (inPause(c)) continue;
     const P = def.kind === 'loop' ? loopParams(def, ev.s) : evalParams(def, ev.s);
     if (ev.pan !== undefined) P.pan = ev.pan;   // jux
+    P._lfos = def.lfos; P._c = c - patOrigin(c);
     // groove: swing on a chosen grid (track swing overrides the global one), nudge, humanize
     const sw = def.params.swing ? P.swing : S.swing, grid = P.sgrid || 16;
     if (sw) { const x = ev.s * grid, rr = Math.round(x); if (Math.abs(x - rr) < 1e-6 && mod(rr, 2) === 1) c += sw / grid; }
@@ -720,8 +800,44 @@ function scheduleRange(a, b) {
   }
   scheduleRange2(a, b);
 }
+// Channel lfos (gain, pan, lpf, hpf on any track): each moves its value through a constant source added onto the
+// strip's own, its curve written one scheduling window at a time so it runs on without a seam.
+const STRIP_LFO = { gain: r => r.trem.gain, pan: r => stripPan(r).pan, lpf: r => r.lpf.frequency, hpf: r => r.hpf.frequency };
+// the auto-pan goes in only when a pan lfo asks for it: a panner turns a mono voice into a quieter stereo one even at centre
+function stripPan(r) {
+  if (r.lpan) return r.lpan;
+  const p = S.ctx.createStereoPanner(), next = r.guard || r.hpf;
+  r.trem.disconnect(next); r.trem.connect(p); p.connect(next); r.lpan = p;
+  return p;
+}
+function stripLfos(a, b) {
+  const ctx = S.ctx, now = ctx.currentTime, ta0 = timeOf(a), tb = timeOf(b);
+  for (const name of S.order) {
+    const def = S.tracks.get(name); if (!def || def.kind === 'loop') continue;
+    const r = S.rt.get(name); if (!r) continue;
+    const want = new Map((def.lfos || []).filter(l => STRIP_LFO[l.target]).map(l => [l.target, l]));
+    const st = r.st.lfo || (r.st.lfo = {});
+    for (const tg of Object.keys(STRIP_LFO)) {
+      const l = want.get(tg); let x = st[tg];
+      if (!l) { if (x && !x.off) { x.src.offset.cancelScheduledValues(now); x.src.offset.setValueAtTime(0, now); x.off = true; } continue; }
+      if (!x) { x = st[tg] = { src: ctx.createConstantSource(), until: 0 }; x.src.offset.value = 0; x.src.connect(STRIP_LFO[tg](r)); x.src.start(); }
+      x.off = false;
+      if (x.until > now + 2) { x.src.offset.cancelScheduledValues(now); x.until = now; }   // a stop and start moved the clock
+      const ta = Math.max(ta0, x.until, now + 0.005); if (tb - ta < 0.004) continue;
+      const P = evalParams(def, a), n = Math.max(2, Math.ceil((tb - ta) * 200)), cv = new Float32Array(n);
+      const c0 = a + (ta - ta0) * S.cps, cps = S.cps;
+      for (let i = 0; i < n; i++) {
+        const c = c0 + i / (n - 1) * (tb - ta) * cps, w = lfoWave(l, c - patOrigin(c));
+        cv[i] = tg === 'gain' ? -Math.min(1, l.depth) * (0.5 - 0.5 * w) : tg === 'pan' ? l.depth * w
+          : tg === 'lpf' ? Math.max(l.depth * w, 60 - (P.lpf || 1500)) : Math.max(l.depth * w, 20 - (P.hpf ?? 20));
+      }
+      try { x.src.offset.setValueCurveAtTime(cv, ta, tb - ta); x.until = tb; } catch (e) { x.src.offset.cancelScheduledValues(ta); }
+    }
+  }
+}
 function scheduleRange2(a, b) {
   autoSched(a, b);
+  stripLfos(a, b);
   for (const [pa, pb, off] of mapSpan(a, b))
   {
     for (const name of S.order) { const def = S.tracks.get(name); if (def) playEvents(def, pa, pb, off); }

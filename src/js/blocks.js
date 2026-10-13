@@ -709,7 +709,10 @@ function bkPress(L, what, steps = 1) {
   for (const a of BK_AUD) bkRelease(a, true);
   const ctx = S.ctx, now = ctx.currentTime, cps = (S.bpm || 120) / 240, t0 = now + 0.02, r = pvStrip();
   const g = ctx.createGain(); g.connect(r.input);
-  const r2 = { ...r, input: g }, hold = Math.min(4, 3 * cps);   // scheduled long; the release ends it sooner
+  // scheduled long, and the release ends it sooner; a worklet voice (acid, mono, the engine) cannot be faded from here,
+  // so it gets the note's own length instead
+  const wk = WK.ok && ['acid', 'zither', 'mono', 'analog', 'wt', 'fmsynth'].includes(def.inst);
+  const r2 = { ...r, input: g }, hold = wk ? Math.min(1, Math.max(steps / BK_STEPS, 0.22 * cps)) : Math.min(4, 3 * cps);
   try { for (const w of what.slice(0, 8)) pvPlayEvent(def, { v: w.v, s: w.s || 0, d: hold, loc: {} }, t0, cps, w.s || 0, r2, g); } catch (err) { }
   const a = { g, t0, min: Math.max(0.2, Math.min(0.8, steps / BK_STEPS / cps)) };
   BK_AUD.add(a); return a;

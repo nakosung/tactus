@@ -365,19 +365,21 @@ const DRUMS = ['kick', 'snare', 'clap', 'hat', 'ohat', 'rim', 'tom', 'ride', 'cr
   // Korean percussion: janggu low and high heads, buk and its shell, jing, kkwaenggwari open and muted
   'kung', 'deok', 'buk', 'buktak', 'jing', 'kkwaeng', 'kkwaengm'];
 const LOOPS = ['loop1', 'loop2', 'loop3', 'loop4'];
-const SYNTHS = ['sine', 'tri', 'saw', 'square', 'supersaw', 'pad', 'bass', 'mono', 'acid', 'pluck', 'bell', 'flute', 'bowed', 'epiano', 'zither', 'piano', 'vibes', 'harp', 'sax', 'dantranh', 'harpsi', 'marimba', 'kalimba', 'swarm', 'choir', 'plate', 'membrane', 'nsax', 'upright'];
+const SYNTHS = ['sine', 'tri', 'saw', 'square', 'supersaw', 'pad', 'bass', 'mono', 'analog', 'wt', 'fmsynth', 'acid', 'pluck', 'bell', 'flute', 'bowed', 'epiano', 'zither', 'piano', 'vibes', 'harp', 'sax', 'dantranh', 'harpsi', 'marimba', 'kalimba', 'swarm', 'choir', 'plate', 'membrane', 'nsax', 'upright'];
 const NAME_INST = [
   ['kung', 'kung'], ['deok', 'deok'], ['janggu', 'kung'], ['buktak', 'buktak'], ['buk', 'buk'], ['kkwaengm', 'kkwaengm'], ['kkwaeng', 'kkwaeng'], ['kkwang', 'kkwaeng'],
   ['kick', 'kick'], ['bd', 'kick'], ['snare', 'snare'], ['sd', 'snare'], ['clap', 'clap'], ['cp', 'clap'],
   ['ohat', 'ohat'], ['open', 'ohat'], ['oh', 'ohat'], ['hat', 'hat'], ['hh', 'hat'], ['rim', 'rim'], ['tom', 'tom'],
-  ['bass', 'bass'], ['sub', 'sine'], ['mono', 'mono'], ['acid', 'acid'], ['lead', 'supersaw'], ['pad', 'pad'], ['chord', 'pad'],
+  ['bass', 'bass'], ['sub', 'sine'], ['mono', 'mono'], ['acid', 'acid'], ['reese', 'analog'], ['hoover', 'analog'], ['analog', 'analog'], ['wavetable', 'wt'], ['growl', 'wt'], ['wt', 'wt'], ['fm', 'fmsynth'], ['lead', 'supersaw'], ['pad', 'pad'], ['chord', 'pad'],
   ['arp', 'pluck'], ['pluck', 'pluck'], ['stab', 'pluck'], ['bell', 'bell'],
   ['ride', 'ride'], ['crash', 'crash'], ['cym', 'crash'], ['shaker', 'shaker'], ['shk', 'shaker'],
   ['gayageum', 'zither'], ['zither', 'zither'], ['koto', 'zither'], ['guitar', 'zither'],
   ['upright', 'upright'], ['dbass', 'upright'], ['contrabass', 'upright'], ['grand', 'piano'], ['vibe', 'vibes'], ['harpsi', 'harpsi'], ['cembalo', 'harpsi'], ['harp', 'harp'], ['sax', 'sax'], ['marimba', 'marimba'], ['kalimba', 'kalimba'], ['dantranh', 'dantranh'], ['jing', 'jing'],
   ['swarm', 'swarm'], ['choir', 'choir'], ['plate', 'plate'], ['membrane', 'membrane'], ['timp', 'membrane'], ['nsax', 'nsax'], ['daegeum', 'flute'], ['flute', 'flute'], ['haegeum', 'bowed'], ['string', 'bowed'], ['keys', 'epiano'], ['rhodes', 'epiano'], ['piano', 'piano'],
 ];
-const PARAMS = ['gain', 'pan', 'oct', 'cut', 'res', 'env', 'atk', 'dec', 'sus', 'rel', 'len', 'delay', 'verb', 'duck', 'shape', 'detune', 'tune', 'slices', 'hpf', 'low', 'high', 'drive', 'width', 'vib', 'slide', 'acc', 'bright', 'wave', 'sub', 'glide', 'vel', 'nudge', 'human', 'swing', 'sgrid', 'comp', 'rate', 'tr', 'range', 'seed', 'dens', 'evolve', 'bars',
+const PARAMS = ['gain', 'pan', 'oct', 'cut', 'res', 'env', 'atk', 'dec', 'sus', 'rel', 'len', 'delay', 'verb', 'duck', 'shape', 'detune', 'tune', 'slices', 'hpf', 'low', 'high', 'drive', 'width', 'vib', 'slide', 'acc', 'bright', 'wave', 'sub', 'glide',
+  // the synth engine: filter envelope and type, pitch envelope, noise, unison, pulse width, sync, ring, wavetable, FM, vowel
+  'fatk', 'fdec', 'fsus', 'ftype', 'penv', 'pdec', 'noise', 'voices', 'pw', 'sync', 'ring', 'table', 'scan', 'fm', 'ratio', 'fb', 'fmdec', 'vowel', 'vel', 'nudge', 'human', 'swing', 'sgrid', 'comp', 'rate', 'tr', 'range', 'seed', 'dens', 'evolve', 'bars',
   // channel strip: more EQ, insert effects, compressor detail
   'lpf', 'mid', 'midf', 'chorus', 'phaser', 'dist', 'crush', 'thr', 'ratio', 'catk', 'crel',
   // only on 'bus delay', 'bus verb' and 'master' lines
@@ -386,6 +388,17 @@ const RETURN_ONLY = ['time', 'fb', 'pre', 'limit'];
 // names of the code's own buses: each also works as a send parameter on track lines (set while compiling)
 let BUS_NAMES = new Set();
 const EXP_PARAMS = new Set(['cut', 'hpf', 'lpf', 'midf']);
+// values that can be written as words: ftype lp, table growl, vowel a (a pattern of them works too: vowel <a o>)
+const WORD_VALS = {
+  ftype: { lp: 0, lp24: 1, ladder: 2, hp: 3, bp: 4, notch: 5 },
+  table: { basic: 0, pwm: 1, sync: 2, formant: 3, growl: 4, fm: 5, organ: 6, fold: 7 },
+  vowel: { a: 0, e: 1, i: 2, o: 3, u: 4 },
+};
+// lfo <target> <period in bars, 1/8 is an eighth note> [shape] [depth]: a tempo-locked wobble on one value.
+// gain, pan, lpf and hpf move the whole channel; the rest move each note of the synth
+const LFO_TARGETS = ['cut', 'res', 'pitch', 'scan', 'pw', 'fm', 'vowel', 'sync', 'noise', 'gain', 'pan', 'lpf', 'hpf'];
+const LFO_SHAPES = ['sine', 'tri', 'saw', 'ramp', 'square', 'rand'];
+const LFO_DEPTH = { cut: 600, res: 2, pitch: 30, scan: 0.3, pw: 0.2, fm: 2, vowel: 2, sync: 1, noise: 0.2, gain: 0.5, pan: 0.8, lpf: 2000, hpf: 300 };
 const GLOBALS = new Set(['bpm', 'key', 'scale', 'swing', 'prog', 'scene', 'song', 'master', 'seed', 'fx', 'auto', 'let', 'sample', 'space', 'viz', 'shader', 'bus']);
 // generator parameters shape the notes, so they are part of the pattern rather than the sound
 const GEN_PARAMS = ['seed', 'dens', 'evolve', 'bars'];
@@ -499,7 +512,7 @@ function parseParams(src, base) {
   const chunks = splitChunks(src, base);
   const params = {};
   let inst = null, fixed = false, speed = 1, voicing = null, arp = null;
-  const every = [], tf = [];
+  const every = [], tf = [], lfos = [];
   for (let i = 0; i < chunks.length; i++) {
     const w = chunks[i].s;
     if (isInst(w)) { inst = w; continue; }
@@ -523,9 +536,21 @@ function parseParams(src, base) {
       speed *= w === 'fast' ? +c.s : 1 / +c.s;
       continue;
     }
+    if (w === 'lfo') {
+      const tg = chunks[++i], rc = chunks[++i], at = chunks[i - 2].c0;
+      if (!tg || !LFO_TARGETS.includes(tg.s)) throw new PErr(t('lfoFmt', { list: LFO_TARGETS.join(' ') }), tg ? tg.c0 : at);
+      const fr = rc && /^(\d+)\/(\d+)$/.exec(rc.s), per = fr ? +fr[1] / +fr[2] : rc && RE_NUM.test(rc.s) ? +rc.s : 0;
+      if (!(per > 0)) throw new PErr(t('lfoFmt', { list: LFO_TARGETS.join(' ') }), rc ? rc.c0 : tg.c0);
+      let shape = 'sine', depth = LFO_DEPTH[tg.s];
+      if (chunks[i + 1] && LFO_SHAPES.includes(chunks[i + 1].s)) shape = chunks[++i].s;
+      if (chunks[i + 1] && RE_NUM.test(chunks[i + 1].s)) depth = +chunks[++i].s;
+      lfos.push({ target: tg.s, per, shape, depth });
+      continue;
+    }
     if (PARAMS.includes(w) || BUS_NAMES.has(w)) {
-      const c = chunks[++i];
+      let c = chunks[++i];
       if (!c) throw new PErr(t('needVal', { w }), chunks[i - 1].c0);
+      if (WORD_VALS[w]) { const m = WORD_VALS[w]; c = { ...c, s: c.s.replace(/[a-z]\w*/gi, x => x in m ? String(m[x]) : x) }; }
       const v = parseValue(c);
       if (!v) throw new PErr(t('badVal', { v: c.s, w }), c.c0);
       params[w] = v;
@@ -533,7 +558,7 @@ function parseParams(src, base) {
     }
     throw new PErr(t('unknownParam', { w }), chunks[i].c0);
   }
-  return { params, inst, fixed, speed, voicing, arp, every, tf };
+  return { params, inst, fixed, speed, voicing, arp, every, tf, lfos };
 }
 // a change to a pattern, as every, jux, sometimes, chunk and superimpose take it: rev inv skip fast K slow K ply K +K -K
 function fnAt(chunks, i, errKey) {
@@ -769,7 +794,7 @@ function parseLine(text) {
   for (const ev of pr.every) p = everyWrap(p, ev.n, ev.fn);
   const inst = pr.inst || instForName(name);
   return {
-    type: 'track', name, pat: p, params: pr.params, inst, fixed: pr.fixed, opts: { voicing: pr.voicing, arp: pr.arp }, gen: spec,
+    type: 'track', name, pat: p, params: pr.params, lfos: pr.lfos, inst, fixed: pr.fixed, opts: { voicing: pr.voicing, arp: pr.arp }, gen: spec,
     kind: isHit(inst) ? 'drum' : LOOPS.includes(inst) ? 'loop' : 'synth',
     chop: patSrc.trim() !== '',
     patKey: inst + '|' + patSrc.replace(/\s+/g, ' ').trim() + '|' + pr.speed + '|' + pr.every.map(x => x.src).join(',') + '|' + pr.tf.map(x => x.src).join(',') + varsUsed.map(n => '|$' + n + '=' + VARS.get(n).src).join('') + (spec ? `|g${spec.seed},${spec.dens},${spec.bars},${spec.evolve},${spec.range}` : ''),

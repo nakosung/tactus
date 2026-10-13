@@ -48,6 +48,16 @@ for (const w of ['scramble 4', 'shuffle 4']) assert.strictEqual(evs('lead c4 d4 
   assert.deepStrictEqual(JSON.parse(kinds('d x . | mykick')), [[], ['mykick:drum']], 'a dropped file plays by its name');
   assert.deepStrictEqual(JSON.parse(kinds('sample mykick c2\nd 0 2 | mykick')), [[], ['mykick:synth']], 'code can re-pitch a dropped file');
   run('USER_SOUNDS.clear()'); }
+// the synth engine's words and lfos
+{ const info = code => JSON.parse(run(`(() => { const r = compile(${JSON.stringify(code)}); const d = r.tracks.get('a'); return JSON.stringify({ err: [...r.errors].map(e => e[1].msg), inst: d && d.inst, p: d && Object.fromEntries(Object.entries(d.params).map(([k, v]) => [k, v.k === 'num' ? v.v : v.k])), lfos: d && d.lfos }); })()`));
+  let x = info('a 0 _ | analog voices 5 detune 30 ftype ladder table growl vowel o lfo cut 1/8 tri 800 lfo pan 2');
+  assert.deepStrictEqual(x.err, []); assert.strictEqual(x.inst, 'analog');
+  assert.deepStrictEqual([x.p.ftype, x.p.table, x.p.vowel, x.p.voices], [2, 4, 3, 5], 'words become numbers');
+  assert.deepStrictEqual(x.lfos, [{ target: 'cut', per: 0.125, shape: 'tri', depth: 800 }, { target: 'pan', per: 2, shape: 'sine', depth: 0.8 }], 'lfo lines');
+  x = info('a 0 | wt vowel <a i u>'); assert.deepStrictEqual([x.err, x.p.vowel], [[], 'pat'], 'a pattern of vowels');
+  for (const bad of ['a 0 | lfo wob 1', 'a 0 | lfo cut', 'a 0 | lfo cut 0', 'a 0 | ftype round']) assert.ok(info(bad).err.length, 'should be an error: ' + bad);
+  assert.strictEqual(info('reese 0').inst, undefined); assert.strictEqual(JSON.parse(run(`JSON.stringify(compile('reese 0').tracks.get('reese').inst)`)), 'analog', 'reese is an analog voice');
+}
 // Pattern time follows the song start: a written-out piece loaded at bar 12 plays its first bar there.
 const first = run(`(() => { const d = compile('rh <c4 d4 e4>').tracks.get('rh'); const at = c => cycleEvents(d, c).map(e => e.v + '@' + e.s).join(' ');
   const a = at(0); setPatOrigin(() => 12); const b = at(12); setPatOrigin(() => 0); return JSON.stringify([a, b]); })()`);

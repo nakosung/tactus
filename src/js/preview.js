@@ -38,6 +38,7 @@ function pvEvents(def, k, play) {
 // play one event the way the scheduler would, into strip r (or a bare output when rendering a thumbnail)
 function pvPlayEvent(def, e, time, cps, c, r, out) {
   const P = evalParams(def, e.s);
+  P._lfos = def.lfos; P._c = c;
   if (r) stripAt(r, P, time);
   if (e.pan !== undefined) P.pan = e.pan;
   const vel = accentOf(e.v) * (P.vel ?? 1) * (e.amp ?? 1), dur = e.d / cps * P.len;
