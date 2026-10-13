@@ -16,7 +16,7 @@
 // (a change waits for the next bar to be heard, but the cards follow the code at once).
 
 // var, not const: evaluate() in ui.js asks for a redraw, and the first evaluate runs before this file does
-var BK = { picks: [], view: 'code', busy: false, items: [], drag: null, flashLine: -1, step: -1, timer: 0, raf: 0, pages: new Map(), minBars: new Map(), brush: 1, sel: null, lastLen: new Map(), rowSpan: new Map(), clicks: (() => { try { return localStorage.getItem('tactus-bkclick') !== '0'; } catch (e) { return true; } })(), key: { root: 9, scale: 'minor' }, prog: null, song: null, scenes: [] };
+var BK = { picks: [], view: 'code', busy: false, items: [], drag: null, flashLine: -1, step: -1, timer: 0, raf: 0, pages: new Map(), minBars: new Map(), brush: 1, sel: null, lastLen: new Map(), rowSpan: new Map(), clicks: (() => { try { return localStorage.getItem('tactus-bkclick') !== '0'; } catch (e) { return true; } })(), key: { root: 9, scale: 'minor' }, prog: null, song: null, scenes: [], synOpen: new Set() };
 const BK_STEPS = 16, BK_MAXBARS = 16;
 const BK_STICKERS = [
   { k: 'gain', min: 0, max: 1.2, step: 0.01, def: 0.8 },
@@ -607,12 +607,14 @@ function bkRender() {
     L.rules = bkRules(p.params);
     const rules = L.rules.map((x, j) => bkRuleHTML(x, j, kind !== 'drum')).join('');
     const more = bkMoreMenu(L, missing);
+    const syn = kind !== 'drum' && kind !== 'loop' && SYNTHS.includes(def.inst), synOpen = syn && BK.synOpen.has(name);
+    const synBtn = syn ? `<button class="bk-synbtn" data-act="syn" aria-expanded="${synOpen}">〰 ${esc(t('bkSyn'))}</button>` : '';
     const m = S.muted.has(name), so = S.solo.has(name);
     cards.push(`<article class="bk-card${err ? ' bad' : ''}${m ? ' muted' : ''}${L.rules.length ? ' ruled' : ''}" data-i="${i}" data-sort="card" style="--tc:${col}">
       <header><span class="bk-ico" aria-hidden="true">${BK_ICON(def.inst)}</span><span class="bk-nm"><b>${esc(name)}</b><small>${esc(bkName(def.inst))}</small></span>
         <button class="bk-tg${m ? ' on' : ''}" data-act="mute" aria-pressed="${m}" title="${esc(t('bkMute'))}">M</button><button class="bk-tg${so ? ' on' : ''}" data-act="solo" aria-pressed="${so}" title="${esc(t('bkSolo'))}">S</button><button class="bk-x" data-act="del" title="${esc(t('bkDel'))}" aria-label="${esc(t('bkDel'))} ${esc(name)}">×</button></header>
-      ${err ? `<p class="bk-err">${esc(err.msg)}</p>` : ''}${body}
-      <div class="bk-foot">${rules ? `<span class="bk-rules" title="${esc(t('bkRuleHint'))}">${rules}</span>` : ''}${st}${more}</div>
+      ${err ? `<p class="bk-err">${esc(err.msg)}</p>` : ''}${body}${synOpen ? bkSynHTML(L) : ''}
+      <div class="bk-foot">${synBtn}${rules ? `<span class="bk-rules" title="${esc(t('bkRuleHint'))}">${rules}</span>` : ''}${st}${more}</div>
     </article>`);
   });
   // the top: tempo, key note, mood (bright, sad, or any other scale), chords
@@ -649,6 +651,7 @@ function bkRender() {
     ${songBox}
     ${other ? `<p class="bk-other">${esc(t('bkOther', { n: other }))}</p>` : ''}`;
   BK.step = -1; BK.nowSig = '';
+  for (const L of BK.items) if (L.syn) bkSynDraw(L);
   bkFocusRoll();
 }
 
@@ -993,6 +996,7 @@ function bkInit() {
     const s = e.target;
     if (s.id === 'bkBpm') { s.parentElement.querySelector('b').textContent = s.value; BK.busy = true; return; }
     if (s.type !== 'range') return;
+    if (s.dataset.syn) { const L = bkLine(s); if (!L) return; const k = s.dataset.syn, v = +s.value; s.nextElementSibling.textContent = `${k} ${bkNumS(v)}`; BK.busy = true; bkWrite(L.i, p => { p.params = bkSetParam3(p.params, k, v); }, { live: true }); return; }
     const L = bkLine(s), spec = BK_STICKERS.find(x => x.k === s.dataset.k); if (!L || !spec) return;
     const v = spec.log ? Math.exp(+s.value) : +s.value;
     s.nextElementSibling.textContent = `${spec.k} ${v >= 100 ? Math.round(v) : +v.toFixed(2)}`;
@@ -1004,6 +1008,7 @@ function bkInit() {
     if (s.id === 'bkRoot') { bkKey(+s.value, BK.key.scale); return; }
     if (s.id === 'bkScale') { bkKey(BK.key.root, s.value); return; }
     const L = bkLine(s);
+    if (L && s.dataset.table) { bkWrite(L.i, p => { p.params = bkSetWord(p.params, 'table', s.value); }); bkSynHear(L); return; }
     if (L && s.dataset.rf) { bkRuleEdit(L, +s.closest('.bk-rule').dataset.r, s.dataset.rf, s.value); return; }
     if (L && s.dataset.act === 'more' && s.value) {
       const [kind, what] = s.value.split(':');
@@ -1050,6 +1055,8 @@ function bkInit() {
     if (b.dataset.rx != null) { const r = L.rules[+b.dataset.rx]; bkWrite(L.i, p => { p.params = bkReplace(p.params, r, ''); }); return; }
     if (b.dataset.pdel != null) { const tr = L.train.slice(); tr.splice(+b.dataset.pdel, 1); bkWriteTrain(L, tr); return; }
     if (b.dataset.act === 'padd') { bkWriteTrain(L, [...L.train, L.train[L.train.length - 1]]); return; }
+    if (b.dataset.act === 'syn') { toggleSet(BK.synOpen, L.name); bkRender(); return; }
+    if (b.dataset.ft != null) { bkWrite(L.i, p => { p.params = bkSetWord(p.params, 'ftype', b.dataset.ft); }); bkSynHear(L); return; }
     if (b.dataset.act === 'mute') { toggleSet(S.muted, L.name); syncLoopVols(); render(); bkRender(); }
     else if (b.dataset.act === 'solo') { toggleSet(S.solo, L.name); syncLoopVols(); render(); bkRender(); }
     else if (b.dataset.act === 'del') bkDelete(L);
@@ -1132,6 +1139,7 @@ function bkView(v, save = true) {
 // the song part playing light up too
 function bkTick(c) {
   if (BK.view === 'code' || !boardEl) return;
+  if (BK.synOpen.size) bkScopes();
   const k = c < 0 ? -1 : Math.floor(mod(c, 1) * BK_STEPS), pb = c < 0 ? -1 : Math.floor(c - patOrigin(c) + 1e-9);
   const cur = c >= 0 ? sceneNameAt(c) : null, sig = `${k}|${pb}|${cur ? cur.name + (cur.part ? S.song.parts.indexOf(cur.part) : '') : ''}`;
   if (sig === BK.nowSig) return;
@@ -1153,4 +1161,144 @@ function bkTick(c) {
     if (cur.part && S.song) { const car = boardEl.querySelector(`.bk-car[data-car="${S.song.parts.indexOf(cur.part)}"]`); if (car) car.classList.add('now'); }
   }
 }
+
+// ---------- the sound shape: envelope, filter and a scope for a synth track ----------
+// Three small drawings on the code screen's colours. Drag the envelope's points (attack, decay and sustain, release) or
+// the filter's point (cutoff across, resonance up and down); each drag writes just that value after |, as the stickers
+// do. When the music is stopped, letting go plays a note, so the change is heard.
+const BK_FT = ['lp', 'lp24', 'ladder', 'hp', 'bp', 'notch'];
+const BK_SYN_R = { atk: [0.001, 2], dec: [0.01, 3], rel: [0.01, 3], sus: [0, 1], cut: [60, 16000], res: [0.5, 15] };
+function bkSetParam3(params, k, v) {
+  const s = bkNumS(v);
+  if (params == null) return ` ${k} ${s}`;
+  const re = new RegExp(`(^|\\s)(${k}\\s+)(\\S+)`);
+  return re.test(params) ? params.replace(re, (m, a, b) => a + b + s) : params.replace(/\s*$/, '') + ` ${k} ${s}`;
+}
+function bkSetWord(params, k, w) { return bkSetParam3(params, k, 0).replace(new RegExp(`(^|\\s)(${k}\\s+)(\\S+)`), (m, a, b) => a + b + w); }
+function bkWord(params, k) { const m = params && new RegExp(`(^|\\s)${k}\\s+(\\S+)`).exec(params); return m ? m[2] : null; }
+// what the track plays with: the line's own values, else the instrument's, else the defaults
+function bkSynVals(L) {
+  const pr = L.pp ? L.pp.params : null, I = INST[L.inst] || {}, o = {};
+  for (const k of ['atk', 'dec', 'sus', 'rel', 'cut', 'res', 'env']) { const v = bkParam(pr, k); o[k] = typeof v === 'number' ? v : I[k] != null ? I[k] : BASE[k] != null ? BASE[k] : 0; }
+  const ft = bkWord(pr, 'ftype');
+  o.ft = BK_FT.includes(ft) ? ft : ['analog', 'mono'].includes(L.inst) ? (L.inst === 'mono' ? 'ladder' : 'lp24') : I.slope === 24 ? 'lp24' : 'lp';
+  o.ftSet = BK_FT.includes(ft);
+  o.table = bkWord(pr, 'table') || 'basic'; const sc = bkParam(pr, 'scan'); o.scan = typeof sc === 'number' ? sc : 0;
+  return o;
+}
+function bkSynHTML(L) {
+  const v = L.syn = bkSynVals(L);
+  const fts = BK_FT.map(f => `<button data-ft="${f}" aria-pressed="${f === v.ft}">${f}</button>`).join('');
+  const wt = L.inst === 'wt' ? `<label class="bk-synw">${esc(t('bkSynTable'))} <select data-table="1">${WT_NAMES.map(n => `<option${n === v.table ? ' selected' : ''}>${n}</option>`).join('')}</select></label><label class="bk-synw"><input type="range" data-syn="scan" min="0" max="1" step="0.01" value="${v.scan}"><code>scan ${bkNumS(v.scan)}</code></label>` : '';
+  return `<div class="bk-syn"><div class="bk-synbox"><canvas class="bk-syncv" data-syncv="1" aria-label="${esc(t('bkSynHint'))}" title="${esc(t('bkSynHint'))}"></canvas><canvas class="bk-synsc" aria-hidden="true"></canvas></div>
+    <div class="bk-synrow"><span class="seg bk-ft" role="group" aria-label="${esc(t('bkSynFt'))}">${fts}</span>${wt}<code class="bk-synval"></code></div></div>`;
+}
+// where things are drawn, in css pixels: the envelope on the left, the filter in the middle, the scope on the right
+function bkSynGeo(cv) {
+  const w = cv.clientWidth, h = cv.clientHeight, gap = 10, sw = w < 420 ? 0 : Math.min(160, w * 0.2), ew = (w - sw - gap * (sw ? 2 : 1)) * 0.48;
+  return { w, h, env: { x: 0, w: ew }, flt: { x: ew + gap, w: w - sw - ew - gap * (sw ? 2 : 1) }, scope: sw ? { x: w - sw, w: sw } : null, top: 10, bot: h - 14 };
+}
+const bkSq = (v, a, b) => Math.sqrt(Math.max(0, Math.min(1, (v - a) / (b - a))));
+function bkEnvPts(v, G) {
+  const E = G.env, W = E.w - 12, x0 = E.x + 6, Y = a => G.bot - a * (G.bot - G.top);
+  const xa = x0 + W * 0.24 * bkSq(v.atk, 0, 2), xd = xa + W * 0.3 * bkSq(v.dec, 0, 3), xs = xd + W * 0.16, xr = xs + W * 0.3 * bkSq(v.rel, 0, 3);
+  return { x0, W, Y, A: [xa, Y(1)], D: [xd, Y(v.sus)], S: [xs, Y(v.sus)], R: [xr, Y(0)] };
+}
+const BK_FLO = 40, BK_FHI = 18000;
+function bkFltX(f, G) { return G.flt.x + Math.log(f / BK_FLO) / Math.log(BK_FHI / BK_FLO) * G.flt.w; }
+function bkFltY(db, G) { return G.top + (24 - Math.max(-36, Math.min(24, db))) / 60 * (G.bot - G.top); }
+function bkFltDb(ft, r, q) {
+  const d = (rr, qq) => Math.sqrt((1 - rr * rr) ** 2 + (rr / qq) ** 2);
+  const m = ft === 'hp' ? r * r / d(r, q) : ft === 'bp' ? (r / q) / d(r, q) * q * 0.7 : ft === 'notch' ? Math.abs(1 - r * r) / d(r, q) : ft === 'lp' ? 1 / d(r, q) : 1 / (d(r, q) * d(r, 0.6));
+  return 20 * Math.log10(m + 1e-6);
+}
+function bkSynDraw(L) {
+  const card = boardEl.querySelector(`.bk-card[data-i="${L.i}"]`), cv = card && card.querySelector('[data-syncv]'); if (!cv) return;
+  const dpr = devicePixelRatio || 1, G = bkSynGeo(cv); cv.width = G.w * dpr; cv.height = G.h * dpr;
+  const g = cv.getContext('2d'), cs = getComputedStyle(card), col = k => cs.getPropertyValue(k).trim(), tc = col('--tc') || col('--k-green'), v = L.syn;
+  g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, G.w, G.h);
+  g.font = `10px ${col('--f-code') || 'monospace'}`; g.lineJoin = 'round';
+  const dot = (x, y, on) => { g.beginPath(); g.arc(x, y, on ? 6.5 : 5, 0, 7); g.fillStyle = on ? col('--scr-fg') : tc; g.fill(); g.lineWidth = 2; g.strokeStyle = col('--scr'); g.stroke(); };
+  // envelope
+  const P = bkEnvPts(v, G); g.fillStyle = col('--scr-faint'); g.fillText('amp', G.env.x + 6, G.h - 3);
+  g.beginPath(); g.moveTo(P.x0, P.Y(0)); g.lineTo(...P.A);
+  g.bezierCurveTo(P.A[0] + (P.D[0] - P.A[0]) * 0.3, P.D[1], P.D[0] - (P.D[0] - P.A[0]) * 0.4, P.D[1], ...P.D); g.lineTo(...P.S);
+  g.bezierCurveTo(P.S[0] + (P.R[0] - P.S[0]) * 0.3, P.R[1], P.R[0] - (P.R[0] - P.S[0]) * 0.5, P.R[1], ...P.R);
+  g.lineWidth = 2; g.strokeStyle = tc; g.stroke(); g.lineTo(P.x0, P.Y(0)); g.globalAlpha = 0.18; g.fillStyle = tc; g.fill(); g.globalAlpha = 1;
+  const hot = BK.synDrag && BK.synDrag.L === L ? BK.synDrag.h : null;
+  dot(...P.A, hot === 'A'); dot(...P.D, hot === 'D'); dot(...P.R, hot === 'R');
+  // filter
+  g.fillStyle = col('--scr-line'); g.fillRect(G.flt.x, bkFltY(0, G), G.flt.w, 1);
+  for (const f of [100, 1000, 10000]) g.fillRect(Math.round(bkFltX(f, G)), G.top, 1, G.bot - G.top);
+  g.fillStyle = col('--scr-faint'); g.fillText(v.ft + (v.env > 0 ? ' · env ' + bkNumS(v.env) : ''), G.flt.x + 4, G.h - 3);
+  g.beginPath();
+  for (let i = 0; i <= 120; i++) { const f = BK_FLO * Math.pow(BK_FHI / BK_FLO, i / 120), x = bkFltX(f, G), y = bkFltY(bkFltDb(v.ft, f / v.cut, v.res), G); i ? g.lineTo(x, y) : g.moveTo(x, y); }
+  g.lineWidth = 2; g.strokeStyle = tc; g.stroke();
+  dot(bkFltX(v.cut, G), bkFltY(20 * Math.log10(v.res), G), hot === 'F');
+  // scope frame (the trace is drawn by bkScopes)
+  if (G.scope) { g.fillStyle = col('--scr-line'); g.fillRect(G.scope.x, (G.top + G.bot) / 2, G.scope.w, 1); g.fillStyle = col('--scr-faint'); g.fillText(t('bkSynScope'), G.scope.x + 4, G.h - 3); }
+  L.synBg = true;
+  const val = card.querySelector('.bk-synval');
+  if (val) val.textContent = `atk ${bkNumS(v.atk)} dec ${bkNumS(v.dec)} sus ${bkNumS(v.sus)} rel ${bkNumS(v.rel)} · cut ${Math.round(v.cut)} res ${bkNumS(v.res)}`;
+}
+// the live trace of each open track: its strip's output, lined up on a rising zero crossing so it stands still
+function bkScopes() {
+  for (const L of BK.items) {
+    if (!L.syn || !L.synBg) continue;
+    const r = S.rt && S.rt.get(L.name); if (!r || !S.ctx) continue;
+    if (!r.scope) { r.scope = S.ctx.createAnalyser(); r.scope.fftSize = 2048; r.duck.connect(r.scope); r.scopeBuf = new Float32Array(2048); }
+    const cv = boardEl.querySelector(`.bk-card[data-i="${L.i}"] [data-syncv]`); if (!cv) continue;
+    const G = bkSynGeo(cv); if (!G.scope) continue;
+    const sc2 = cv.nextElementSibling, dpr = devicePixelRatio || 1, b = r.scopeBuf;
+    if (sc2.width !== Math.round(G.w * dpr)) { sc2.width = Math.round(G.w * dpr); sc2.height = Math.round(G.h * dpr); }
+    const g = sc2.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(G.scope.x - 2, 0, G.scope.w + 4, G.h);
+    r.scope.getFloatTimeDomainData(b);
+    let pk = 0; for (let i = 0; i < b.length; i++) pk = Math.max(pk, Math.abs(b[i]));
+    if (pk < 1e-4) continue;
+    let z = 0; for (let i = 1; i < 1024; i++) if (b[i - 1] <= 0 && b[i] > 0) { z = i; break; }
+    const n = 1024, sc = 0.45 / Math.max(0.05, pk), mid = (G.top + G.bot) / 2, hh = G.bot - G.top;
+    g.beginPath(); for (let i = 0; i < n; i++) { const x = G.scope.x + i / (n - 1) * G.scope.w, y = mid - b[z + i] * sc * hh; i ? g.lineTo(x, y) : g.moveTo(x, y); }
+    g.lineWidth = 1.5; g.strokeStyle = getComputedStyle(cv.closest('.bk-card')).getPropertyValue('--tc').trim(); g.stroke();
+  }
+}
+function bkSynHit(L, cv, e) {
+  const G = bkSynGeo(cv), rc = cv.getBoundingClientRect(), x = e.clientX - rc.left, y = e.clientY - rc.top, v = L.syn, P = bkEnvPts(v, G);
+  const hs = [['A', ...P.A], ['D', ...P.D], ['R', ...P.R], ['F', bkFltX(v.cut, G), bkFltY(20 * Math.log10(v.res), G)]];
+  let best = null, bd = 22; for (const [h, hx, hy] of hs) { const d = Math.hypot(hx - x, hy - y); if (d < bd) { bd = d; best = h; } }
+  // a press anywhere in the filter picture moves its point there
+  if (!best && x > G.flt.x && x < G.flt.x + G.flt.w) best = 'F';
+  return best && { L, h: best, G, rc, cv };
+}
+function bkSynMove(d, e) {
+  const { L, h, G, rc } = d, x = e.clientX - rc.left, y = e.clientY - rc.top, v = L.syn, P = bkEnvPts(v, G);
+  const lim = (k, a) => Math.max(BK_SYN_R[k][0], Math.min(BK_SYN_R[k][1], a)), q3 = a => Math.round(a * 1000) / 1000, q2 = a => Math.round(a * 100) / 100;
+  const inv = (px, frac, max) => max * Math.pow(Math.max(0, Math.min(1, px / (P.W * frac))), 2);
+  const out = {};
+  if (h === 'A') out.atk = q3(lim('atk', inv(x - P.x0, 0.24, 2)));
+  if (h === 'D') { out.dec = q2(lim('dec', inv(x - P.A[0], 0.3, 3))); out.sus = q2(lim('sus', (G.bot - y) / (G.bot - G.top))); }
+  if (h === 'R') out.rel = q2(lim('rel', inv(x - P.S[0], 0.3, 3)));
+  if (h === 'F') {
+    const f = BK_FLO * Math.pow(BK_FHI / BK_FLO, (x - G.flt.x) / G.flt.w), db = 24 - (y - G.top) / (G.bot - G.top) * 60;
+    out.cut = Math.round(lim('cut', f) / 10) * 10; out.res = q2(lim('res', Math.pow(10, db / 20)));
+  }
+  Object.assign(v, out); d.moved = true;
+  BK.busy = true; bkWrite(L.i, p => { for (const k in out) p.params = bkSetParam3(p.params, k, out[k]); }, { live: true });
+  bkSynDraw(L);
+}
+function bkSynHear(L) {
+  const n = L.notes && L.notes.length ? L.notes.find(o => o.v != null) : null;
+  setTimeout(() => { const a = bkPress(L, [{ v: n ? n.v : 0, s: 0 }], 4); if (a) bkRelease(a); }, 40);
+}
+function bkSynInit() {
+  boardEl.addEventListener('pointerdown', e => {
+    const cv = e.target.closest('[data-syncv]'); if (!cv || e.button > 0) return;
+    const L = bkLine(cv); if (!L || !L.syn) return;
+    const d = bkSynHit(L, cv, e); if (!d) return;
+    e.preventDefault(); cv.setPointerCapture(e.pointerId); BK.synDrag = d; bkSynDraw(L); bkSynMove(d, e);
+  });
+  boardEl.addEventListener('pointermove', e => { if (BK.synDrag) bkSynMove(BK.synDrag, e); });
+  const end = () => { const d = BK.synDrag; if (!d) return; BK.synDrag = null; BK.busy = false; bkRender(); if (d.moved) { const L = BK.items.find(x => x.name === d.L.name); if (L) bkSynHear(L); } };
+  boardEl.addEventListener('pointerup', end); boardEl.addEventListener('pointercancel', end);
+}
 bkInit();
+bkSynInit();
