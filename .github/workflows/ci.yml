@@ -16,6 +16,8 @@ jobs:
           python-version: '3.12'
       - name: Example songs compile
         run: node tests/compile.test.js
+      - name: Voice to code and sound match
+        run: node tests/voice.test.js && node tests/match.test.js
       - name: Pages build
         run: python3 build.py
       - name: Rust DSP matches the JavaScript voices
