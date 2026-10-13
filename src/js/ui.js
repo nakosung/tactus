@@ -1052,7 +1052,15 @@ function frame() {
       const bar = Math.min(tk.bars, Math.floor(c - tk.startC) + 1);
       recText.textContent = t('bannerRec', { name: tk.slot.name, bar, bars: tk.bars }) + ' · ' + (tk.silent ? t('bannerMuted') : tk.src === 'out' ? t('bannerOut') : '');
     }
+  } else if (VX.take && S.playing) {
+    // voice take: count-in beats, then the bar being sung
+    const vt = VX.take, c = transport(now), beat = Math.floor(mod(c, 1) * 4);
+    recbar.hidden = false; document.body.classList.add('recording');
+    beatEls.forEach((b, i) => b.classList.toggle('on', i === beat));
+    if (c < vt.startC) { recCount.textContent = Math.max(1, Math.ceil((vt.startC - c) * 4 - 1e-6)); recText.textContent = t('vxCount', { m: t(vt.mode === 'beat' ? 'vxBeat' : 'vxHum') }); }
+    else { recCount.textContent = '●'; recText.textContent = t('vxRecBanner', { bar: Math.min(vt.bars, Math.floor(c - vt.startC) + 1), bars: vt.bars, m: t(vt.mode === 'beat' ? 'vxBeat' : 'vxHum') }); }
   } else if (!recbar.hidden) { recbar.hidden = true; document.body.classList.remove('recording'); }
+  vxTick(now);
   if (st !== lastTakeState) { lastTakeState = st; renderLoops(); }
   drawWaves();
   drawArr(now);

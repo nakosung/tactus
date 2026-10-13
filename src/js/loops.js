@@ -78,9 +78,9 @@ function connectCapture(src) {
   LS.capInput.connect(LS.cap);
 }
 function outLat() { return S.ctx.outputLatency || S.ctx.baseLatency || 0.01; }
-function compSec() {
+function compSec(src = LS.source) {
   let base = 0;
-  if (LS.source === 'mic') {
+  if (src === 'mic') {
     if (LS.speaker) base = LS.clap.speaker ?? (LS.rtt != null ? Math.max(0, LS.rtt - outLat()) + 0.02 : 0.025);
     else base = LS.clap.phones ?? LS.rtt ?? outLat() + 0.012;
   }
@@ -100,7 +100,7 @@ async function recToggle(i) {
     }
     return;
   }
-  if (tk) return;
+  if (tk || VX.take) return;
   if (LS.source === 'mic') {
     const r = await ensureMic();
     if (r !== 'ok') { LS.source = 'out'; loopMsg(t(r === 'blocked' ? 'micBlocked' : 'micDenied'), 'bad', 6000); renderLoops(); }
@@ -149,6 +149,7 @@ function onChunk(f, l, r) {
     const a = Math.max(f, pr.f0), b = Math.min(f + l.length, pr.f0 + pr.L.length);
     if (b > a) pr.L.set(l.subarray(a - f, b - f), a - pr.f0);
   }
+  if (VX.take) vxChunk(f, l);
   const tk = LS.take; if (!tk) return;
   const total = tk.bars * tk.barFrames;
   const a = Math.max(f, tk.f0), b = Math.min(f + l.length, tk.f0 + total);

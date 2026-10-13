@@ -370,6 +370,17 @@ body.recording .editor { border-color: var(--c-err); }
 .knob:is(.press, :active) { box-shadow: var(--shadow), 0 0 0 var(--key-edge); transform: translateY(1px); }
 
 /*SKINS*/
+/* ---- voice to code ---- */
+.vxbox { display: grid; gap: 8px; }
+.vxrow { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.vxunit { font-size: 12px; color: var(--dim); }
+.vxrec { margin-left: auto; }
+.vxrec::before { content: ''; display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: var(--k-pink); margin-right: 7px; vertical-align: 0; }
+.vxrec.on { background: var(--k-pink); border-color: var(--k-pink); color: var(--on-key); }
+.vxrec.on::before { background: var(--on-key); border-radius: 2px; }
+.vxview { width: 100%; height: 86px; border-radius: var(--r-m); background: var(--scr); display: block; }
+.vxout { margin: 0; padding: 9px 11px; border-radius: var(--r-m); background: var(--scr); color: var(--scr-fg); font: 12px/1.6 var(--f-code); white-space: pre-wrap; overflow-wrap: anywhere; }
+.vxmsg.ok { color: var(--k-green); } .vxmsg.bad { color: var(--k-pink); }
 /* ---- sharing ---- */
 .sharedlg { width: min(520px, calc(100vw - 32px)); padding: 0; border: 1px solid var(--line); border-radius: var(--r-xl); background: var(--panel); color: var(--fg); box-shadow: 0 24px 60px rgba(0,0,0,.45); }
 .sharedlg::backdrop { background: rgba(0, 0, 0, .5); }
@@ -612,6 +623,20 @@ body.recording .editor { border-color: var(--c-err); }
           <button class="btn go" id="cmpGo" data-i18n="cmpGo"></button>
           <button class="btn ghost" id="cmpUndo" data-i18n="cmpUndo" disabled></button>
         </div>
+        <div class="vxbox" id="vxBox">
+          <h2 class="sec-h"><span data-i18n="vxTitle"></span><small data-i18n="vxSmall"></small></h2>
+          <p class="note" data-i18n="vxIntro"></p>
+          <div class="vxrow">
+            <div class="seg" id="vxMode" role="group" data-i18n-aria="vxModeLbl"><button data-m="beat" data-i18n="vxBeat"></button><button data-m="hum" data-i18n="vxHum"></button></div>
+            <div class="seg" id="vxBars" role="group" data-i18n-aria="vxBarsLbl"><button data-b="1">1</button><button data-b="2">2</button><button data-b="4">4</button></div>
+            <span class="vxunit" data-i18n="vxBarsLbl"></span>
+            <button class="btn vxrec" id="vxRec"></button>
+          </div>
+          <canvas class="vxview" id="vxView" hidden aria-hidden="true"></canvas>
+          <pre class="vxout" id="vxOut" hidden></pre>
+          <div class="row-btns" id="vxActs" hidden><button class="btn go" id="vxInsert" data-i18n="vxInsert"></button><button class="btn ghost" id="vxUndo" data-i18n="vxUndo"></button></div>
+          <p class="note vxmsg" id="vxMsg" aria-live="polite"></p>
+        </div>
         <h2 class="sec-h"><span data-i18n="genTitle"></span></h2>
         <dl class="gens">
           <dt><code>~beat four</code></dt><dd data-i18n="genBeat"></dd>
@@ -798,5 +823,7 @@ body.recording .editor { border-color: var(--c-err); }
 /*HAND*/
 /*UI*/
 /*SHARE*/
+/*VXDSP*/
+/*VOICE*/
 /*VIZ*/
 </script>
