@@ -6,14 +6,14 @@
 // On a desktop, ⤢ makes the code or the side panel fill the window (Esc to come back).
 
 const MOB = { on: false, land: false, tab: 'code', more: false, max: '' };
-const MOB_TABS = ['code', 'blocks', 'perform', 'song', 'record', 'sounds', 'guide'];
+const MOB_TABS = ['code', 'blocks', 'perform', 'song', 'record', 'sounds', 'master', 'guide'];
 const MOB_MQ = matchMedia('(max-width: 760px), (max-height: 520px) and (pointer: coarse)');
 const MOB_LAND = matchMedia('(orientation: landscape)');
 
 function mobBuild() {
   const app = document.querySelector('.app'); if (!app || document.getElementById('mtabs')) return;
   const nav = document.createElement('nav'); nav.className = 'mtabs'; nav.id = 'mtabs'; nav.setAttribute('role', 'tablist');
-  const lbl = { code: 'viewCode', blocks: 'viewBlocks', perform: 'tabPerform', song: 'mtSong', record: 'tabRecord', sounds: 'tabSounds', guide: 'tabGuide' };
+  const lbl = { code: 'viewCode', blocks: 'viewBlocks', perform: 'tabPerform', song: 'mtSong', record: 'tabRecord', sounds: 'tabSounds', master: 'tabMaster', guide: 'tabGuide' };
   nav.innerHTML = MOB_TABS.map(n => `<button role="tab" data-mt="${n}" data-i18n="${lbl[n]}" aria-selected="false">${esc(t(lbl[n]))}</button>`).join('');
   app.appendChild(nav);
   nav.addEventListener('click', e => { const b = e.target.closest('[data-mt]'); if (b) mobTab(b.dataset.mt); });

@@ -688,6 +688,7 @@ fn fx_biq(b: &mut Bq, kind: u32, f: f64, q: f64, db: f64, sr: f64) {
     if kind == 0 { b0 = (1.0 - cw) / 2.0; b1 = 1.0 - cw; b2 = b0; a0 = 1.0 + al; a1 = -2.0 * cw; a2 = 1.0 - al; }
     else if kind == 1 { b0 = (1.0 + cw) / 2.0; b1 = -(1.0 + cw); b2 = b0; a0 = 1.0 + al; a1 = -2.0 * cw; a2 = 1.0 - al; }
     else if kind == 2 { b0 = 1.0 + al * a; b1 = -2.0 * cw; b2 = 1.0 - al * a; a0 = 1.0 + al / a; a1 = -2.0 * cw; a2 = 1.0 - al / a; }
+    else if kind == 5 { b0 = 1.0 - al; b1 = -2.0 * cw; b2 = 1.0 + al; a0 = 1.0 + al; a1 = -2.0 * cw; a2 = 1.0 - al; }
     else {
         let s2 = 2.0 * sqrtd(a) * al; let sg = if kind == 3 { -1.0 } else { 1.0 };
         b0 = a * ((a + 1.0) - sg * (a - 1.0) * cw + s2); b1 = 2.0 * sg * a * ((a - 1.0) - sg * (a + 1.0) * cw); b2 = a * ((a + 1.0) - sg * (a - 1.0) * cw - s2);
@@ -942,5 +943,280 @@ pub extern "C" fn fx_process(n: u32, c0: f64, cps: f64) {
         }
         ol[k] = (l * lvl) as f32; or_[k] = (r * lvl) as f32;
         cb += dcb;
+    }
+}
+
+// ======================= mastering (mirrors class Mst in src/js/synth.js) =======================
+// The end of the mix: a bass made mono below a frequency, three bands compressed against their own level, a level
+// that finds a loudness target, and a limiter that looks 1.5 ms ahead and watches the peaks between the samples.
+// It also measures what comes out (BS.1770 loudness blocks, true peak, gain reduction, correlation).
+const MS_N: usize = 16;
+const MS_M: usize = 16;
+const MS_R: usize = 512;
+const MS_X1: f64 = 120.0;
+const MS_X2: f64 = 2500.0;
+const MS_Q: f64 = 0.707_106_781_186_547_6;
+const MS_ATK: [f64; 3] = [0.03, 0.01, 0.003];
+const MS_REL: [f64; 3] = [0.2, 0.12, 0.08];
+const DB10: f64 = 3.010_299_956_639_811_6;
+static mut MS_FIR: [[f64; 12]; 3] = [[0.0; 12]; 3];
+fn ms_fir_make() {
+    let f = st!(MS_FIR);
+    for p in 1..4 {
+        let mut sum = 0.0;
+        for j in -5i32..=6 {
+            let u = p as f64 * 0.25 - j as f64; let w = 0.5 + 0.5 * sinp(PI_D * u / 6.5 + PI_D / 2.0);
+            let v = (if u == 0.0 { 1.0 } else { sinp(PI_D * u) / (PI_D * u) }) * w;
+            f[p - 1][(j + 5) as usize] = v; sum += v;
+        }
+        for j in 0..12 { f[p - 1][j] /= sum }
+    }
+}
+#[inline(always)]
+fn ms_tp(h: &mut [f64; 12], x: f64) -> f64 {
+    for j in 0..11 { h[j] = h[j + 1] } h[11] = x;
+    let mut a = if h[5] < 0.0 { -h[5] } else { h[5] };
+    let f = st!(MS_FIR);
+    for p in 0..3 { let mut v = 0.0; for j in 0..12 { v += f[p][j] * h[j] } if v < 0.0 { v = -v } if v > a { a = v } }
+    a
+}
+#[inline(always)]
+fn ms_gr(over: f64, rat: f64) -> f64 {
+    let s = 1.0 - 1.0 / rat;
+    if over <= -3.0 { return 0.0 }
+    if over >= 3.0 { return -over * s }
+    -(over + 3.0) * (over + 3.0) / 12.0 * s
+}
+struct Mst {
+    sr: f64, la: i64, d: i64, hh: i64, bb: i64, w: i64, rel: f64, bsum: f64, mix: f64, gs: f64, auto: f64, rf: f64,
+    ev: [f64; 3], av: [f64; 3], gt: [f64; 3], gb: [f64; 3], cnt: u32,
+    hl: [f64; 12], hr: [f64; 12], ol: [f64; 12], or: [f64; 12], acc: f64, an: i64, bp: [f64; 30], bn: i64, bw: i64, mono: f64, bq: [Bq; 24],
+}
+const MS0: Mst = Mst { sr: 48000.0, la: 1, d: 3, hh: 4, bb: 2, w: 0, rel: 1.0, bsum: 2.0, mix: 0.0, gs: 0.0, auto: 0.0, rf: -100.0,
+    ev: [0.0; 3], av: [1e-6; 3], gt: [1.0; 3], gb: [1.0; 3], cnt: 0, hl: [0.0; 12], hr: [0.0; 12], ol: [0.0; 12], or: [0.0; 12],
+    acc: 0.0, an: 0, bp: [0.0; 30], bn: 0, bw: 0, mono: -1.0, bq: [[0.0; 9]; 24] };
+static mut MS: Mst = MS0;
+static mut MP: [f32; MS_N] = [0.0; MS_N];
+static mut MM: [f32; MS_M] = [0.0; MS_M];
+static mut MS_XL: [f32; MS_R] = [0.0; MS_R];
+static mut MS_XR: [f32; MS_R] = [0.0; MS_R];
+static mut MS_RQ: [f32; MS_R] = [1.0; MS_R];
+static mut MS_RB: [f64; MS_R] = [1.0; MS_R];
+static mut MS_IL: [f32; BLOCK] = [0.0; BLOCK];
+static mut MS_IR: [f32; BLOCK] = [0.0; BLOCK];
+static mut MS_OL: [f32; BLOCK] = [0.0; BLOCK];
+static mut MS_OR: [f32; BLOCK] = [0.0; BLOCK];
+#[unsafe(no_mangle)]
+pub extern "C" fn mst_params() -> *mut f32 { st!(MP).as_mut_ptr() }
+#[unsafe(no_mangle)]
+pub extern "C" fn mst_meter() -> *mut f32 { st!(MM).as_mut_ptr() }
+#[unsafe(no_mangle)]
+pub extern "C" fn mst_in_l() -> *mut f32 { st!(MS_IL).as_mut_ptr() }
+#[unsafe(no_mangle)]
+pub extern "C" fn mst_in_r() -> *mut f32 { st!(MS_IR).as_mut_ptr() }
+#[unsafe(no_mangle)]
+pub extern "C" fn mst_out_l() -> *const f32 { st!(MS_OL).as_ptr() }
+#[unsafe(no_mangle)]
+pub extern "C" fn mst_out_r() -> *const f32 { st!(MS_OR).as_ptr() }
+#[unsafe(no_mangle)]
+pub extern "C" fn mst_init(sr: f32) {
+    let p = st!(MP); for v in p.iter_mut() { *v = 0.0 } p[3] = -1.0; p[6] = 60.0;
+    let m = st!(MS); *m = MS0; m.sr = sr as f64;
+    mst_reset();
+}
+#[unsafe(no_mangle)]
+pub extern "C" fn mst_reset() {
+    let s = st!(MS); let sr = s.sr;
+    *s = MS0; s.sr = sr;
+    s.la = 1i64.max(fxr(0.0015 * sr) as i64); s.d = s.la + 7; s.hh = s.la + 8; s.bb = s.la + 1;
+    ms_fir_make(); s.bsum = s.bb as f64;
+    for v in st!(MS_XL).iter_mut().chain(st!(MS_XR).iter_mut()) { *v = 0.0 }
+    for v in st!(MS_RQ).iter_mut() { *v = 1.0 }
+    for v in st!(MS_RB).iter_mut() { *v = 1.0 }
+    let b = &mut s.bq;
+    for c in 0..2 {
+        let o = c * 9;
+        fx_biq(&mut b[o], 0, MS_X1, MS_Q, 0.0, sr); fx_biq(&mut b[o + 1], 0, MS_X1, MS_Q, 0.0, sr); fx_biq(&mut b[o + 2], 1, MS_X1, MS_Q, 0.0, sr); fx_biq(&mut b[o + 3], 1, MS_X1, MS_Q, 0.0, sr);
+        fx_biq(&mut b[o + 4], 0, MS_X2, MS_Q, 0.0, sr); fx_biq(&mut b[o + 5], 0, MS_X2, MS_Q, 0.0, sr); fx_biq(&mut b[o + 6], 1, MS_X2, MS_Q, 0.0, sr); fx_biq(&mut b[o + 7], 1, MS_X2, MS_Q, 0.0, sr);
+        fx_biq(&mut b[o + 8], 5, MS_X2, MS_Q, 0.0, sr);
+    }
+    for o in [19usize, 21] { fx_biq(&mut b[o], 4, 1681.974450955533, 0.7071752369554196, 3.999843853973347, sr); fx_biq(&mut b[o + 1], 1, 38.13547087602444, 0.5003270373238773, 0.0, sr); }
+    let m = st!(MM); for v in m.iter_mut() { *v = 0.0 } m[3] = 1.0; m[4] = 1.0; m[5] = 1.0; m[6] = 1.0;
+}
+fn ms_block(s: &mut Mst, m: &mut [f32; MS_M], on: bool, tgt: f64) {
+    s.bp[(s.bw % 30) as usize] = s.acc / s.an as f64; s.bw += 1; if s.bn < 30 { s.bn += 1 }
+    s.acc = 0.0; s.an = 0;
+    let mut s4 = 0.0; let mut s30 = 0.0; let n4 = if s.bn < 4 { s.bn } else { 4 };
+    for j in 1..=s.bn { let v = s.bp[((s.bw - j) % 30) as usize]; s30 += v; if j <= n4 { s4 += v } }
+    let stv = s30 / s.bn as f64; m[0] = (s4 / n4 as f64) as f32; m[1] = stv as f32; m[11] += 1.0;
+    if on && tgt < 0.0 && s.bn >= 10 {
+        let l = -0.691 + DB10 * log2d(stv + 1e-20);
+        if l > -50.0 {
+            s.rf = if s.rf - 0.05 > l { s.rf - 0.05 } else { l };
+            if l >= s.rf - 4.0 {
+                let mut step = (tgt - l) * 0.03; if step > 0.3 { step = 0.3 } else if step < -0.3 { step = -0.3 }
+                let mut a = s.auto + step; if a > 18.0 { a = 18.0 } else if a < -12.0 { a = -12.0 }
+                s.auto = a;
+            }
+        }
+    }
+    m[7] = s.auto as f32;
+}
+#[unsafe(no_mangle)]
+pub extern "C" fn mst_process(n: u32) {
+    let s = st!(MS); let p = st!(MP); let m = st!(MM); let sr = s.sr; let msk = (MS_R - 1) as i64;
+    let (il, ir, ol_, or_) = (st!(MS_IL), st!(MS_IR), st!(MS_OL), st!(MS_OR));
+    let (xl, xr, rq, rb) = (st!(MS_XL), st!(MS_XR), st!(MS_RQ), st!(MS_RB));
+    let pv = |i: usize| p[i] as f64;
+    let on = pv(0) > 0.5; let mb = pv(1).clamp(0.0, 1.0); let tgt = pv(2); let ceil = fxdb(pv(3).clamp(-12.0, 0.0));
+    let mono = pv(4).clamp(20.0, 400.0);
+    if mono != s.mono { s.mono = mono; fx_biq(&mut s.bq[18], 1, mono, MS_Q, 0.0, sr); }
+    let krel = 1.0 - expp(-1.0 / (pv(6).max(5.0) * 0.001 * sr)); let ksm = 1.0 - expp(-1.0 / (0.05 * sr)); let kmix = 1.0 / (0.03 * sr);
+    let kg = 1.0 - expp(-1.0 / (0.002 * sr)); let kav = 1.0 - expp(-1.0 / (3.0 * sr));
+    let cdet = ceil * 0.988_553_094_656_938_9;
+    let rat = 1.0 + 3.0 * mb; let off = 6.0 - 6.0 * mb; let mk = fxdb(1.5 * mb); let sub = fxr(0.1 * sr) as i64;
+    let mut ka = [0.0f64; 3]; let mut kr = [0.0f64; 3];
+    for j in 0..3 { ka[j] = 1.0 - expp(-1.0 / (MS_ATK[j] * sr)); kr[j] = 1.0 - expp(-1.0 / (MS_REL[j] * sr)); }
+    let gtd = pv(5) + if tgt < 0.0 { s.auto } else { 0.0 };
+    for k in 0..n as usize {
+        s.mix += if on { if s.mix < 1.0 { kmix } else { 0.0 } } else if s.mix > 0.0 { -kmix } else { 0.0 };
+        if s.mix > 1.0 { s.mix = 1.0 } else if s.mix < 0.0 { s.mix = 0.0 }
+        let mx = s.mix; let l0 = il[k] as f64; let r0 = ir[k] as f64;
+        let mut l = l0; let mut r = r0;
+        if mx > 0.0 {
+            s.gs += (gtd - s.gs) * ksm;
+            let g = fxdb(s.gs); l *= g; r *= g;
+            let b = &mut s.bq;
+            let md = (l + r) * 0.5; let sd = fx_bq(&mut b[18], (l - r) * 0.5); l = md + sd; r = md - sd;
+            let t = fx_bq(&mut b[0], l); let lo0 = fx_bq(&mut b[1], t);
+            let t = fx_bq(&mut b[2], l); let re0 = fx_bq(&mut b[3], t);
+            let t = fx_bq(&mut b[4], re0); let mi0 = fx_bq(&mut b[5], t);
+            let t = fx_bq(&mut b[6], re0); let hi0 = fx_bq(&mut b[7], t);
+            let la0 = fx_bq(&mut b[8], lo0);
+            let t = fx_bq(&mut b[9], r); let lo1 = fx_bq(&mut b[10], t);
+            let t = fx_bq(&mut b[11], r); let re1 = fx_bq(&mut b[12], t);
+            let t = fx_bq(&mut b[13], re1); let mi1 = fx_bq(&mut b[14], t);
+            let t = fx_bq(&mut b[15], re1); let hi1 = fx_bq(&mut b[16], t);
+            let la1 = fx_bq(&mut b[17], lo1);
+            let bl = [la0, mi0, hi0]; let br = [la1, mi1, hi1];
+            for j in 0..3 {
+                let a = bl[j] * bl[j]; let c = br[j] * br[j]; let e = if a > c { a } else { c };
+                s.ev[j] += (e - s.ev[j]) * if e > s.ev[j] { ka[j] } else { kr[j] };
+                s.av[j] += (e - s.av[j]) * kav;
+            }
+            let c0 = s.cnt; s.cnt = s.cnt.wrapping_add(1);
+            if c0 & 7 == 0 { for j in 0..3 {
+                let lev = DB10 * log2d(s.ev[j] + 1e-12); let avg = DB10 * log2d(s.av[j] + 1e-12);
+                s.gt[j] = if mb > 0.0 { fxdb(ms_gr(lev - (avg + off), rat)) } else { 1.0 };
+            } }
+            for j in 0..3 { s.gb[j] += (s.gt[j] - s.gb[j]) * kg; if s.gb[j] < m[4 + j] as f64 { m[4 + j] = s.gb[j] as f32 } }
+            let pl = (la0 * s.gb[0] + mi0 * s.gb[1] + hi0 * s.gb[2]) * mk; let pr = (la1 * s.gb[0] + mi1 * s.gb[1] + hi1 * s.gb[2]) * mk;
+            l = l0 + (pl - l0) * mx; r = r0 + (pr - r0) * mx;
+        }
+        let tl = ms_tp(&mut s.hl, l); let tr = ms_tp(&mut s.hr, r); let pk = if tl > tr { tl } else { tr };
+        let w = s.w;
+        xl[(w & msk) as usize] = l as f32; xr[(w & msk) as usize] = r as f32; rq[(w & msk) as usize] = if pk > cdet { (cdet / pk) as f32 } else { 1.0 };
+        let mut hold = 1.0f64; for j in 0..s.hh { let v = rq[((w - j) & msk) as usize] as f64; if v < hold { hold = v } }
+        s.rel = if hold < s.rel { hold } else { s.rel + (hold - s.rel) * krel };
+        s.bsum += s.rel - rb[((w - s.bb) & msk) as usize]; rb[(w & msk) as usize] = s.rel;
+        let mut gl = s.bsum / s.bb as f64; if gl > 1.0 { gl = 1.0 }
+        let ge = 1.0 + (gl - 1.0) * mx;
+        let mut ol = xl[((w - s.d) & msk) as usize] as f64 * ge; let mut or = xr[((w - s.d) & msk) as usize] as f64 * ge;
+        if mx > 0.0 {
+            if ol > ceil { ol = ceil } else if ol < -ceil { ol = -ceil }
+            if or > ceil { or = ceil } else if or < -ceil { or = -ceil }
+        }
+        s.w = w + 1;
+        ol_[k] = ol as f32; or_[k] = or as f32;
+        if ge < m[3] as f64 { m[3] = ge as f32 }
+        let ta = ms_tp(&mut s.ol, ol); let tb = ms_tp(&mut s.or, or); let tp = if ta > tb { ta } else { tb }; if tp > m[2] as f64 { m[2] = tp as f32 }
+        m[8] = (m[8] as f64 + ol * or) as f32; m[9] = (m[9] as f64 + ol * ol) as f32; m[10] = (m[10] as f64 + or * or) as f32;
+        let t = fx_bq(&mut s.bq[19], ol); let kl = fx_bq(&mut s.bq[20], t);
+        let t = fx_bq(&mut s.bq[21], or); let kr2 = fx_bq(&mut s.bq[22], t);
+        s.acc += kl * kl + kr2 * kr2;
+        s.an += 1;
+        if s.an >= sub { ms_block(s, m, on, tgt) }
+    }
+}
+
+// ======================= speaker check (mirrors class Spk in src/js/synth.js) =======================
+// The finished mix as other speakers would play it: a few filters for the driver, how much stereo it keeps, how hard
+// it distorts, and for a car or a club a short room; levels matched so a model is heard for its tone.
+const SP_W: usize = 38;
+const SP_RL: usize = 8192;
+const SP_MODELS: [f64; SP_W * 9] = [
+    1.0, 0.35, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 3.7, 1.0, 420.0, 0.54, 0.0, 1.0, 420.0, 1.31, 0.0, 2.0, 1100.0, 1.0, 3.0, 2.0, 3200.0, 1.2, 5.0, 0.0, 9000.0, 0.7, 0.0, -1.0, 0.0, 0.0, 0.0, -1.0, 0.0, 0.0, 0.0,
+    0.6, 0.15, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 2.7, 1.0, 180.0, 0.54, 0.0, 1.0, 180.0, 1.31, 0.0, 2.0, 450.0, 0.8, 2.0, 2.0, 2600.0, 1.0, 3.0, 2.0, 6000.0, 2.0, -4.0, 0.0, 15000.0, 0.7, 0.0, -1.0, 0.0, 0.0, 0.0,
+    0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 3.1, 1.0, 90.0, 0.7, 0.0, 2.0, 2800.0, 1.4, 5.0, 2.0, 6500.0, 3.0, -6.0, 4.0, 10000.0, 0.7, -3.0, 0.0, 16000.0, 0.7, 0.0, -1.0, 0.0, 0.0, 0.0, -1.0, 0.0, 0.0, 0.0,
+    1.0, 0.25, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 3.0, 1.0, 75.0, 0.54, 0.0, 1.0, 75.0, 1.31, 0.0, 2.0, 115.0, 1.6, 5.0, 2.0, 1500.0, 1.0, -2.0, 2.0, 4000.0, 1.0, 2.5, 0.0, 13000.0, 0.7, 0.0, -1.0, 0.0, 0.0, 0.0,
+    0.0, 0.05, 0.12, 0.35, 4000.0, 2.3, 3.1, 4.7, 5.9, -2.6, 3.0, 75.0, 0.7, 6.0, 2.0, 220.0, 1.0, -3.0, 2.0, 3500.0, 1.0, 2.0, 4.0, 8000.0, 0.7, -3.0, 1.0, 28.0, 0.7, 0.0, -1.0, 0.0, 0.0, 0.0, -1.0, 0.0, 0.0, 0.0,
+    0.5, 0.1, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 3.1, 1.0, 140.0, 0.54, 0.0, 1.0, 140.0, 1.31, 0.0, 2.0, 800.0, 1.2, -2.0, 2.0, 3000.0, 1.0, 4.0, 0.0, 11000.0, 0.7, 0.0, -1.0, 0.0, 0.0, 0.0, -1.0, 0.0, 0.0, 0.0,
+    1.0, 0.05, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 3.6, 1.0, 160.0, 0.54, 0.0, 1.0, 160.0, 1.31, 0.0, 2.0, 1400.0, 0.7, 3.0, 2.0, 4500.0, 2.0, -2.0, 0.0, 10000.0, 0.7, 0.0, -1.0, 0.0, 0.0, 0.0, -1.0, 0.0, 0.0, 0.0,
+    0.3, 0.1, 0.2, 0.72, 2500.0, 23.1, 29.7, 37.3, 43.9, -0.9, 3.0, 55.0, 0.7, 6.0, 2.0, 110.0, 0.9, 2.0, 2.0, 400.0, 1.0, -2.0, 4.0, 9000.0, 0.7, -4.0, 1.0, 30.0, 0.7, 0.0, -1.0, 0.0, 0.0, 0.0, -1.0, 0.0, 0.0, 0.0,
+    1.0, 0.6, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 5.0, 1.0, 280.0, 0.54, 0.0, 1.0, 280.0, 1.31, 0.0, 0.0, 3600.0, 0.54, 0.0, 0.0, 3600.0, 1.31, 0.0, 2.0, 1300.0, 1.0, 3.0, -1.0, 0.0, 0.0, 0.0, -1.0, 0.0, 0.0, 0.0,
+];
+struct Spk { sr: f64, model: i64, nf: usize, mono: f64, drive: f64, rmix: f64, rfb: f64, kd: f64, trim: f64, rd: [i64; 4], z: [f64; 4], rw: i64, bl: [Bq; 7], br: [Bq; 7] }
+const SP0: Spk = Spk { sr: 48000.0, model: 0, nf: 0, mono: 0.0, drive: 0.0, rmix: 0.0, rfb: 0.0, kd: 1.0, trim: 1.0, rd: [1; 4], z: [0.0; 4], rw: 0, bl: [[0.0; 9]; 7], br: [[0.0; 9]; 7] };
+static mut SP: Spk = SP0;
+static mut SP_L: [f32; BLOCK] = [0.0; BLOCK];
+static mut SP_R: [f32; BLOCK] = [0.0; BLOCK];
+static mut SP_BIG: *mut f32 = core::ptr::null_mut();
+fn sp_room(j: usize) -> &'static mut [f32] { unsafe { core::slice::from_raw_parts_mut(SP_BIG.add(j * SP_RL), SP_RL) } }
+#[unsafe(no_mangle)]
+pub extern "C" fn sp_l() -> *mut f32 { st!(SP_L).as_mut_ptr() }
+#[unsafe(no_mangle)]
+pub extern "C" fn sp_r() -> *mut f32 { st!(SP_R).as_mut_ptr() }
+#[unsafe(no_mangle)]
+pub extern "C" fn sp_init(sr: f32) -> u32 {
+    let s = st!(SP); *s = SP0; s.sr = sr as f64;
+    #[cfg(target_arch = "wasm32")]
+    unsafe {
+        if SP_BIG.is_null() {
+            let pages = (4 * SP_RL * 4 + 65535) / 65536;
+            let prev = core::arch::wasm32::memory_grow(0, pages);
+            if prev == usize::MAX { return 0 }
+            SP_BIG = (prev * 65536) as *mut f32;
+        }
+    }
+    sp_set(0);
+    1
+}
+#[unsafe(no_mangle)]
+pub extern "C" fn sp_set(model: u32) {
+    let s = st!(SP); let sr = s.sr;
+    *s = SP0; s.sr = sr; s.model = model as i64;
+    if !unsafe { SP_BIG.is_null() } { for j in 0..4 { for v in sp_room(j).iter_mut() { *v = 0.0 } } }
+    if model < 1 || model as usize > SP_MODELS.len() / SP_W { return }
+    let o = (model as usize - 1) * SP_W; let mm = &SP_MODELS;
+    s.mono = mm[o]; s.drive = mm[o + 1]; s.rmix = mm[o + 2]; s.rfb = mm[o + 3];
+    s.kd = if mm[o + 4] > 0.0 { 1.0 - expp(-TAU_D * mm[o + 4] / sr) } else { 1.0 }; s.trim = fxdb(mm[o + 9]);
+    for j in 0..4 { s.rd[j] = ((SP_RL - 2) as f64).min(fxr(mm[o + 5 + j] * 0.001 * sr)) as i64; }
+    for j in 0..7 {
+        let q = o + 10 + j * 4; if mm[q] < 0.0 { break }
+        fx_biq(&mut s.bl[j], mm[q] as u32, mm[q + 1], mm[q + 2], mm[q + 3], sr); fx_biq(&mut s.br[j], mm[q] as u32, mm[q + 1], mm[q + 2], mm[q + 3], sr);
+        s.nf += 1;
+    }
+}
+#[unsafe(no_mangle)]
+pub extern "C" fn sp_process(n: u32) {
+    let s = st!(SP); if s.model < 1 || s.nf == 0 { return }
+    let (lb, rb) = (st!(SP_L), st!(SP_R));
+    let sg = 1.0 - s.mono; let g = 1.0 + 2.0 * s.drive; let room = s.rmix > 0.0 && !unsafe { SP_BIG.is_null() }; let msk = (SP_RL - 1) as i64;
+    for k in 0..n as usize {
+        let md = (lb[k] as f64 + rb[k] as f64) * 0.5; let sd = (lb[k] as f64 - rb[k] as f64) * 0.5 * sg;
+        let mut l = md + sd; let mut r = md - sd;
+        for j in 0..s.nf { l = fx_bq(&mut s.bl[j], l); r = fx_bq(&mut s.br[j], r); }
+        if s.drive > 0.0 { l = thd(l * g) / g; r = thd(r * g) / g; }
+        if room {
+            let w = s.rw; let x = (l + r) * 0.5;
+            for j in 0..4 { let y = sp_room(j)[((w - s.rd[j]) & msk) as usize] as f64; s.z[j] += (y - s.z[j]) * s.kd; }
+            let z = s.z;
+            let h0 = (z[0] + z[1] + z[2] + z[3]) * 0.5; let h1 = (z[0] - z[1] + z[2] - z[3]) * 0.5; let h2 = (z[0] + z[1] - z[2] - z[3]) * 0.5; let h3 = (z[0] - z[1] - z[2] + z[3]) * 0.5;
+            let wi = (w & msk) as usize;
+            sp_room(0)[wi] = (x + h0 * s.rfb) as f32; sp_room(1)[wi] = (x + h1 * s.rfb) as f32; sp_room(2)[wi] = (x + h2 * s.rfb) as f32; sp_room(3)[wi] = (x + h3 * s.rfb) as f32;
+            s.rw = w + 1;
+            l += (z[0] + z[2]) * 0.5 * s.rmix; r += (z[1] + z[3]) * 0.5 * s.rmix;
+        }
+        lb[k] = (l * s.trim) as f32; rb[k] = (r * s.trim) as f32;
     }
 }

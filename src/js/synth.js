@@ -349,12 +349,13 @@ const FX_FDN = [31.7, 37.1, 41.1, 43.7, 47.9, 53.3, 59.9, 67.1];
 const fxR = x => Math.floor(x + 0.5);
 const fxDb = db => exp2p(db * 0.16609640474436813);
 function fxBiq(b, kind, f, q, db, sr) {
-  // RBJ cookbook: 0 low-pass, 1 high-pass, 2 peaking, 3 low shelf, 4 high shelf; b = [b0 b1 b2 a1 a2 x1 x2 y1 y2]
+  // RBJ cookbook: 0 low-pass, 1 high-pass, 2 peaking, 3 low shelf, 4 high shelf, 5 all-pass; b = [b0 b1 b2 a1 a2 x1 x2 y1 y2]
   const w = TAU * f / sr, cw = sinp(w + Math.PI / 2), sw = sinp(w), al = sw / (2 * q), A = exp2p(db * 0.08304820237218406);
   let b0, b1, b2, a0, a1, a2;
   if (kind === 0) { b0 = (1 - cw) / 2; b1 = 1 - cw; b2 = b0; a0 = 1 + al; a1 = -2 * cw; a2 = 1 - al; }
   else if (kind === 1) { b0 = (1 + cw) / 2; b1 = -(1 + cw); b2 = b0; a0 = 1 + al; a1 = -2 * cw; a2 = 1 - al; }
   else if (kind === 2) { b0 = 1 + al * A; b1 = -2 * cw; b2 = 1 - al * A; a0 = 1 + al / A; a1 = -2 * cw; a2 = 1 - al / A; }
+  else if (kind === 5) { b0 = 1 - al; b1 = -2 * cw; b2 = 1 + al; a0 = 1 + al; a1 = -2 * cw; a2 = 1 - al; }
   else {
     const s2 = 2 * Math.sqrt(A) * al, sg = kind === 3 ? -1 : 1;
     b0 = A * ((A + 1) - sg * (A - 1) * cw + s2); b1 = 2 * sg * A * ((A - 1) - sg * (A + 1) * cw); b2 = A * ((A + 1) - sg * (A - 1) * cw - s2);
@@ -604,6 +605,262 @@ class Live extends AudioWorkletProcessor {
   }
 }
 registerProcessor('tactus-live', Live);
+// ---- mastering (mirrors mst_* in dsp/src/lib.rs: same helpers, same order of operations) ----
+// The end of the mix, before the speakers: a bass that is mono below a frequency, a three-band compressor
+// (Linkwitz-Riley crossovers, so the bands add back up flat) whose thresholds follow each band's own level, a level
+// that finds a loudness target by itself, and a limiter that looks ahead and keeps the peaks between the samples under
+// the ceiling too. It delays by the same few samples whether it is on or off, so switching it never jumps.
+// It also measures the result: K-weighted loudness in 100 ms blocks (ITU-R BS.1770), true peak, gain reduction and
+// the correlation between left and right.
+// p: 0 on, 1 multiband amount, 2 loudness target in LUFS (0: none), 3 ceiling dBTP, 4 mono below (Hz), 5 gain dB,
+//    6 limiter release ms
+// m: 0 momentary power, 1 short-term power, 2 true peak, 3 limiter gain (lowest), 4-6 band gains (lowest),
+//    7 the target's gain dB, 8-10 sums for the correlation (lr, ll, rr), 11 blocks so far
+const MS_N = 16, MS_M = 16, MS_R = 512, MS_X1 = 120, MS_X2 = 2500, MS_Q = 0.7071067811865476;
+const MS_ATK = [0.03, 0.01, 0.003], MS_REL = [0.2, 0.12, 0.08];
+// the points between samples: 4x oversampling by a short windowed-sinc filter (12 taps a phase, as BS.1770 suggests)
+const MS_FIR = [];
+for (let p = 1; p < 4; p++) {
+  const row = []; let sum = 0;
+  for (let j = -5; j <= 6; j++) { const u = p * 0.25 - j, w = 0.5 + 0.5 * sinp(Math.PI * u / 6.5 + Math.PI / 2), v = (u === 0 ? 1 : sinp(Math.PI * u) / (Math.PI * u)) * w; row.push(v); sum += v; }
+  MS_FIR.push(row.map(v => v / sum));
+}
+// the highest of a sample six back and the three points after it (h holds the last twelve samples, oldest first)
+function msTp(h, x) {
+  for (let j = 0; j < 11; j++) h[j] = h[j + 1]; h[11] = x;
+  let a = h[5] < 0 ? -h[5] : h[5];
+  for (let p = 0; p < 3; p++) { const c = MS_FIR[p]; let v = 0; for (let j = 0; j < 12; j++) v += c[j] * h[j]; if (v < 0) v = -v; if (v > a) a = v; }
+  return a;
+}
+// the knee of a compressor: gain change in dB for a level above the threshold (soft over 6 dB)
+function msGr(over, rat) {
+  const s = 1 - 1 / rat;
+  if (over <= -3) return 0;
+  if (over >= 3) return -over * s;
+  return -(over + 3) * (over + 3) / 12 * s;
+}
+class Mst {
+  constructor(sr) { this.sr = sr; this.p = new Float32Array(MS_N); this.m = new Float32Array(MS_M); this.p[3] = -1; this.p[6] = 60; this.reset(); }
+  reset() {
+    const sr = this.sr, b = [];
+    this.la = Math.max(1, fxR(0.0015 * sr)); this.D = this.la + 7; this.H = this.la + 8; this.B = this.la + 1;
+    this.xl = new Float32Array(MS_R); this.xr = new Float32Array(MS_R); this.rq = new Float32Array(MS_R).fill(1); this.rb = new Float64Array(MS_R).fill(1);
+    this.w = 0; this.rel = 1; this.bsum = this.B; this.mix = 0; this.gs = 0; this.auto = 0; this.ref = -100;
+    this.ev = new Float64Array(3); this.av = new Float64Array(3).fill(1e-6); this.gt = new Float64Array(3).fill(1); this.gb = new Float64Array(3).fill(1); this.cnt = 0;
+    this.hl = new Float64Array(12); this.hr = new Float64Array(12); this.ol = new Float64Array(12); this.or = new Float64Array(12);
+    this.acc = 0; this.an = 0; this.bp = new Float64Array(30); this.bn = 0; this.bw = 0; this.mono = -1;
+    for (let i = 0; i < 24; i++) b.push(new Float64Array(9));
+    for (let c = 0; c < 2; c++) {
+      const o = c * 9;
+      fxBiq(b[o], 0, MS_X1, MS_Q, 0, sr); fxBiq(b[o + 1], 0, MS_X1, MS_Q, 0, sr); fxBiq(b[o + 2], 1, MS_X1, MS_Q, 0, sr); fxBiq(b[o + 3], 1, MS_X1, MS_Q, 0, sr);
+      fxBiq(b[o + 4], 0, MS_X2, MS_Q, 0, sr); fxBiq(b[o + 5], 0, MS_X2, MS_Q, 0, sr); fxBiq(b[o + 6], 1, MS_X2, MS_Q, 0, sr); fxBiq(b[o + 7], 1, MS_X2, MS_Q, 0, sr);
+      fxBiq(b[o + 8], 5, MS_X2, MS_Q, 0, sr);
+    }
+    // 18: the side's high-pass (the mono bass); 19-22: K-weighting, a shelf and a high-pass for each side
+    for (const o of [19, 21]) { fxBiq(b[o], 4, 1681.974450955533, 0.7071752369554196, 3.999843853973347, sr); fxBiq(b[o + 1], 1, 38.13547087602444, 0.5003270373238773, 0, sr); }
+    this.bq = b;
+    this.m.fill(0); this.m[3] = 1; this.m[4] = 1; this.m[5] = 1; this.m[6] = 1;
+  }
+  process(iL, iR, oL, oR, n) {
+    const P = this.p, sr = this.sr, b = this.bq, m = this.m, M = MS_R - 1;
+    const on = P[0] > 0.5, mb = Math.max(0, Math.min(1, P[1])), tgt = P[2], ceil = fxDb(Math.max(-12, Math.min(0, P[3])));
+    const mono = Math.max(20, Math.min(400, P[4]));
+    if (mono !== this.mono) { this.mono = mono; fxBiq(b[18], 1, mono, MS_Q, 0, sr); }
+    const krel = 1 - expp(-1 / (Math.max(5, P[6]) * 0.001 * sr)), ksm = 1 - expp(-1 / (0.05 * sr)), kmix = 1 / (0.03 * sr), kg = 1 - expp(-1 / (0.002 * sr)), kav = 1 - expp(-1 / (3 * sr));
+    // the limiter aims 0.1 dB under the ceiling: 4x oversampling can miss a little of a peak between samples
+    const cdet = ceil * 0.9885530946569389;
+    const rat = 1 + 3 * mb, off = 6 - 6 * mb, mk = fxDb(1.5 * mb), sub = fxR(0.1 * sr);
+    const ka = [0, 1, 2].map(j => 1 - expp(-1 / (MS_ATK[j] * sr))), kr = [0, 1, 2].map(j => 1 - expp(-1 / (MS_REL[j] * sr)));
+    const gtd = (P[5] || 0) + (tgt < 0 ? this.auto : 0);
+    for (let k = 0; k < n; k++) {
+      this.mix += on ? (this.mix < 1 ? kmix : 0) : (this.mix > 0 ? -kmix : 0);
+      if (this.mix > 1) this.mix = 1; else if (this.mix < 0) this.mix = 0;
+      const mx = this.mix, l0 = iL[k], r0 = iR[k];
+      let l = l0, r = r0;
+      if (mx > 0) {
+        this.gs += (gtd - this.gs) * ksm;
+        const g = fxDb(this.gs); l *= g; r *= g;
+        const md = (l + r) * 0.5, sd = fxBq(b[18], (l - r) * 0.5); l = md + sd; r = md - sd;
+        // three bands each side; the low band goes through the high crossover's all-pass so the sum stays flat
+        const lo0 = fxBq(b[1], fxBq(b[0], l)), re0 = fxBq(b[3], fxBq(b[2], l)), mi0 = fxBq(b[5], fxBq(b[4], re0)), hi0 = fxBq(b[7], fxBq(b[6], re0)), la0 = fxBq(b[8], lo0);
+        const lo1 = fxBq(b[10], fxBq(b[9], r)), re1 = fxBq(b[12], fxBq(b[11], r)), mi1 = fxBq(b[14], fxBq(b[13], re1)), hi1 = fxBq(b[16], fxBq(b[15], re1)), la1 = fxBq(b[17], lo1);
+        const bl = [la0, mi0, hi0], br = [la1, mi1, hi1];
+        for (let j = 0; j < 3; j++) {
+          const a = bl[j] * bl[j], c = br[j] * br[j], e = a > c ? a : c;
+          this.ev[j] += (e - this.ev[j]) * (e > this.ev[j] ? ka[j] : kr[j]);
+          this.av[j] += (e - this.av[j]) * kav;
+        }
+        if ((this.cnt++ & 7) === 0) for (let j = 0; j < 3; j++) {
+          const lev = 3.0102999566398116 * Math.log2(this.ev[j] + 1e-12), avg = 3.0102999566398116 * Math.log2(this.av[j] + 1e-12);
+          this.gt[j] = mb > 0 ? fxDb(msGr(lev - (avg + off), rat)) : 1;
+        }
+        for (let j = 0; j < 3; j++) { this.gb[j] += (this.gt[j] - this.gb[j]) * kg; if (this.gb[j] < m[4 + j]) m[4 + j] = this.gb[j]; }
+        const pl = (la0 * this.gb[0] + mi0 * this.gb[1] + hi0 * this.gb[2]) * mk, pr = (la1 * this.gb[0] + mi1 * this.gb[1] + hi1 * this.gb[2]) * mk;
+        l = l0 + (pl - l0) * mx; r = r0 + (pr - r0) * mx;
+      }
+      // the limiter: what each sample (and the points around it) needs, held over the look-ahead, let go at the
+      // release, then averaged over the look-ahead so the gain is down by the time the peak comes out
+      const tl = msTp(this.hl, l), tr = msTp(this.hr, r), pk = tl > tr ? tl : tr;
+      const w = this.w;
+      this.xl[w & M] = l; this.xr[w & M] = r; this.rq[w & M] = pk > cdet ? cdet / pk : 1;
+      let hold = 1; for (let j = 0; j < this.H; j++) { const v = this.rq[(w - j) & M]; if (v < hold) hold = v; }
+      this.rel = hold < this.rel ? hold : this.rel + (hold - this.rel) * krel;
+      this.bsum += this.rel - this.rb[(w - this.B) & M]; this.rb[w & M] = this.rel;
+      let gl = this.bsum / this.B; if (gl > 1) gl = 1;
+      const ge = 1 + (gl - 1) * mx;
+      let ol = this.xl[(w - this.D) & M] * ge, or = this.xr[(w - this.D) & M] * ge;
+      if (mx > 0) { if (ol > ceil) ol = ceil; else if (ol < -ceil) ol = -ceil; if (or > ceil) or = ceil; else if (or < -ceil) or = -ceil; }
+      this.w = w + 1;
+      oL[k] = ol; oR[k] = or;
+      if (ge < m[3]) m[3] = ge;
+      // what came out: true peak, phase, loudness
+      const ta = msTp(this.ol, ol), tb = msTp(this.or, or), tp = ta > tb ? ta : tb; if (tp > m[2]) m[2] = tp;
+      m[8] += ol * or; m[9] += ol * ol; m[10] += or * or;
+      const kl = fxBq(b[20], fxBq(b[19], ol)), kq = fxBq(b[22], fxBq(b[21], or));
+      this.acc += kl * kl + kq * kq;
+      if (++this.an >= sub) this.block(on, tgt);
+    }
+  }
+  // every 100 ms: the block's mean square, momentary (last 4) and short-term (last 30) loudness, and the target's gain.
+  // The gain moves (slowly, so it never pumps) only while the music is near its loudest recent stretch, so a quiet verse
+  // keeps its gain and stays quieter than the chorus
+  block(on, tgt) {
+    this.bp[this.bw % 30] = this.acc / this.an; this.bw++; if (this.bn < 30) this.bn++;
+    this.acc = 0; this.an = 0;
+    let s4 = 0, s30 = 0; const n4 = this.bn < 4 ? this.bn : 4;
+    for (let j = 1; j <= this.bn; j++) { const v = this.bp[(this.bw - j) % 30]; s30 += v; if (j <= n4) s4 += v; }
+    const st = s30 / this.bn; this.m[0] = s4 / n4; this.m[1] = st; this.m[11] += 1;
+    if (on && tgt < 0 && this.bn >= 10) {
+      const L = -0.691 + 3.0102999566398116 * Math.log2(st + 1e-20);
+      if (L > -50) {
+        this.ref = this.ref - 0.05 > L ? this.ref - 0.05 : L;
+        if (L >= this.ref - 4) {
+          let step = (tgt - L) * 0.03; if (step > 0.3) step = 0.3; else if (step < -0.3) step = -0.3;
+          let a = this.auto + step; if (a > 18) a = 18; else if (a < -12) a = -12;
+          this.auto = a;
+        }
+      }
+    }
+    this.m[7] = this.auto;
+  }
+}
+// ---- speaker check (mirrors sp_* in dsp/src/lib.rs) ----
+// The finished mix as it would come out of other speakers: each model is a few filters (the driver's range and its
+// peaks), how much of the stereo it keeps, how hard its small driver distorts, and for a car or a club a short room.
+// The levels are matched (pink noise comes out as loud as it went in), so a model is heard for its tone, not its level.
+// A model: mono, drive, room mix, room feedback, room damping Hz, four room delays ms, trim dB, then up to 7 filters
+// as kind (0 low-pass, 1 high-pass, 2 peak, 3 low shelf, 4 high shelf; -1 none), frequency, Q, dB.
+const SP_W = 38, SP_RL = 8192;
+const SP_MODELS = [
+  /* phone */     1, 0.35, 0, 0, 0, 0, 0, 0, 0, 3.7, 1, 420, 0.54, 0, 1, 420, 1.31, 0, 2, 1100, 1, 3, 2, 3200, 1.2, 5, 0, 9000, 0.7, 0, -1, 0, 0, 0, -1, 0, 0, 0,
+  /* laptop */    0.6, 0.15, 0, 0, 0, 0, 0, 0, 0, 2.7, 1, 180, 0.54, 0, 1, 180, 1.31, 0, 2, 450, 0.8, 2, 2, 2600, 1, 3, 2, 6000, 2, -4, 0, 15000, 0.7, 0, -1, 0, 0, 0,
+  /* earbuds */   0, 0, 0, 0, 0, 0, 0, 0, 0, 3.1, 1, 90, 0.7, 0, 2, 2800, 1.4, 5, 2, 6500, 3, -6, 4, 10000, 0.7, -3, 0, 16000, 0.7, 0, -1, 0, 0, 0, -1, 0, 0, 0,
+  /* speaker */   1, 0.25, 0, 0, 0, 0, 0, 0, 0, 3.0, 1, 75, 0.54, 0, 1, 75, 1.31, 0, 2, 115, 1.6, 5, 2, 1500, 1, -2, 2, 4000, 1, 2.5, 0, 13000, 0.7, 0, -1, 0, 0, 0,
+  /* car */       0, 0.05, 0.12, 0.35, 4000, 2.3, 3.1, 4.7, 5.9, -2.6, 3, 75, 0.7, 6, 2, 220, 1, -3, 2, 3500, 1, 2, 4, 8000, 0.7, -3, 1, 28, 0.7, 0, -1, 0, 0, 0, -1, 0, 0, 0,
+  /* tv */        0.5, 0.1, 0, 0, 0, 0, 0, 0, 0, 3.1, 1, 140, 0.54, 0, 1, 140, 1.31, 0, 2, 800, 1.2, -2, 2, 3000, 1, 4, 0, 11000, 0.7, 0, -1, 0, 0, 0, -1, 0, 0, 0,
+  /* cube */      1, 0.05, 0, 0, 0, 0, 0, 0, 0, 3.6, 1, 160, 0.54, 0, 1, 160, 1.31, 0, 2, 1400, 0.7, 3, 2, 4500, 2, -2, 0, 10000, 0.7, 0, -1, 0, 0, 0, -1, 0, 0, 0,
+  /* club */      0.3, 0.1, 0.2, 0.72, 2500, 23.1, 29.7, 37.3, 43.9, -0.9, 3, 55, 0.7, 6, 2, 110, 0.9, 2, 2, 400, 1, -2, 4, 9000, 0.7, -4, 1, 30, 0.7, 0, -1, 0, 0, 0, -1, 0, 0, 0,
+  /* radio */     1, 0.6, 0, 0, 0, 0, 0, 0, 0, 5.0, 1, 280, 0.54, 0, 1, 280, 1.31, 0, 0, 3600, 0.54, 0, 0, 3600, 1.31, 0, 2, 1300, 1, 3, -1, 0, 0, 0, -1, 0, 0, 0,
+];
+class Spk {
+  constructor(sr) { this.sr = sr; this.model = 0; this.rm = [0, 1, 2, 3].map(() => new Float32Array(SP_RL)); this.set(0); }
+  set(model) {
+    this.model = model; const sr = this.sr;
+    this.bl = []; this.br = []; this.nf = 0; this.rw = 0; this.z = new Float64Array(4); this.rd = new Float64Array(4);
+    for (const r of this.rm) r.fill(0);
+    if (model < 1 || model > SP_MODELS.length / SP_W) return;
+    const o = (model - 1) * SP_W, M = SP_MODELS;
+    this.mono = M[o]; this.drive = M[o + 1]; this.rmix = M[o + 2]; this.rfb = M[o + 3]; this.kd = M[o + 4] > 0 ? 1 - expp(-TAU * M[o + 4] / sr) : 1; this.trim = fxDb(M[o + 9]);
+    for (let j = 0; j < 4; j++) this.rd[j] = Math.min(SP_RL - 2, fxR(M[o + 5 + j] * 0.001 * sr));
+    for (let j = 0; j < 7; j++) {
+      const q = o + 10 + j * 4; if (M[q] < 0) break;
+      const a = new Float64Array(9), c = new Float64Array(9); fxBiq(a, M[q], M[q + 1], M[q + 2], M[q + 3], sr); fxBiq(c, M[q], M[q + 1], M[q + 2], M[q + 3], sr);
+      this.bl.push(a); this.br.push(c); this.nf++;
+    }
+  }
+  process(L, R, n) {
+    if (this.model < 1 || !this.nf) return;
+    const sg = 1 - this.mono, g = 1 + 2 * this.drive, room = this.rmix > 0, msk = SP_RL - 1;
+    for (let k = 0; k < n; k++) {
+      const md = (L[k] + R[k]) * 0.5, sd = (L[k] - R[k]) * 0.5 * sg;
+      let l = md + sd, r = md - sd;
+      for (let j = 0; j < this.nf; j++) { l = fxBq(this.bl[j], l); r = fxBq(this.br[j], r); }
+      if (this.drive > 0) { l = th(l * g) / g; r = th(r * g) / g; }
+      if (room) {
+        const w = this.rw, z = this.z, x = (l + r) * 0.5;
+        for (let j = 0; j < 4; j++) { const y = this.rm[j][(w - this.rd[j]) & msk]; z[j] += (y - z[j]) * this.kd; }
+        const h0 = (z[0] + z[1] + z[2] + z[3]) * 0.5, h1 = (z[0] - z[1] + z[2] - z[3]) * 0.5, h2 = (z[0] + z[1] - z[2] - z[3]) * 0.5, h3 = (z[0] - z[1] - z[2] + z[3]) * 0.5;
+        this.rm[0][w & msk] = x + h0 * this.rfb; this.rm[1][w & msk] = x + h1 * this.rfb; this.rm[2][w & msk] = x + h2 * this.rfb; this.rm[3][w & msk] = x + h3 * this.rfb;
+        this.rw = w + 1;
+        l += (z[0] + z[2]) * 0.5 * this.rmix; r += (z[1] + z[3]) * 0.5 * this.rmix;
+      }
+      L[k] = l * this.trim; R[k] = r * this.trim;
+    }
+  }
+}
+// the end of the mix: the master above (Rust when it loaded), and every 100 ms what it measured
+class Master extends AudioWorkletProcessor {
+  constructor() {
+    super(); this.ms = new Mst(sampleRate); this.x = null; this.last = 0;
+    this.port.onmessage = e => {
+      const d = e.data;
+      if (d.t === 'wasm') {
+        try {
+          const x = new WebAssembly.Instance(new WebAssembly.Module(d.bytes), {}).exports;
+          x.mst_init(sampleRate); this.x = x; this.xv(); this.xp.set(this.ms.p);
+          this.port.postMessage({ t: 'wasm-ok' });
+        } catch (err) { this.port.postMessage({ t: 'wasm-fail', err: String(err) }); }
+        return;
+      }
+      if (d.t === 'p') { this.ms.p.set(d.p); if (this.x) { this.xv(); this.xp.set(d.p); } }
+    };
+  }
+  xv() { const x = this.x, b = x.memory.buffer; if (this.xb === b) return; this.xb = b; this.xp = new Float32Array(b, x.mst_params(), MS_N); this.xm = new Float32Array(b, x.mst_meter(), MS_M); this.xil = new Float32Array(b, x.mst_in_l(), 128); this.xir = new Float32Array(b, x.mst_in_r(), 128); this.xol = new Float32Array(b, x.mst_out_l(), 128); this.xor = new Float32Array(b, x.mst_out_r(), 128); }
+  process(ins, outs) {
+    const i = ins[0], o = outs[0]; if (!o || !o.length) return true;
+    const n = o[0].length, Z = this.z || (this.z = new Float32Array(128)), L = i && i[0] ? i[0] : Z, R = i && (i[1] || i[0]) ? (i[1] || i[0]) : Z;
+    const oL = o[0], oR = o[1] || o[0];
+    let m;
+    if (this.x) { this.xv(); this.xil.set(L.subarray(0, n)); this.xir.set(R.subarray(0, n)); this.x.mst_process(n); oL.set(this.xol.subarray(0, n)); if (oR !== oL) oR.set(this.xor.subarray(0, n)); m = this.xm; }
+    else { this.ms.process(L, R, oL, oR === oL ? (this.tmp || (this.tmp = new Float32Array(128))) : oR, n); m = this.ms.m; }
+    for (let k = 0; k < n; k++) { const v = oL[k]; if (v - v !== 0) { oL[k] = 0; } const u = oR[k]; if (u - u !== 0) oR[k] = 0; }
+    if (m[11] !== this.last) {
+      this.last = m[11];
+      this.port.postMessage({ m: Array.from(m) });
+      m[2] = 0; m[3] = 1; m[4] = 1; m[5] = 1; m[6] = 1; m[8] = 0; m[9] = 0; m[10] = 0;
+    }
+    return true;
+  }
+}
+registerProcessor('tactus-master', Master);
+class Speaker extends AudioWorkletProcessor {
+  constructor() {
+    super(); this.sp = new Spk(sampleRate); this.x = null; this.model = 0; this.fade = 1;
+    this.port.onmessage = e => {
+      const d = e.data;
+      if (d.t === 'wasm') {
+        try { const x = new WebAssembly.Instance(new WebAssembly.Module(d.bytes), {}).exports; if (!x.sp_init(sampleRate)) throw new Error('memory'); x.sp_set(this.model); this.x = x; this.port.postMessage({ t: 'wasm-ok' }); }
+        catch (err) { this.port.postMessage({ t: 'wasm-fail', err: String(err) }); }
+        return;
+      }
+      if (d.model != null && d.model !== this.model) { this.model = d.model; this.sp.set(d.model); if (this.x) this.x.sp_set(d.model); this.fade = 0; }
+    };
+  }
+  process(ins, outs) {
+    const i = ins[0], o = outs[0]; if (!o || !o.length) return true;
+    const n = o[0].length, oL = o[0], oR = o[1] || o[0];
+    if (!i || !i[0]) { oL.fill(0); oR.fill(0); return true; }
+    oL.set(i[0]); if (oR !== oL) oR.set(i[1] || i[0]);
+    if (this.model > 0) {
+      if (this.x) { const b = this.x.memory.buffer; if (this.xb !== b) { this.xb = b; this.pl = new Float32Array(b, this.x.sp_l(), 128); this.pr = new Float32Array(b, this.x.sp_r(), 128); } const pl = this.pl, pr = this.pr; pl.set(oL); pr.set(oR); this.x.sp_process(n); oL.set(pl.subarray(0, n)); if (oR !== oL) oR.set(pr.subarray(0, n)); }
+      else this.sp.process(oL, oR, n);
+    }
+    // a change of speaker comes in over 30 ms, so it never clicks
+    if (this.fade < 1) for (let k = 0; k < n; k++) { this.fade = Math.min(1, this.fade + 1 / (0.03 * sampleRate)); oL[k] *= this.fade; if (oR !== oL) oR[k] *= this.fade; }
+    return true;
+  }
+}
+registerProcessor('tactus-speaker', Speaker);
 `;
 const WK = { ok: null, loading: null, mod: null, dsp: 'js' };
 // decode the Rust DSP once; each worklet node compiles its own instance from these bytes
@@ -624,7 +881,7 @@ function ensureSynthWorklet() {
   WK.loading = (async () => {
     const urls = [URL.createObjectURL(new Blob([SYN_CODE], { type: 'text/javascript' })), 'data:text/javascript;charset=utf-8,' + encodeURIComponent(SYN_CODE)];
     dspModule();
-    for (const u of urls) { try { await S.ctx.audioWorklet.addModule(u); WK.ok = true; dspProbe(); for (const r of S.rt.values()) stripGuard(r); return true; } catch (e) { } }
+    for (const u of urls) { try { await S.ctx.audioWorklet.addModule(u); WK.ok = true; dspProbe(); for (const r of S.rt.values()) stripGuard(r); if (typeof mstAttach === 'function') mstAttach(); return true; } catch (e) { } }
     WK.ok = false; return false;
   })();
   return WK.loading;

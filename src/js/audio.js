@@ -35,7 +35,7 @@ function initAudio() {
   A.sat = ctx.createWaveShaper(); A.sat.curve = curve(0.05); A.sat.oversample = '4x';
   A.lim = ctx.createDynamicsCompressor();
   A.lim.threshold.value = -1.5; A.lim.ratio.value = 20; A.lim.knee.value = 0; A.lim.attack.value = 0.0015; A.lim.release.value = 0.09;
-  A.clip = A.lim; // capture point for resampling
+  A.fin = g(1); A.clip = A.fin; // the finished mix: the capture point for resampling
   A.out = g(OUT_GAIN);
   A.an = ctx.createAnalyser(); A.an.fftSize = 2048;
   A.gate = g(1);
@@ -61,7 +61,8 @@ function initAudio() {
   // safety: transparent below -1.4 dBFS, rounds off the few fast transients the limiter lets through
   A.safe = ctx.createWaveShaper(); A.safe.oversample = '4x';
   { const n = 4096, c = new Float32Array(n), t = 0.85; for (let i = 0; i < n; i++) { const x = i / (n - 1) * 2 - 1, a = Math.abs(x); c[i] = a <= t ? x : Math.sign(x) * (t + (1 - t) * Math.tanh((a - t) / (1 - t))); } A.safe.curve = c; }
-  A.lim.connect(A.safe); A.safe.connect(A.out); A.out.connect(A.an); A.an.connect(ctx.destination);
+  // the mastering worklet (master.js) goes between safe and fin once it has loaded
+  A.lim.connect(A.safe); A.safe.connect(A.fin); A.fin.connect(A.out); A.out.connect(A.an); A.an.connect(ctx.destination);
   // stereo ping-pong delay (dotted 8th), filtered so repeats sit behind the dry sound
   A.dIn = g(1); A.dHP = bq('highpass', 300);
   A.dlL = ctx.createDelay(4); A.dlR = ctx.createDelay(4);
@@ -97,7 +98,7 @@ function initAudio() {
   A.synIn = ctx.createDelay(0.05); A.synIn.delayTime.value = 0.006; A.synIn.connect(A.bus);
   A.drumIn.connect(A.drumComp); A.drumComp.connect(A.drumSat); A.drumSat.connect(A.drumOut); A.drumOut.connect(A.bus);
   // a long FFT on the finished mix, read by the spectral freeze pad
-  A.frz = ctx.createAnalyser(); A.frz.fftSize = 32768; A.frz.smoothingTimeConstant = 0; A.lim.connect(A.frz);
+  A.frz = ctx.createAnalyser(); A.frz.fftSize = 32768; A.frz.smoothingTimeConstant = 0; A.fin.connect(A.frz);
   ensureSynthWorklet(); loadKit(); applyMaster(S.masterMode); gpuInit().then(gpuPrewarm);
   mixSync();
   if (S.space && S.space !== 'hall-default') applySpace(S.space);

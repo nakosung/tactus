@@ -494,7 +494,7 @@ const STRIP_PARAMS = ['gain', 'pan', 'hpf', 'lpf', 'low', 'mid', 'midf', 'high',
 const BUS_PARAMS = [...STRIP_PARAMS, 'delay', 'verb'];
 const VERB_PARAMS = ['gain', 'pre', 'hpf', 'lpf', 'duck'];
 const DELAY_PARAMS = ['gain', 'time', 'fb', 'hpf', 'lpf', 'duck'];
-const MASTER_PARAMS = ['thr', 'ratio', 'catk', 'crel', 'low', 'mid', 'midf', 'high', 'width', 'drive', 'limit', 'gain'];
+const MASTER_PARAMS = ['thr', 'ratio', 'catk', 'crel', 'low', 'mid', 'midf', 'high', 'width', 'drive', 'limit', 'gain', 'target', 'bands', 'ceil', 'monobass'];
 function mixParams(src, base, allowed) {
   const chunks = splitChunks(src, base), params = {};
   for (let i = 0; i < chunks.length; i++) {

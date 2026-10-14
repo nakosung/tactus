@@ -572,7 +572,7 @@ $('#padCode').addEventListener('click', () => {
 
 // ---------- control surface tabs ----------
 // perform, record (voice and loops, with the mic settings they share), sounds (hear every instrument), guide
-const TABS = ['perform', 'record', 'sounds', 'guide'];
+const TABS = ['perform', 'record', 'sounds', 'master', 'guide'];
 function showTab(name) {
   for (const n of TABS) { $('#tab-' + n).setAttribute('aria-selected', n === name); $('#pane-' + n).hidden = n !== name; }
   try { localStorage.setItem('pulse-tab', name); } catch (e) { }

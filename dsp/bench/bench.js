@@ -7,7 +7,7 @@ const src = fs.readFileSync(path.join(__dirname, '../../src/js/synth.js'), 'utf8
 const code = /const SYN_CODE = `([\s\S]*?)`;/.exec(src)[1];
 globalThis.sampleRate = SR; globalThis.currentFrame = 0;
 globalThis.AudioWorkletProcessor = class { constructor() { this.port = {}; } };
-let Syn, Live; globalThis.registerProcessor = (n, c) => { if (n === 'pulse-synth') Syn = c; if (n === 'tactus-live') Live = c; };
+let Syn, Live, Master, Speaker; globalThis.registerProcessor = (n, c) => { if (n === 'pulse-synth') Syn = c; if (n === 'tactus-live') Live = c; if (n === 'tactus-master') Master = c; if (n === 'tactus-speaker') Speaker = c; };
 globalThis.currentTime = 0;
 new Function(code)();
 // the engine's wavetables, made by the same code the app uses
@@ -121,4 +121,84 @@ function fxRun(useWasm, secs) {
   const fs_ = Math.min(SECS, 10), a = fxRun(false, fs_), b = fxRun(true, fs_);
   let e = 0, pk = 0; for (let i = 0; i < a.out.length; i++) { e = Math.max(e, Math.abs(a.out[i] - b.out[i])); pk = Math.max(pk, Math.abs(a.out[i])); }
   console.log(`live effects max abs difference ${e.toExponential(2)} (peak ${pk.toFixed(3)}) · ${fs_}s, every effect on: JS ${a.ms.toFixed(0)} ms, WASM ${b.ms.toFixed(0)} ms (${(fs_ * 1000 / b.ms).toFixed(0)}x realtime)`);
+}
+
+// ---- the master and the speaker check ----
+// A made-up mix (kick, snare, hats, a bass and chords, with a quiet verse and a loud chorus), through the mastering
+// in JavaScript and in Rust; both must agree. Then the checks that matter: true peak (by 8x oversampling) under the
+// ceiling, the loud part at the loudness target, the quiet part still quieter.
+function mixSig(N) {
+  const L = new Float32Array(N), R = new Float32Array(N), beat = SR * 60 / 124; let seed = 9, ph = 0, ph2 = 0;
+  const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647 * 2 - 1;
+  for (let i = 0; i < N; i++) {
+    const t = i / SR, b = i / beat, bp = b % 1, loud = Math.floor(t / 8) % 2 ? 1 : 0.35;
+    let k = 0; if (bp < 0.3) { ph += 2 * Math.PI * (48 + 110 * Math.exp(-bp * beat / SR * 30)) / SR; k = 0.9 * Math.sin(ph) * Math.exp(-bp * beat / SR * 7); }
+    const sb = (b + 1) % 2 - 1, sn = sb >= 0 && sb < 0.25 ? 0.35 * rnd() * Math.exp(-sb * beat / SR * 22) : 0;
+    const hb = (b * 2) % 1, h = 0.12 * rnd() * Math.exp(-hb * beat / 2 / SR * 60);
+    const root = [45, 41, 43, 40][Math.floor(b / 4) % 4], f = 440 * Math.pow(2, (root - 69) / 12);
+    ph2 += f / SR; const bass = 0.35 * ((ph2 % 1) * 2 - 1);
+    let ch = 0; for (const iv of [12, 15, 19]) ch += Math.sin(2 * Math.PI * f * Math.pow(2, iv / 12) * t) * 0.08;
+    L[i] = (k + sn + h * 0.7 + bass + ch * 1.2) * 0.5 * loud; R[i] = (k + sn + h * 1.3 + bass + ch * 0.8) * 0.5 * loud;
+  }
+  return [L, R];
+}
+const MSP = { 0: 1, 1: 0.5, 2: -14, 3: -1, 4: 120, 5: 0, 6: 60 };
+function mstRun(useWasm, L, R) {
+  const N = L.length, oL = new Float32Array(N), oR = new Float32Array(N); let ms, x, io, m, blocks = [];
+  if (useWasm) {
+    x = new WebAssembly.Instance(new WebAssembly.Module(fs.readFileSync(path.join(__dirname, '../tactus_dsp.wasm'))), {}).exports; x.mst_init(SR);
+    const b = x.memory.buffer, pp = new Float32Array(b, x.mst_params(), 16); for (const k in MSP) pp[k] = MSP[k];
+    io = [new Float32Array(b, x.mst_in_l(), BLOCK), new Float32Array(b, x.mst_in_r(), BLOCK), new Float32Array(b, x.mst_out_l(), BLOCK), new Float32Array(b, x.mst_out_r(), BLOCK)]; m = new Float32Array(b, x.mst_meter(), 16);
+  } else { ms = new Master().ms; for (const k in MSP) ms.p[k] = MSP[k]; m = ms.m; }
+  const tl = new Float32Array(BLOCK), tr = new Float32Array(BLOCK); let last = 0;
+  const t0 = process.hrtime.bigint();
+  for (let f = 0; f + BLOCK <= N; f += BLOCK) {
+    if (useWasm) { io[0].set(L.subarray(f, f + BLOCK)); io[1].set(R.subarray(f, f + BLOCK)); x.mst_process(BLOCK); oL.set(io[2], f); oR.set(io[3], f); }
+    else { ms.process(L.subarray(f, f + BLOCK), R.subarray(f, f + BLOCK), tl, tr, BLOCK); oL.set(tl, f); oR.set(tr, f); }
+    if (m[11] !== last) { last = m[11]; blocks.push(m[0]); }
+  }
+  return { ms: Number(process.hrtime.bigint() - t0) / 1e6, oL, oR, blocks, auto: m[7] };
+}
+// true peak by 8x oversampling with a windowed sinc (a reference, not the cheap estimate the limiter uses)
+function truePeak(x) {
+  const O = 8, T = 32, h = []; for (let p = 0; p < O; p++) { const row = []; for (let j = -T; j <= T; j++) { const u = j - p / O; const w = 0.5 + 0.5 * Math.cos(Math.PI * u / (T + 1)); row.push(u === 0 ? 1 : Math.sin(Math.PI * u) / (Math.PI * u) * w); } h.push(row); }
+  let pk = 0;
+  for (let i = T; i < x.length - T; i++) for (let p = 0; p < O; p++) { let s = 0; const row = h[p]; for (let j = -T; j <= T; j++) s += row[j + T] * x[i + j]; const a = Math.abs(s); if (a > pk) pk = a; }
+  return pk;
+}
+const lufs = pw => -0.691 + 10 * Math.log10(pw + 1e-20);
+{
+  const secs = 32, [L, R] = mixSig(SR * secs), a = mstRun(false, L, R), b = mstRun(true, L, R);
+  let e = 0, pk = 0; for (let i = 0; i < L.length; i++) { e = Math.max(e, Math.abs(a.oL[i] - b.oL[i]), Math.abs(a.oR[i] - b.oR[i])); pk = Math.max(pk, Math.abs(a.oL[i])); }
+  console.log(`master max abs difference ${e.toExponential(2)} (peak ${pk.toFixed(3)}) · ${secs}s: JS ${a.ms.toFixed(0)} ms, WASM ${b.ms.toFixed(0)} ms (${(secs * 1000 / b.ms).toFixed(0)}x realtime)`);
+  const tp = 20 * Math.log10(Math.max(truePeak(b.oL.subarray(SR * 4)), truePeak(b.oR.subarray(SR * 4))));
+  // the loud half's momentary loudness in its second pass (24-32 s) and the quiet half's (16-24 s)
+  const mean = (arr, a0, a1) => arr.slice(a0, a1).reduce((s, v) => s + v, 0) / (a1 - a0);
+  const loudL = lufs(mean(b.blocks, 244, 320)), quietL = lufs(mean(b.blocks, 164, 240)), inL = lufs(mean(mstRun(true, L, R).blocks, 0, 1));
+  console.log(`master: true peak ${tp.toFixed(2)} dBTP (ceiling -1) · loud part ${loudL.toFixed(1)} LUFS (target -14), quiet part ${quietL.toFixed(1)} LUFS · auto gain ${b.auto.toFixed(1)} dB`);
+}
+// each speaker: pink noise in at -20 LUFS, out at about the same loudness (the trims are set from this)
+{
+  const N = SR * 6, L = new Float32Array(N), R = new Float32Array(N); let seed = 5, b0 = 0, b1 = 0, b2 = 0, b3 = 0, b4 = 0, b5 = 0, b6 = 0, c0 = 0, c1 = 0, c2 = 0, c3 = 0, c4 = 0, c5 = 0, c6 = 0;
+  const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647 * 2 - 1;
+  const pink = (x, s) => { s[0] = 0.99886 * s[0] + x * 0.0555179; s[1] = 0.99332 * s[1] + x * 0.0750759; s[2] = 0.969 * s[2] + x * 0.153852; s[3] = 0.8665 * s[3] + x * 0.3104856; s[4] = 0.55 * s[4] + x * 0.5329522; s[5] = -0.7616 * s[5] - x * 0.016898; const y = (s[0] + s[1] + s[2] + s[3] + s[4] + s[5] + s[6] + x * 0.5362) * 0.11; s[6] = x * 0.115926; return y; };
+  const sl = [0, 0, 0, 0, 0, 0, 0], sr_ = [0, 0, 0, 0, 0, 0, 0];
+  for (let i = 0; i < N; i++) { L[i] = pink(rnd(), sl); R[i] = pink(rnd(), sr_); }
+  const kw = (l, r) => { const ms = new Master().ms; ms.p[0] = 0; const oL = new Float32Array(BLOCK), oR = new Float32Array(BLOCK), bl = []; let last = 0; for (let f = 0; f + BLOCK <= l.length; f += BLOCK) { ms.process(l.subarray(f, f + BLOCK), r.subarray(f, f + BLOCK), oL, oR, BLOCK); if (ms.m[11] !== last) { last = ms.m[11]; bl.push(ms.m[1]); } } return lufs(bl[bl.length - 1]); };
+  const g = Math.pow(10, (-20 - kw(L, R)) / 20); for (let i = 0; i < N; i++) { L[i] *= g; R[i] *= g; }
+  const names = ['phone', 'laptop', 'earbuds', 'speaker', 'car', 'tv', 'cube', 'club', 'radio'], row = [];
+  const x = new WebAssembly.Instance(new WebAssembly.Module(fs.readFileSync(path.join(__dirname, '../tactus_dsp.wasm'))), {}).exports; x.sp_init(SR);
+  const xl = new Float32Array(x.memory.buffer, x.sp_l(), BLOCK), xr = new Float32Array(x.memory.buffer, x.sp_r(), BLOCK);
+  let e = 0;
+  for (let mo = 1; mo <= 9; mo++) {
+    const sp = new Speaker().sp; sp.set(mo); x.sp_set(mo);
+    const oL = L.slice(), oR = R.slice(), wL = L.slice(), wR = R.slice();
+    for (let f = 0; f + BLOCK <= N; f += BLOCK) {
+      sp.process(oL.subarray(f, f + BLOCK), oR.subarray(f, f + BLOCK), BLOCK);
+      xl.set(wL.subarray(f, f + BLOCK)); xr.set(wR.subarray(f, f + BLOCK)); x.sp_process(BLOCK); wL.set(xl, f); wR.set(xr, f);
+    }
+    for (let i = 0; i < N; i++) e = Math.max(e, Math.abs(oL[i] - wL[i]), Math.abs(oR[i] - wR[i]));
+    row.push(`${names[mo - 1]} ${(kw(oL, oR) + 20).toFixed(1)}`);
+  }
+  console.log(`speakers max abs difference ${e.toExponential(2)} · loudness change on pink noise (dB): ${row.join(', ')}`);
 }

@@ -18,7 +18,7 @@ function mixApply(r) {
   S.buses = new Map([...r.buses].filter(([n]) => n !== 'verb' && n !== 'delay'));
   S.retParams = { verb: (r.buses.get('verb') || {}).params || {}, delay: (r.buses.get('delay') || {}).params || {} };
   const sig = JSON.stringify(r.masterParams || {});
-  if (sig !== S.masterSig) { S.masterSig = sig; S.masterParams = r.masterParams || {}; S.mixLast = {}; S.masterSat = null; if (S.ctx) { applyMaster(S.masterMode); resetMasterExtras(); } }
+  if (sig !== S.masterSig) { S.masterSig = sig; S.masterParams = r.masterParams || {}; S.mixLast = {}; S.masterSat = null; if (S.ctx) { applyMaster(S.masterMode); resetMasterExtras(); } if (typeof mstRender === 'function' && typeof MST_READY !== 'undefined') { if (S.ctx) mstSync(transport(S.ctx.currentTime), 0); mstRender(); } }
   if (S.ctx) mixSync();
 }
 function mixSync() {
@@ -84,6 +84,7 @@ function widthAt(w, time) {
   A.wM[0].gain.setTargetAtTime(a, time, 0.02); A.wM[1].gain.setTargetAtTime(b, time, 0.02); A.wM[2].gain.setTargetAtTime(b, time, 0.02); A.wM[3].gain.setTargetAtTime(a, time, 0.02);
 }
 function masterAt(s, time) {
+  if (typeof mstSync === 'function') mstSync(s, time);
   const mp = S.masterParams; if (!mp || !A.glue) return;
   const keys = Object.keys(mp); if (!keys.length) return;
   const P = {}; for (const k of keys) { const x = valueAt(mp[k], s, k); if (x !== null) P[k] = x; }
