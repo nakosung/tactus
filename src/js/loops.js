@@ -335,8 +335,18 @@ function playRegion(slot, from, to, atC, pdef, fade) {
   nodes.pan.pan.setValueAtTime(Math.max(-1, Math.min(1, P.pan)), time);
   stripAt(r, P, time);
   const rate = S.cps / v.cps, bs = buf.duration;
-  const src = playBuf(nodes.in, buf, time, within * bs, (to - from) * bs, rate, fade);
-  slot.srcs.push({ src, end: timeOf(atC + (to - from)) });
+  // a separated loop plays its two stems, each at its own level (drums, rest); together at 1 they are the loop
+  const st = v === slot && sepValid(slot) ? slot.stems : null, gd = Math.max(0, P.drums), gr = Math.max(0, P.rest);
+  if (st && (gd !== 1 || gr !== 1)) {
+    for (const [bufs, g] of [[st.drums, gd], [st.rest, gr]]) {
+      if (g <= 0) continue;
+      const gn = S.ctx.createGain(); gn.gain.value = g; gn.connect(nodes.in);
+      slot.srcs.push({ src: playBuf(gn, bufs[bi], time, within * bs, (to - from) * bs, rate, fade), end: timeOf(atC + (to - from)) });
+    }
+  } else {
+    const src = playBuf(nodes.in, buf, time, within * bs, (to - from) * bs, rate, fade);
+    slot.srcs.push({ src, end: timeOf(atC + (to - from)) });
+  }
   if (slot.srcs.length > 24) slot.srcs = slot.srcs.filter(s => s.end > now);
   slot.lastPlay = { time, pos: bi + within, bars: v.bars };
   if (pdef) S.vis.push({ time, id: '', line: pdef.line });
@@ -393,6 +403,54 @@ function playChop(def, ev, time, dur, P) {
 function resetLoops() {
   for (const s of LS.slots) { stopSlotSources(s, S.ctx ? S.ctx.currentTime : 0); s.cover = -Infinity; s.waiting = null; }
 }
+
+// ---------- drum separation (sep.js) ----------
+// The stems belong to the bars they were made from: a new take, a load, an undo or a clear makes them stale.
+function sepValid(slot) { const st = slot.stems; return !!(st && slot.bufs && st.of.length === slot.bufs.length && st.of.every((b, k) => b === slot.bufs[k])); }
+function sepSlot(i) {
+  const slot = LS.slots[i]; if (!slot.bufs || !slot.bufs.every(Boolean) || slot.sepBusy) return;
+  const fr = slot.bufs[0].length, n = fr * slot.bufs.length, L = new Float32Array(n), R = new Float32Array(n);
+  slot.bufs.forEach((b, k) => { L.set(b.getChannelData(0), k * fr); R.set(b.getChannelData(b.numberOfChannels > 1 ? 1 : 0), k * fr); });
+  const msg = { L, R, sr: S.ctx.sampleRate, bars: slot.bars, barSec: 1 / slot.cps }, of = slot.bufs.slice();
+  slot.sepBusy = true; loopMsg(t('sepWorking', { name: slot.name }), '', 60000); renderLoops();
+  const done = d => {
+    slot.sepBusy = false;
+    if (slot.bufs.length !== of.length || !of.every((b, k) => b === slot.bufs[k])) { renderLoops(); return; }
+    const cut = (ch, k) => ch.subarray(k * fr, (k + 1) * fr), mk = arr => of.map((_, k) => makeBuf(cut(arr[0], k), cut(arr[1] || arr[0], k), 0, fr));
+    slot.stems = { of, drums: mk(d.drums), rest: mk(d.rest), lines: d.lines, peaks: null };
+    const nk = Object.keys(d.lines).length;
+    loopMsg(t('sepDone', { name: slot.name, kinds: nk ? Object.keys(d.lines).join(', ') : '—' }), 'ok', 6000); renderLoops();
+  };
+  try {
+    if (!LS.sepUrl) LS.sepUrl = URL.createObjectURL(new Blob([sepWorkerSrc()], { type: 'text/javascript' }));
+    const w = new Worker(LS.sepUrl);
+    w.onmessage = e => { w.terminate(); done(e.data); };
+    w.onerror = e => { w.terminate(); e.preventDefault(); inline(); };
+    w.postMessage(msg, [L.buffer, R.buffer]);
+  } catch (e) { inline(); }
+  // no workers here: do it on the page after a frame, so the message shows first
+  function inline() { setTimeout(() => { const o = sepSplit(msg.L, msg.R, msg.sr), b = sepBeats(o.spec, msg.bars, msg.barSec); done({ drums: o.drums, rest: o.rest, lines: b.lines }); }, 30); }
+}
+// how the loop's line sets the two stems: all, drums only, no drums
+function sepMode(slot) { const d = S.tracks.get(slot.name), v = k => { const p = d && d.params[k]; return p && p.k === 'num' ? p.v : 1; }; const a = v('drums'), b = v('rest'); return a === 1 && b === 1 ? 'all' : a > 0 && b === 0 ? 'drums' : a === 0 && b > 0 ? 'nodrums' : 'mix'; }
+function sepSetMode(slot, mode) {
+  const [d, r] = { all: [1, 1], drums: [1, 0], nodrums: [0, 1] }[mode];
+  const lines = srcEl.value.split('\n'), i = lines.findIndex(l => new RegExp(`^\\s*${slot.name}\\b`).test(l) && !/^\s*\/\//.test(l));
+  if (i >= 0) { const p = bkSplit(lines[i]); if (p) { p.params = bkSetParam(bkSetParam(p.params, 'drums', d), 'rest', r); lines[i] = bkJoin(p); srcEl.value = lines.join('\n'); } }
+  else codeAddTrack(slot.name, `${slot.name} | drums ${d} rest ${r}`);
+  try { localStorage.setItem('pulse-src', srcEl.value); } catch (e) { }
+  render(); evaluate('bar'); renderLoops();
+}
+// the separated drums as code: kick, snare and hat lines on the loop's grid, and the loop's own drums turned off,
+// so the kit plays the beat the loop had
+function sepToCode(slot) {
+  const st = slot.stems; if (!st) return;
+  const pre = 'l' + (slot.i ? slot.i + 1 : ''), add = Object.entries(st.lines).map(([k, tok]) => ({ name: pre + k, pat: vxPattern(tok, slot.bars, false), params: k + (k === 'hat' ? ' gain .5' : k === 'snare' ? ' gain .7' : ' gain .9') }));
+  if (!add.length) { loopMsg(t('sepNoBeat'), 'bad'); return; }
+  LS.sepUndo = srcEl.value; codeInsertLines(add); sepSetMode(slot, 'nodrums');
+  loopMsg(t('sepCoded', { n: add.length, name: slot.name }), 'ok', 7000);
+}
+function sepUndo() { if (LS.sepUndo == null) return; srcEl.value = LS.sepUndo; LS.sepUndo = null; render(); evaluate('bar'); renderLoops(); loopMsg(t('vxUndone'), 'ok'); }
 
 // ---------- import ----------
 async function loadIntoSlot(i, file) {

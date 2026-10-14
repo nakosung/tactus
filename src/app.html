@@ -258,6 +258,10 @@ body.recording .editor { border-color: var(--c-err); }
 .slots { display: grid; gap: 6px; }
 .slot { display: grid; grid-template-columns: 32px minmax(0, 1fr) auto auto auto auto; align-items: center; gap: 5px; padding: 6px; border-radius: var(--r-l); background: var(--panel); border: 1px solid var(--line); }
 .slot.drop { border-color: var(--k-blue); }
+.sl-stems { grid-column: 2 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 5px; }
+.sl-stems[hidden] { display: none; }
+.sl-stems .seg button { font-size: 11.5px; padding: 4px 8px; }
+.sl-sep { font-size: 11.5px; color: var(--dim); }
 .slot .rec { width: 32px; height: 32px; border-radius: 50%; border: 1px solid var(--line); background: var(--raised); cursor: pointer; display: grid; place-items: center; padding: 0; box-shadow: var(--shadow); }
 .slot .rec i { width: 11px; height: 11px; border-radius: 50%; background: var(--k-pink); }
 .slot.armed .rec { animation: blink .5s steps(2) infinite; }
@@ -1290,6 +1294,7 @@ body.mob.mland .pad { min-height: 60px; }
 /*UI*/
 /*SHARE*/
 /*VXDSP*/
+/*SEP*/
 /*MATCH*/
 /*VOICE*/
 /*LIVE*/

@@ -16,7 +16,7 @@ REPO = 'https://github.com/nakosung/tactus'
 SITE = 'https://nakosung.github.io/tactus/'
 # order matters: later scripts use what earlier ones define
 APP_JS = ['i18n', 'skin', 'pwa', 'kit', 'engine', 'gen', 'presets', 'audio', 'mix', 'dsp_wasm', 'wavetables', 'synth', 'samples', 'musical',
-          'nsax_net', 'gpu', 'loops', 'preview', 'sounds', 'hand', 'ui', 'share', 'vxdsp', 'match', 'voice', 'live', 'pedals', 'blocks', 'viz', 'mobile']
+          'nsax_net', 'gpu', 'loops', 'preview', 'sounds', 'hand', 'ui', 'share', 'vxdsp', 'sep', 'match', 'voice', 'live', 'pedals', 'blocks', 'viz', 'mobile']
 PLACEHOLDER = {'dsp_wasm': 'DSPWASM', 'nsax_net': 'NSAXNET'}
 
 

@@ -336,7 +336,7 @@ srcEl.addEventListener('wheel', e => {
 }, { passive: false });
 
 // ---------- autocomplete ----------
-const AC_RANGES = { lpf: [300, 8000], mid: [-9, 6], midf: [200, 4000], chorus: [0, 1], phaser: [0, 1], dist: [0, .8], crush: [0, .8], thr: [-36, -6], ratio: [1.5, 8], catk: [1, 50], crel: [40, 400], bright: [.2, .9], slide: [0, 1], acc: [0, 1], sub: [0, 1], glide: [0, .3], fatk: [0, .5], fdec: [.05, 1], fsus: [0, 1], penv: [-24, 24], pdec: [.01, .3], noise: [0, .6], voices: [1, 7], pw: [.05, .95], sync: [1, 6], ring: [0, 1], scan: [0, 1], fm: [0, 8], ratio: [.5, 8], feed: [0, .8], fmdec: [.05, 1], vowel: [0, 4], hpf: [20, 800], low: [-12, 6], high: [-12, 6], drive: [0, .8], width: [0, 1], vib: [0, 30], cut: [300, 6000], gain: [0, 1], pan: [-1, 1], res: [1, 15], verb: [0, .8], delay: [0, .6], duck: [0, 1], shape: [0, .8], detune: [0, 40], env: [0, 1], oct: [2, 5], len: [.25, 1], atk: [.005, 1], dec: [.05, 1], sus: [0, 1], rel: [.05, 2], tune: [.7, 1.4], slices: [4, 16], vel: [.5, 1.3], nudge: [-30, 30], human: [0, 1], swing: [0, .6], sgrid: [8, 16], comp: [0, 1], rate: [4, 32], tr: [-7, 7], range: [3, 12] };
+const AC_RANGES = { drums: [0, 1], rest: [0, 1], lpf: [300, 8000], mid: [-9, 6], midf: [200, 4000], chorus: [0, 1], phaser: [0, 1], dist: [0, .8], crush: [0, .8], thr: [-36, -6], ratio: [1.5, 8], catk: [1, 50], crel: [40, 400], bright: [.2, .9], slide: [0, 1], acc: [0, 1], sub: [0, 1], glide: [0, .3], fatk: [0, .5], fdec: [.05, 1], fsus: [0, 1], penv: [-24, 24], pdec: [.01, .3], noise: [0, .6], voices: [1, 7], pw: [.05, .95], sync: [1, 6], ring: [0, 1], scan: [0, 1], fm: [0, 8], ratio: [.5, 8], feed: [0, .8], fmdec: [.05, 1], vowel: [0, 4], hpf: [20, 800], low: [-12, 6], high: [-12, 6], drive: [0, .8], width: [0, 1], vib: [0, 30], cut: [300, 6000], gain: [0, 1], pan: [-1, 1], res: [1, 15], verb: [0, .8], delay: [0, .6], duck: [0, 1], shape: [0, .8], detune: [0, 40], env: [0, 1], oct: [2, 5], len: [.25, 1], atk: [.005, 1], dec: [.05, 1], sus: [0, 1], rel: [.05, 2], tune: [.7, 1.4], slices: [4, 16], vel: [.5, 1.3], nudge: [-30, 30], human: [0, 1], swing: [0, .6], sgrid: [8, 16], comp: [0, 1], rate: [4, 32], tr: [-7, 7], range: [3, 12] };
 const AC_QUAL = ['', 'm', '7', 'maj7', 'm7', '9', 'm9', 'maj9', 'sus2', 'sus4', '7sus4', 'dim', 'dim7', 'm7b5', 'aug', '6', 'm6', 'add9', 'madd9', '11', 'm11', '13', '7b9', '7#9', 'mM7', '5'];
 const AC_TRACKS = ['kick', 'snare', 'clap', 'hat', 'ohat', 'ride', 'crash', 'shaker', 'rim', 'tom', 'bass', 'keys', 'flute', 'strings', 'gayageum', 'piano', 'vibes', 'sax', 'harp', 'harpsi', 'asnare', 'ahat', 'aride', 'acrash', 'conga', 'bongo', 'cajon', 'tamb', 'gong', 'sub', 'acid', 'lead', 'pad', 'arp', 'pluck', 'stab', 'bell', 'chord', 'reese', 'growl', 'fm', 'analog', 'mono', ...LOOPS];
 const acEl = document.createElement('div');
@@ -716,6 +716,7 @@ function buildSlots() {
       <button class="sm mute" title="${esc(t('muteTitle'))}">M</button>
       <button class="sm undo" title="${esc(t('undoTitle'))}" aria-label="${esc(t('undoTitle'))}">↶</button>
       <button class="sm clear" title="${esc(t('clearTitle'))}" aria-label="${esc(t('clearTitle'))}">×</button>
+      <div class="sl-stems"></div>
     </div>`).join('');
   renderLoops();
 }
@@ -726,6 +727,10 @@ slotsEl.addEventListener('click', e => {
   else if (e.target.closest('.mute')) { toggleSet(S.muted, s.name); syncLoopVols(); render(); }
   else if (e.target.closest('.undo')) undoSlot(i);
   else if (e.target.closest('.clear')) clearSlot(i);
+  else if (e.target.closest('[data-sep]')) {
+    const m = e.target.closest('[data-sep]').dataset.sep;
+    if (m === 'split') sepSlot(i); else if (m === 'code') sepToCode(s); else if (m === 'undo') sepUndo(); else sepSetMode(s, m);
+  }
 });
 slotsEl.addEventListener('change', e => {
   const row = e.target.closest('.slot'); if (row && e.target.matches('.bars')) LS.slots[+row.dataset.i].sel = +e.target.value;
@@ -787,6 +792,12 @@ function renderLoops() {
     row.querySelector('.mute').classList.toggle('off', S.muted.has(s.name));
     row.querySelector('.undo').disabled = !s.prev && !(tk && tk.slot === s);
     row.querySelector('.clear').disabled = !s.bufs && !(tk && tk.slot === s);
+    // drums: split the loop, then play all of it, only its drums or all but its drums, or write its beat as code
+    const sb = row.querySelector('.sl-stems'), ok = sepValid(s), mode = ok ? sepMode(s) : '';
+    sb.hidden = !s.bufs || !!tk && tk.slot === s;
+    sb.innerHTML = !s.bufs ? '' : s.sepBusy ? `<span class="sl-sep">${esc(t('sepBusy'))}</span>`
+      : !ok ? `<button class="calbtn" data-sep="split" title="${esc(t('sepSplitTitle'))}">${esc(t('sepSplit'))}</button>`
+      : `<span class="seg" role="group" aria-label="${esc(t('sepStems'))}">${['all', 'drums', 'nodrums'].map(m => `<button data-sep="${m}" aria-pressed="${mode === m}">${esc(t('sep_' + m))}</button>`).join('')}</span><button class="calbtn" data-sep="code" title="${esc(t('sepCodeTitle'))}">${esc(t('sepCode'))}</button>${LS.sepUndo != null ? `<button class="calbtn" data-sep="undo">${esc(t('vxUndo'))}</button>` : ''}`;
     row._dirty = true;
   });
 }
@@ -815,6 +826,12 @@ function drawWaves() {
     const pk = slotPeaks(s, cols), cw = w / cols;
     g.fillStyle = cLil; g.globalAlpha = 0.75;
     for (let i = 0; i < cols; i++) { const a = Math.max(1, pk[i] * h * 0.9); g.fillRect(i * cw, (h - a) / 2, Math.max(1, cw - devicePixelRatio), a); }
+    // a separated loop shows its drums over it
+    if (sepValid(s)) {
+      const st = s.stems; if (!st.peaks || st.peaks.length !== cols) st.peaks = slotPeaks({ bufs: st.drums }, cols);
+      g.fillStyle = cAmb; g.globalAlpha = 0.85;
+      for (let i = 0; i < cols; i++) { const a = Math.max(1, st.peaks[i] * h * 0.9); g.fillRect(i * cw, (h - a) / 2, Math.max(1, cw - devicePixelRatio), a); }
+    }
     g.globalAlpha = 1;
     const tk = LS.take;
     if (tk && tk.slot === s && S.playing) {

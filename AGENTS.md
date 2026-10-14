@@ -7,9 +7,10 @@ You are working on Tactus, a browser live-coding music instrument. Read this bef
 - `src/app.html` is the app page: markup, all CSS, and `/*NAME*/` placeholders where `build.py` inlines the scripts.
 - `src/landing.html` is the landing page.
 - `src/js/` holds the scripts, loaded in this order (later files use names from earlier ones; there are no modules):
-  `i18n, skin, pwa, kit, engine, gen, presets, audio, mix, dsp_wasm, wavetables, synth, samples, musical, nsax_net, gpu, loops, preview, sounds, hand, ui, share, vxdsp, match, voice, live, pedals, blocks, viz, mobile`.
+  `i18n, skin, pwa, kit, engine, gen, presets, audio, mix, dsp_wasm, wavetables, synth, samples, musical, nsax_net, gpu, loops, preview, sounds, hand, ui, share, vxdsp, sep, match, voice, live, pedals, blocks, viz, mobile`.
 - `blocks.js` is the block view: cards drawn from the code. The code is the only source of truth; a card edit rewrites just the pattern or the one value it touched, so keep `bkSplit`/`bkJoin` lossless when you change the line format.
 - `vxdsp.js` turns a voice recording into patterns (beatbox to kick/snare/hat, humming to a melody). It is pure, like `engine.js`, and `tests/voice.test.js` runs it on synthesized voices.
+- `sep.js` splits a loop into drums and the rest (median-filter HPSS; the soft masks add up to one, so the stems sum to the loop) and writes the drums down on the loop's grid. It is pure and also runs as a worker built from its own functions (`sepWorkerSrc`); `tests/sep.test.js` checks it on a made-up loop.
 - `match.js` fits a wavetable synth line to one recorded note, and `wavetables.js` builds the tables it compares against (the same tables the synth plays). Both are pure; `tests/match.test.js` checks the fit on made-up notes whose settings are known.
 - `live.js` is live input (the page as an effects box): mic or interface in, the `tactus-live` worklet, straight to the output, skipping the strips and the master chain because their compressors look ahead. Anything put on this path must not add delay: no lookahead, no FFT blocks, no `DynamicsCompressorNode`. The effects are the `Fx` class in `SYN_CODE` and `fx_*` in `dsp/src/lib.rs`; like the voices, the two must match (`node dsp/bench/bench.js` checks them).
 - `pedals.js` draws the input line as stompboxes (in the block view and, as switches, in the live panel) and writes it back in the chain's order. A file that draws early (live.js) must not touch names declared in a later file before it has run: everything is one script, and a `const` used too early stops the rest of the page.
@@ -22,7 +23,7 @@ You are working on Tactus, a browser live-coding music instrument. Read this bef
 
 ## Rules
 
-1. **Run the checks.** Run `node tests/compile.test.js`, `node tests/voice.test.js`, `node tests/match.test.js` and `python3 build.py` before you finish. Open the built page and look at the console.
+1. **Run the checks.** Run `node tests/compile.test.js`, `node tests/voice.test.js`, `node tests/match.test.js`, `node tests/sep.test.js` and `python3 build.py` before you finish. Open the built page and look at the console.
 2. **Keep both languages.** Every user-facing string goes in `src/js/i18n.js`, under both `ko` and `en`.
 3. **Don't break the language.** Old code must keep compiling. If a new keyword could clash with track names, check `GLOBALS`, `PARAMS` and `NAME_INST` in `engine.js`.
 4. **Listen, or say you could not.** You may not be able to hear audio. When you change a sound, measure it (render it, compare spectra and levels before and after), and say in the pull request what you measured and what still needs a human ear.
