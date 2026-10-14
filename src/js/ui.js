@@ -778,6 +778,7 @@ function slotStateText(s) {
   return loopUsers(s).chop ? `${b} · ${t('slotChop')}` : b;
 }
 function renderLoops() {
+  if (typeof bkSlotsChanged === 'function' && typeof BK !== 'undefined' && BK) bkSlotsChanged();
   setSource(LS.source);
   const parts = [];
   if (LS.rtt != null) parts.push(`RTT ${Math.round(LS.rtt * 1000)}ms`);

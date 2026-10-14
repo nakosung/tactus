@@ -16,7 +16,7 @@
 // (a change waits for the next bar to be heard, but the cards follow the code at once).
 
 // var, not const: evaluate() in ui.js asks for a redraw, and the first evaluate runs before this file does
-var BK = { picks: [], view: 'code', busy: false, items: [], drag: null, flashLine: -1, step: -1, timer: 0, raf: 0, pages: new Map(), minBars: new Map(), brush: 1, sel: null, lastLen: new Map(), rowSpan: new Map(), clicks: (() => { try { return localStorage.getItem('tactus-bkclick') !== '0'; } catch (e) { return true; } })(), key: { root: 9, scale: 'minor' }, prog: null, song: null, scenes: [], synOpen: new Set(), unfold: new Set() };
+var BK = { picks: [], view: 'code', busy: false, items: [], drag: null, flashLine: -1, step: -1, timer: 0, raf: 0, pages: new Map(), minBars: new Map(), brush: 1, sel: null, lastLen: new Map(), rowSpan: new Map(), clicks: (() => { try { return localStorage.getItem('tactus-bkclick') !== '0'; } catch (e) { return true; } })(), key: { root: 9, scale: 'minor' }, prog: null, song: null, scenes: [], synOpen: new Set(), unfold: new Set(), slicePick: new Map(), slotSig: '' };
 const BK_STEPS = 16, BK_MAXBARS = 16;
 const BK_STICKERS = [
   { k: 'gain', min: 0, max: 1.2, step: 0.01, def: 0.8 },
@@ -30,8 +30,8 @@ const BK_PALETTE = [
   ['kick', 'x x x x'], ['snare', '. x . x'], ['clap', '. x . x'], ['hat', '. x . x . x . x'], ['ohat', '. . . x . . . x'], ['rim', '. . . . . . x . . . x . . . . .'],
   ['bass', '0 . 0 4 . 0 3 .'], ['piano', '0 2 4 7 4 2 0 _'], ['pluck', '4 . 2 . 0 . 2 .'], ['bell', '7 . 4 . 2 . 0 .'], ['marimba', '0 4 7 4 0 4 7 9'], ['flute', '4 _ 2 _ 0 _ _ _'], ['pad', '0 _ _ _ 4 _ _ _'], ['acid', '0 0 7 0 3 0 10 0'],
 ];
-const BK_ICON = inst => isHit(inst) ? '🥁' : /bass|acid|upright/.test(inst) ? '🎸' : /piano|epiano|harpsi/.test(inst) ? '🎹' : /sax/.test(inst) ? '🎷' : /bowed|string/.test(inst) ? '🎻' : /bell|vibes|marimba|kalimba|plate/.test(inst) ? '🔔' : /flute|choir/.test(inst) ? '🎵' : /harp|pluck|zither|dantranh/.test(inst) ? '🪕' : '🎛️';
-const bkName = inst => { const k = 'bi_' + inst, v = t(k); return v === k ? inst : v; };
+const BK_ICON = inst => LOOPS.includes(inst) ? '📼' : isHit(inst) ? '🥁' : /bass|acid|upright/.test(inst) ? '🎸' : /piano|epiano|harpsi/.test(inst) ? '🎹' : /sax/.test(inst) ? '🎷' : /bowed|string/.test(inst) ? '🎻' : /bell|vibes|marimba|kalimba|plate/.test(inst) ? '🔔' : /flute|choir/.test(inst) ? '🎵' : /harp|pluck|zither|dantranh/.test(inst) ? '🪕' : '🎛️';
+const bkName = inst => { if (LOOPS.includes(inst)) return t('bkSmpKind'); const k = 'bi_' + inst, v = t(k); return v === k ? inst : v; };
 const bkT = (k, fb) => { const v = t(k); return v === k ? fb : v; };
 const bkHue = s => TRACK_COLORS[[...s].reduce((a, c) => a * 31 + c.charCodeAt(0), 7) % TRACK_COLORS.length];
 
@@ -292,7 +292,7 @@ function bkMelBar(L, b) {
 }
 // write the pattern back: only the bars that changed are rewritten; the rest stay as they were written
 function bkPatternOf(L) {
-  const fresh = b => L.tok ? bkRepeat(vxBar(bkBarTok(L, b), false)) : bkMelBar(L, b);
+  const fresh = b => L.tok ? bkRepeat(vxBar(bkBarTok(L, b), !!L.chop)) : bkMelBar(L, b);
   const bs = Array.from({ length: L.bars }, (_, b) => L.items && L.items.length === L.bars && L.items[b] != null && L.orig[b] === bkSig(L, b) ? L.items[b] : fresh(b));
   if (bs.every(s => s === bs[0]) && !(L.items && L.items.length === L.bars && L.bars > 1)) return bs[0];
   return `<${bs.map(s => /\s/.test(s) && !/^\[[^\]]*\]$/.test(s) ? `[${s}]` : s).join(' ')}>`;
@@ -586,7 +586,7 @@ function bkRender() {
     }
     const name = r.lineNames.get(i), def = name && r.tracks.get(name);
     const err = r.errors.get(i);
-    if (!def || def.line !== i) { if (stripComment(ln).trim() && !/^\s*(bpm|key|scale|swing|prog|scene|song|let)\b/.test(ln)) other++; return; }
+    if (!def || def.line !== i) { if (stripComment(ln).trim() && !/^\s*(bpm|key|scale|swing|prog|scene|song|let|sample\s+loop\d)\b/.test(ln)) other++; return; }
     const kind = def.kind, key = name, L = { i, name, key, inst: def.inst, kind, def, pp: p };
     const ci = r.order.indexOf(name), col = TRACK_COLORS[(ci < 0 ? 0 : ci) % TRACK_COLORS.length];
     BK.items.push(L);
@@ -597,7 +597,8 @@ function bkRender() {
       L.train = (train[1] || train[2]).trim().split(/\s+/).map(s => s.slice(1));
       body = `<div class="bk-train" role="group" aria-label="${esc(t('bkTrainOf'))}">${L.train.map((n, j) => `<span class="bk-piece" data-sort="piece" style="--pc:${bkHue(n)}">${bkPick('piece', '$' + n, t('bkPhrase') + ' ' + (j + 1), [...new Set([...phrases, n])].map(x => ({ v: x, l: '$' + x })), n, val => { const tr = L.train.slice(); tr[j] = val; bkWriteTrain(L, tr); })}${L.train.length > 1 ? `<button class="bk-rx" data-pdel="${j}" aria-label="${esc(t('bkRuleDel'))}">×</button>` : ''}</span>`).join('')}<button class="bk-bar add" data-act="padd" aria-label="${esc(t('bkPhAdd'))}" title="${esc(t('bkPhAdd'))}">+</button></div>`;
     } else {
-      if (kind !== 'loop' && bkLoad(L, p.pat, kind)) body = `<div class="bk-gridbox">${bkGridHTML(L, p, def)}</div>`;
+      if (kind === 'loop') body = bkSmpHTML(L, r);
+      else if (bkLoad(L, p.pat, kind)) body = `<div class="bk-gridbox">${bkGridHTML(L, p, def)}</div>`;
       else body = `<div class="bk-chip"><code>${esc(p.pat.trim() || '—')}</code><button class="bk-link" data-act="goto">${esc(t('bkInCode'))}</button></div><p class="bk-why">${esc(t('bkComplex'))}</p>`;
     }
     const stickers = BK_STICKERS.map(s => ({ ...s, v: bkParam(p.params, s.k) })).filter(s => s.v !== undefined);
@@ -658,7 +659,8 @@ function bkRender() {
     ${songBox}
     ${other ? `<p class="bk-other">${esc(t('bkOther', { n: other }))}</p>` : ''}`;
   BK.step = -1; BK.nowSig = '';
-  for (const L of BK.items) if (L.syn) bkSynDraw(L);
+  for (const L of BK.items) { if (L.syn) bkSynDraw(L); if (L.smp) bkWaveDraw(L); }
+  BK.slotSig = bkSlotsSig();
   bkFocusRoll();
 }
 
@@ -940,7 +942,7 @@ function bkInit() {
       d.timer = setTimeout(() => { if (BK.drag !== d || d.done.size > 1) return; const m = was === 'x?' ? 'x' : 'x?'; bkPaintDrum(cell, m); bkSetDrum(L, k, m); bkBuzz(); bkClick('lift'); d.held = true; }, LONG);
       bkPaintDrum(cell, v); bkSetDrum(L, k, v);
       if (v === '.') bkClick('off'); else if (S.playing) bkClick('on'); else bkHear(L, v, 1, (L.page * BK_STEPS + k) / BK_STEPS);
-    }
+    } else if (L.chop) bkChopTap(L, k);
     boardEl.setPointerCapture && boardEl.setPointerCapture(e.pointerId);
   });
   boardEl.addEventListener('pointermove', e => {
@@ -1029,6 +1031,8 @@ function bkInit() {
   boardEl.addEventListener('click', e => {
     // a folded card's name row opens it, as its ▸ does
     const nm = !e.target.closest('button') && e.target.closest('.bk-card.fold > header'); if (nm) { const L = bkLine(nm); if (L) bkOpen(L, nm.querySelector('.bk-mini')); return; }
+    const wv = e.target.closest('.bk-wv');
+    if (wv) { const L = bkLine(wv); if (L && L.smp) { const r = wv.getBoundingClientRect(), j = Math.max(0, Math.min(L.slices - 1, Math.floor((e.clientX - r.left) / r.width * L.slices))); bkPadPick(L, j); bkSliceHear(L, j); } return; }
     const b = e.target.closest('button'); if (!b) return;
     if (b.dataset.pick != null) { bkMenu(b); return; }
     if (b.dataset.act === 'clicks') { BK.clicks = !BK.clicks; try { localStorage.setItem('tactus-bkclick', BK.clicks ? '1' : '0'); } catch (err) { } b.setAttribute('aria-pressed', BK.clicks); b.textContent = BK.clicks ? '🔊' : '🔈'; if (BK.clicks) bkClick('on'); return; }
@@ -1047,6 +1051,13 @@ function bkInit() {
     if (b.dataset.cmv) { const j = +b.closest('.bk-car').dataset.car, d = +b.dataset.cmv, ps = BK.song.parts.map(p => ({ name: p.name, bars: p.bars })); [ps[j], ps[j + d]] = [ps[j + d], ps[j]]; bkWriteSong(ps, BK.song.line); return; }
     if (b.dataset.cdel2 != null) { const ps = BK.song.parts.map(p => ({ name: p.name, bars: p.bars })); ps.splice(+b.dataset.cdel2, 1); if (ps.length) bkWriteSong(ps, BK.song.line); else { const lines = srcEl.value.split('\n'); lines.splice(BK.song.line, 1); srcEl.value = lines.join('\n'); bkApply(); } return; }
     const L = bkLine(b); if (!L) return;
+    if (b.dataset.slice != null) { bkPadPick(L, +b.dataset.slice); bkSliceHear(L, +b.dataset.slice); return; }
+    if (b.dataset.smode) { bkSmpMode(L, b.dataset.smode); return; }
+    if (b.dataset.slices) { bkSmpSlices(L, +b.dataset.slices); return; }
+    if (b.dataset.act === 'smpstraight') { bkSmpOrder(L, bkStraight(L.slot.bars, L.slices), L.slices); return; }
+    if (b.dataset.act === 'smpshuf') { bkSmpShuffle(L); return; }
+    if (b.dataset.act === 'smpsep') { sepSlot(L.slot.i); return; }
+    if (b.dataset.sb != null) { bkStemTap(L, b.closest('[data-stem]').dataset.stem, +b.dataset.sb); return; }
     if (b.dataset.bar != null) { L.page = +b.dataset.bar; BK.pages.set(L.key, L.page); bkRender(); return; }
     if (b.dataset.act === 'baradd') { bkBarAdd(L); return; }
     if (b.dataset.act === 'bardel') {
@@ -1151,6 +1162,7 @@ function bkTick(c) {
   if (BK.view === 'code' || !boardEl) return;
   if (BK.synOpen.size) bkScopes();
   bkHits(c);
+  bkSmpTick(c);
   const k = c < 0 ? -1 : Math.floor(mod(c, 1) * BK_STEPS), pb = c < 0 ? -1 : Math.floor(c - patOrigin(c) + 1e-9);
   const cur = c >= 0 ? sceneNameAt(c) : null, sig = `${k}|${pb}|${cur ? cur.name + (cur.part ? S.song.parts.indexOf(cur.part) : '') : ''}`;
   if (sig === BK.nowSig) return;
@@ -1158,6 +1170,7 @@ function bkTick(c) {
   boardEl.querySelectorAll('.ph, .now').forEach(x => x.classList.remove('ph', 'now'));
   if (k < 0) return;
   for (const L of BK.items) {
+    if (L.stems) { const cd = boardEl.querySelector(`.bk-card[data-i="${L.i}"]`); if (cd) bkStemNow(L, pb, cd); }
     if (!L.grid) continue;
     const card = boardEl.querySelector(`.bk-card[data-i="${L.i}"]`); if (!card) continue;
     const bar = mod(pb, L.bars);
@@ -1387,6 +1400,251 @@ function bkHits(c) {
     cells[k] && cells[k].classList.add('cur');
   }
 }
+
+// ---------- the sampler card: a loop as a waveform, slice pads and a sequence of slices ----------
+// As on a hardware sampler: the loop is drawn with its slices marked, each slice has a pad (tap to hear it), and the
+// line's pattern is the order the slices play in, one step row per bar (a number is a slice, _ holds it, . is quiet).
+// With no pattern the loop plays straight through. Under it, the loop's drums and the rest bar by bar (drums, rest).
+const BK_SLICES = [4, 8, 16];
+const bkSlot = L => LS.slots[+L.inst.slice(4) - 1] || null;
+const bkSlotOk = s => !!(s && s.bufs && s.bufs.length && s.bufs.every(Boolean));
+const bkSlColor = j => TRACK_COLORS[mod(j, TRACK_COLORS.length)];
+function bkSlicesOf(L) { const v = L.pp ? bkParam(L.pp.params, 'slices') : undefined; return Math.max(1, Math.round(v == null ? 8 : v)); }
+// slice counts that fall on the step grid: each slice a whole number of steps, none longer than a bar
+const bkSliceOpts = bars => BK_SLICES.filter(n => n >= bars && (BK_STEPS * bars) % n === 0);
+// the slice a step plays: its number, or for x the slice under that place in the loop
+function bkSliceAt(L, v, step, slices, bars) { return /^\d+$/.test(v) ? mod(+v, slices) : Math.floor(mod(step / BK_STEPS, bars) / (bars / slices) + 1e-9) % slices; }
+// the line's pattern as steps (like a drum lane, with holds); null when it does not fit
+function bkChopGrid(patSrc) {
+  const src = patSrc.trim();
+  if (!src || /[~$]/.test(src)) return null;
+  let pat; try { pat = parseMini(src, 0); } catch (e) { return null; }
+  const bar = c => pat.q(c, c + 1).filter(e => e.v !== '~' && e.s >= c - 1e-9 && e.s < c + 1 - 1e-9);
+  const sig = c => bar(c).map(e => `${e.v}@${((e.s - c) * BK_STEPS).toFixed(3)}+${(e.d * BK_STEPS).toFixed(3)}`).sort().join(' ');
+  const sigs = Array.from({ length: 32 }, (_, c) => sig(c));
+  const bars = [1, 2, 3, 4, 6, 8, 12, 16].find(P => sigs.every((s, c) => s === sigs[c % P]));
+  if (!bars) return null;
+  const tok = Array(bars * BK_STEPS).fill('.');
+  for (let b = 0; b < bars; b++) for (const e of bar(b)) {
+    const k = (e.s - b) * BK_STEPS, kk = Math.round(k), len = Math.round(e.d * BK_STEPS), i = b * BK_STEPS + kk;
+    if (Math.abs(k - kk) > 1e-6 || Math.abs(e.d * BK_STEPS - len) > 1e-6 || kk < 0 || len < 1 || kk + len > BK_STEPS || !/^(\d+|x)$/.test(e.v)) return null;
+    for (let j = 0; j < len; j++) { if (tok[i + j] !== '.') return null; tok[i + j] = j ? '_' : e.v; }
+  }
+  return { tok, bars };
+}
+function bkChopLoad(L, src) {
+  const g = bkChopGrid(src); if (!g) return false;
+  let { tok, bars } = g;
+  const items = bkItems(src);
+  if (items && items.length > bars && items.length <= BK_MAXBARS && items.length % bars === 0) { tok = Array.from({ length: items.length / bars }, () => tok).flat(); bars = items.length; }
+  const want = BK.minBars.get(L.key) || 0;
+  if (want > bars && want % bars === 0) { tok = Array.from({ length: want / bars }, () => tok).flat(); bars = want; }
+  L.grid = true; L.chop = true; L.tok = tok; L.notes = null; L.bars = bars; L.lane = 'chop'; L.mode = null;
+  L.items = items && items.length === bars ? items : null;
+  L.orig = Array.from({ length: bars }, (_, b) => bkSig(L, b));
+  L.page = Math.min(BK.pages.get(L.key) || 0, bars - 1);
+  return true;
+}
+// the loop in its slices' order, as written by "in order": slice 0 at the start, each held for its length
+function bkStraight(bars, slices) {
+  const per = BK_STEPS * bars / slices, tok = [];
+  for (let j = 0; j < slices; j++) for (let q = 0; q < per; q++) tok.push(q ? '_' : String(j));
+  return tok;
+}
+// a value after | as one number for every bar, or as <a b c> (one per bar); null when it is something else
+function bkStemRead(params, k, n) {
+  const m = params == null ? null : new RegExp(`(^|\\s)${k}\\s+(<[^>]*>|\\S+)`).exec(params);
+  if (!m) return { vals: Array(n).fill(1), has: false };
+  if (BK_NUM.test(m[2])) return { vals: Array(n).fill(+m[2]), has: true };
+  const it = /^<([^>]*)>$/.exec(m[2]), w = it ? it[1].trim().split(/\s+/) : null;
+  return w && w.length && w.length <= 32 && w.every(x => BK_NUM.test(x)) ? { vals: w.map(Number), has: true } : null;
+}
+function bkStemWrite(params, k, vals) {
+  const same = vals.every(v => v === vals[0]), txt = same ? bkNum(vals[0]) : `<${vals.map(bkNum).join(' ')}>`;
+  const re = new RegExp(`(^|\\s)(${k}\\s+)(<[^>]*>|\\S+)`);
+  if (params != null && re.test(params)) return same && vals[0] === 1 ? params.replace(new RegExp(`\\s*\\b${k}\\s+(<[^>]*>|\\S+)`), '') : params.replace(re, (m, a, b) => a + b + txt);
+  if (same && vals[0] === 1) return params;
+  return (params == null ? '' : params.replace(/\s*$/, '')) + ` ${k} ${txt}`;
+}
+function bkSmpHTML(L, r) {
+  const slot = bkSlot(L), ok = bkSlotOk(slot), file = r.loopFiles && r.loopFiles.get(L.inst);
+  const busy = file && LS.loopFetch && LS.loopFetch.has(file.url);
+  L.smp = true; L.slot = slot;
+  if (!ok) return `<div class="bk-smp empty"><p class="bk-why">${esc(t(busy ? 'bkSmpLoading' : 'bkSmpEmpty', { n: L.inst }))}</p></div>`;
+  const bars = slot.bars, opts = bkSliceOpts(bars);
+  let slices = bkSlicesOf(L); L.slices = slices;
+  const pick = Math.min(BK.slicePick.get(L.key) || 0, slices - 1); BK.slicePick.set(L.key, pick);
+  const chop = !!L.def.chop, grid = chop && bkChopLoad(L, L.pp.pat);
+  const mode = `<span class="seg bk-smode" role="group" aria-label="${esc(t('bkSmpMode'))}"><button data-smode="whole" aria-pressed="${!chop}">${esc(t('bkSmpWhole'))}</button><button data-smode="chop" aria-pressed="${chop}">${esc(t('bkSmpChop'))}</button></span>`;
+  const sl = opts.length > 1 || !opts.includes(slices) ? `<span class="bk-slc"><span class="bk-barlbl">${esc(t('bkSmpSlices'))}</span><span class="seg">${[...new Set([...opts, slices])].sort((a, b) => a - b).map(n => `<button data-slices="${n}" aria-pressed="${n === slices}">${n}</button>`).join('')}</span></span>` : '';
+  const ord = grid ? `<button class="bk-add" data-act="smpstraight">${esc(t('bkSmpStraight'))}</button><button class="bk-add" data-act="smpshuf">${esc(t('bkSmpShuffle'))}</button>` : '';
+  const used = new Set(grid ? L.tok.map((v, k) => v === '.' || v === '_' ? -1 : bkSliceAt(L, v, k, slices, bars)) : []);
+  const pads = Array.from({ length: slices }, (_, j) => `<button class="bk-pad${j === pick ? ' pick' : ''}${grid && !used.has(j) ? ' idle' : ''}" data-slice="${j}" style="--sc:${bkSlColor(j)}" aria-pressed="${j === pick}" aria-label="${esc(t('bkSmpPad', { n: j + 1 }))}">${j + 1}</button>`).join('');
+  let seq = '';
+  if (grid) {
+    const off = L.page * BK_STEPS, tabs = L.bars < 2 ? '' : `<div class="bk-bars" role="group" aria-label="${esc(t('bkBar'))}">${Array.from({ length: L.bars }, (_, b) => `<button class="bk-bar${b === L.page ? ' sel' : ''}" data-bar="${b}" aria-pressed="${b === L.page}">${b + 1}</button>`).join('')}${L.bars < BK_MAXBARS ? `<button class="bk-bar add" data-act="baradd" title="${esc(t('bkBarAdd'))}" aria-label="${esc(t('bkBarAdd'))}">+</button>` : ''}${L.bars > 1 ? `<button class="bk-bar del" data-act="bardel" title="${esc(t('bkBarDel'))}" aria-label="${esc(t('bkBarDel'))}">−</button>` : ''}<span class="bk-barlbl">${esc(t('bkBar'))}</span></div>`;
+    let own = -1;
+    const cells = L.tok.slice(off, off + BK_STEPS).map((v, k) => {
+      const at = off + k;
+      if (v !== '_') own = v === '.' ? -1 : at;
+      const ov = own >= 0 ? L.tok[own] : '.', j = own >= 0 ? bkSliceAt(L, ov, own, slices, bars) : -1, st = own === at;
+      const lbl = st ? (ov === 'x' ? '·' : String(j + 1)) : '';
+      return `<button class="bk-cell sl${own >= 0 ? ' on' : ''}${own >= 0 && !st ? ' hold' : ''}" data-k="${k}"${j >= 0 ? ` style="--sc:${bkSlColor(j)}"` : ''} aria-label="${k + 1}${j >= 0 ? ' · ' + esc(t('bkSmpPad', { n: j + 1 })) : ''}" aria-pressed="${own >= 0}">${lbl}</button>`;
+    }).join('');
+    seq = `<div class="bk-tools">${tabs}${ord}</div><div class="bk-steps sl">${cells}</div>`;
+  } else if (chop) seq = `<div class="bk-chip"><code>${esc(L.pp.pat.trim())}</code><button class="bk-link" data-act="goto">${esc(t('bkInCode'))}</button></div><p class="bk-why">${esc(t('bkComplex'))}</p>`;
+  // drums and the rest, bar by bar
+  const st = sepValid(slot), n0 = Math.min(16, Math.max(1, bars));
+  const dR = bkStemRead(L.pp.params, 'drums', n0), rR = bkStemRead(L.pp.params, 'rest', n0);
+  const sepBtn = st || slot.sepBusy ? '' : `<button class="bk-add" data-act="smpsep" title="${esc(t('sepSplitTitle'))}">${esc(t('sepSplit'))}</button>`;
+  let stems = sepBtn ? `<div class="bk-row2">${sepBtn}</div>` : '';
+  if (st || slot.sepBusy || (dR && dR.has) || (rR && rR.has)) {
+    if (!dR || !rR) stems = `<p class="bk-why">${esc(t('bkStemCode'))}</p>`;
+    else {
+      const n = Math.max(dR.vals.length, rR.vals.length), fit = R => R.vals.length === n ? R.vals : Array.from({ length: n }, (_, j) => R.vals[j % R.vals.length]);
+      L.stems = { n, drums: fit(dR), rest: fit(rR) };
+      const lane = k => `<div class="bk-stl" data-stem="${k}"><b>${esc(t(k === 'drums' ? 'bkStemDrums' : 'bkStemRest'))}</b><span class="bk-stc" style="--n:${n}">${L.stems[k].map((v, j) => `<button class="${v > 0 ? 'on' : ''}${j % 4 === 0 ? ' b' : ''}" data-sb="${j}" style="--v:${Math.min(1, Math.max(0, v)).toFixed(2)}" aria-pressed="${v > 0}" aria-label="${esc(t(k === 'drums' ? 'bkStemDrums' : 'bkStemRest'))} ${j + 1}">${j % 4 === 0 ? j + 1 : ''}</button>`).join('')}</span></div>`;
+      stems = `<div class="bk-stems">${lane('drums')}${lane('rest')}${st ? '' : `<div class="bk-foot"><p class="bk-why">${esc(t(slot.sepBusy ? 'bkStemWait' : 'bkStemOff'))}</p>${sepBtn}</div>`}</div>`;
+    }
+  }
+  const name = file ? decodeURIComponent(file.url.split('/').pop().split('?')[0]) : t('bkSmpRec');
+  const meta = `<span class="bk-smeta"><b>${esc(name)}</b> ${esc(t('bkSmpMeta', { bars, bpm: Math.round(slot.cps * 240) }))}</span>`;
+  return `<div class="bk-smp"><div class="bk-tools">${mode}${sl}${meta}</div>
+    <div class="bk-wv" data-wv="1" title="${esc(t('bkSmpTap'))}"><canvas class="bk-wvc" aria-hidden="true"></canvas><i class="bk-wsl" aria-hidden="true"></i><i class="bk-wph" aria-hidden="true"></i></div>
+    <div class="bk-pads" role="group" aria-label="${esc(t('bkSmpPads'))}" style="--n:${slices}">${pads}</div>
+    ${seq}<p class="bk-why">${esc(t(grid ? 'bkSmpChopHint' : 'bkSmpWholeHint'))}</p>${stems}</div>`;
+}
+// peaks of the loop (and of its drums when separated), kept on the slot until its bars change
+function bkPeaks(bufs, n) {
+  const p = new Float32Array(n), fr = bufs[0].length, total = fr * bufs.length;
+  for (let i = 0; i < n; i++) {
+    const a = Math.floor(i * total / n), b = Math.floor((i + 1) * total / n); let m = 0;
+    for (let j = a; j < b; j += 3) { const d = bufs[Math.floor(j / fr)].getChannelData(0), v = Math.abs(d[j % fr]); if (v > m) m = v; }
+    p[i] = Math.min(1, m);
+  }
+  return p;
+}
+function bkWaveDraw(L) {
+  const slot = L.slot, card = boardEl.querySelector(`.bk-card[data-i="${L.i}"]`), cv = card && card.querySelector('.bk-wvc');
+  if (!cv || !bkSlotOk(slot)) return;
+  const dpr = devicePixelRatio || 1, w = Math.round(cv.clientWidth * dpr), h = Math.round(cv.clientHeight * dpr); if (!w || !h) return;
+  if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; }
+  const cols = Math.max(16, Math.floor(w / (3 * dpr))), st = sepValid(slot) ? slot.stems : null;
+  const pk = slot.bkPk && slot.bkPk.of === slot.bufs[0] && slot.bkPk.n === cols && slot.bkPk.st === st ? slot.bkPk : (slot.bkPk = { of: slot.bufs[0], n: cols, st, mix: bkPeaks(slot.bufs, cols), drums: st ? bkPeaks(st.drums, cols) : null });
+  const css = getComputedStyle(card), fg = css.getPropertyValue('--scr-fg').trim() || '#ddd', tc = css.getPropertyValue('--tc').trim() || '#f90';
+  const g = cv.getContext('2d'); g.clearRect(0, 0, w, h);
+  const cw = w / cols, mid = h / 2, amp = h * 0.46, bar = (arr, col, al) => { g.fillStyle = col; g.globalAlpha = al; for (let i = 0; i < cols; i++) { const a = Math.max(dpr, arr[i] * amp); g.fillRect(i * cw, mid - a, Math.max(dpr, cw - dpr), 2 * a); } };
+  bar(pk.mix, fg, 0.42);
+  if (pk.drums) bar(pk.drums, tc, 0.9);
+  // slices: a thin line between them and a strip of each one's colour along the bottom; bars a stronger line
+  g.globalAlpha = 1;
+  const n = L.slices;
+  for (let j = 0; j < n; j++) { g.fillStyle = bkSlColor(j); g.fillRect(j * w / n + dpr, h - 3 * dpr, w / n - 2 * dpr, 3 * dpr); }
+  g.fillStyle = fg;
+  for (let j = 1; j < n; j++) { const x = Math.round(j * w / n), isBar = (j * slot.bars) % n === 0; g.globalAlpha = isBar ? 0.55 : 0.22; g.fillRect(x - (isBar ? dpr : dpr / 2), 0, isBar ? 2 * dpr : dpr, h); }
+  g.globalAlpha = 1; cv._st = st;
+}
+// hear one slice now, at the song's tempo (and flash its pad and its place in the waveform)
+function bkSliceHear(L, j) {
+  const slot = L.slot; if (!bkSlotOk(slot) || !BK.clicks) return;
+  initAudio(); S.ctx.resume();
+  const n = L.slices, sl = slot.bars / n, p = j * sl, bi = Math.floor(p + 1e-9) % slot.bars, within = p - Math.floor(p + 1e-9);
+  const buf = slot.bufs[bi], rate = S.playing ? S.cps / slot.cps : 1, len = Math.min(sl, 1 - within) * buf.duration;
+  const g = S.ctx.createGain(); g.gain.value = 0.9; g.connect(pvStrip().input);
+  playBuf(g, buf, S.ctx.currentTime + 0.01, within * buf.duration, len, rate, true);
+  setTimeout(() => { try { g.disconnect(); } catch (e) { } }, (len / rate + 0.5) * 1000);
+  bkSliceShow(L, j, len / rate);
+}
+function bkSliceShow(L, j, sec) {
+  const card = boardEl.querySelector(`.bk-card[data-i="${L.i}"]`); if (!card) return;
+  const pad = card.querySelector(`.bk-pad[data-slice="${j}"]`), sl = card.querySelector('.bk-wsl');
+  if (pad) { pad.classList.add('hit'); setTimeout(() => pad.classList.remove('hit'), Math.max(90, sec * 1000)); }
+  if (sl) { sl.style.left = (j / L.slices * 100) + '%'; sl.style.width = (100 / L.slices) + '%'; sl.style.setProperty('--sc', bkSlColor(j)); sl.classList.add('on'); clearTimeout(sl._t); sl._t = setTimeout(() => sl.classList.remove('on'), Math.max(120, sec * 1000)); }
+}
+// a tap on a step: put the chosen slice there (held until the next one or the slice's end); the same slice again
+// takes it out; another slice there swaps it, keeping its length
+function bkChopTap(L, k) {
+  const T = L.tok, a = L.page * BK_STEPS + k, end = (L.page + 1) * BK_STEPS, v = T[a], j = BK.slicePick.get(L.key) || 0;
+  const per = Math.max(1, Math.round(BK_STEPS * L.slot.bars / L.slices));
+  const clear = q => { while (q < end && T[q] === '_') T[q++] = '.'; };
+  if (v !== '.' && v !== '_' && bkSliceAt(L, v, a, L.slices, L.slot.bars) === j) { T[a] = '.'; clear(a + 1); bkClick('off'); }
+  else if (v !== '.' && v !== '_') { T[a] = String(j); bkSliceHear(L, j); }
+  else { T[a] = String(j); let q = a + 1; while (q < end && q - a < per && (T[q] === '_' || T[q] === '.')) T[q++] = '_'; clear(q); bkSliceHear(L, j); }
+  bkWritePat(L);
+}
+function bkSmpMode(L, mode) {
+  const slot = L.slot; if (!bkSlotOk(slot)) return;
+  if (mode === 'whole') { BK.minBars.delete(L.key); bkWrite(L.i, p => { p.pat = p.params != null ? '  ' : ''; }); return; }
+  const opts = bkSliceOpts(slot.bars), n = opts.includes(L.slices) ? L.slices : opts.find(x => x >= 8) || opts[0] || L.slices;
+  bkSmpOrder(L, bkStraight(slot.bars, n), n);
+}
+function bkSmpOrder(L, tok, n) {
+  const bars = tok.length / BK_STEPS, M = { tok, bars, items: null, chop: true, orig: Array(bars).fill(null) };
+  BK.minBars.delete(L.key);
+  bkWrite(L.i, p => { p.pat = bkFit(p.pat, bkPatternOf(M), true); p.params = bkSetParam(p.params, 'slices', n); });
+}
+function bkSmpSlices(L, n) {
+  // a straight order stays straight with the new count; any other order keeps its numbers
+  const slot = L.slot, straight = L.chop && L.tok && L.tok.join(' ') === bkStraight(slot.bars, L.slices).join(' ');
+  if (straight) bkSmpOrder(L, bkStraight(slot.bars, n), n);
+  else bkWrite(L.i, p => { p.params = bkSetParam(p.params, 'slices', n); });
+}
+function bkSmpShuffle(L) {
+  const n = L.slices, perm = Array.from({ length: n }, (_, j) => j);
+  for (let j = n - 1; j > 0; j--) { const q = Math.floor(Math.random() * (j + 1)); [perm[j], perm[q]] = [perm[q], perm[j]]; }
+  L.tok = L.tok.map((v, k) => v === '.' || v === '_' ? v : String(perm[bkSliceAt(L, v, k, n, L.slot.bars)]));
+  bkWritePat(L, false);
+}
+function bkStemTap(L, k, j) {
+  const S0 = L.stems; if (!S0) return;
+  const vals = S0[k].slice(); vals[j] = vals[j] > 0 ? 0 : 1;
+  bkWrite(L.i, p => { p.params = bkStemWrite(p.params, k, vals); });
+}
+// the playhead: where in the loop the sound is now (a slice jumps it to that slice), the slice's pad lit
+function bkSmpTick(c) {
+  for (const L of BK.items) {
+    if (!L.smp || !bkSlotOk(L.slot)) continue;
+    const card = boardEl.querySelector(`.bk-card[data-i="${L.i}"]`); if (!card) continue;
+    const ph = card.querySelector('.bk-wph'), slot = L.slot;
+    const cv = card.querySelector('.bk-wvc'); if (cv && cv._st !== (sepValid(slot) ? slot.stems : null)) bkWaveDraw(L);
+    let x = -1, j = -1;
+    if (c >= 0 && S.playing && audible(L.name) && activeIn(sceneAt(c), L.name)) {
+      if (!L.def.chop) x = mod(c - slot.startC, slot.bars) / slot.bars;
+      else if (L.tok) {
+        const pb = Math.floor(c - patOrigin(c) + 1e-9), stepF = mod(c, 1) * BK_STEPS, at = mod(pb, L.bars) * BK_STEPS + Math.floor(stepF);
+        let o = at; while (o > 0 && L.tok[o] === '_' && o % BK_STEPS) o--;
+        const v = L.tok[o];
+        if (v !== '.' && v !== '_') {
+          j = bkSliceAt(L, v, o, L.slices, slot.bars);
+          const sl = slot.bars / L.slices, into = Math.min(sl, (stepF - o % BK_STEPS) / BK_STEPS);
+          x = (j * sl + into) / slot.bars;
+        }
+      }
+    }
+    if (ph) { ph.style.display = x < 0 ? 'none' : 'block'; if (x >= 0) ph.style.left = (x * 100).toFixed(2) + '%'; }
+    card.classList.toggle('sounding', x >= 0);
+    if (L.def.chop && j !== L.hitPad) {
+      card.querySelectorAll('.bk-pad.cur').forEach(p => p.classList.remove('cur'));
+      if (j >= 0) { const p = card.querySelector(`.bk-pad[data-slice="${j}"]`); if (p) p.classList.add('cur'); }
+      L.hitPad = j;
+    }
+  }
+}
+// the bars of a stem lane now playing
+function bkStemNow(L, pb, card) {
+  if (!L.stems) return;
+  const j = mod(pb, L.stems.n);
+  card.querySelectorAll(`.bk-stc button[data-sb="${j}"]`).forEach(x => x.classList.add('now'));
+}
+// a slot that changes (a file arrives, a take ends, the drums are split) redraws the board
+function bkSlotsSig() { return LS.slots.map(s => `${s.bars}:${bkSlotOk(s) ? 1 : 0}:${s.bufs && s.bufs[0] ? s.bufs[0].length : 0}:${sepValid(s) ? 1 : 0}:${s.sepBusy ? 1 : 0}`).join('|') + (LS.loopFetch ? LS.loopFetch.size : 0); }
+function bkSlotsChanged() { const s = bkSlotsSig(); if (s !== BK.slotSig) { BK.slotSig = s; bkSoon(); } }
+function bkPadPick(L, j) {
+  BK.slicePick.set(L.key, j);
+  const card = boardEl.querySelector(`.bk-card[data-i="${L.i}"]`);
+  if (card) card.querySelectorAll('.bk-pad').forEach(p => { const on = +p.dataset.slice === j; p.classList.toggle('pick', on); p.setAttribute('aria-pressed', on); });
+}
+window.addEventListener('resize', () => { if (BK.view !== 'code') for (const L of BK.items) if (L.smp) bkWaveDraw(L); });
 boardEl.addEventListener('toggle', e => { if (e.target.classList && e.target.classList.contains('bk-set')) BK.setOpen = e.target.open; }, true);
 bkInit();
 bkSynInit();

@@ -578,6 +578,39 @@ body.recording .editor { border-color: var(--c-err); }
 .bk-foot .bk-why { flex: 1 1 200px; }
 .bk-more { max-width: 120px; font-size: 12px; font-weight: 600; border: 1px dashed var(--line); background: transparent; color: var(--dim); border-radius: 999px; padding: 4px 8px; cursor: pointer; }
 .bk-more:hover { color: var(--fg); border-color: var(--fg); }
+/* ---- the sampler card (a loop): waveform with its slices, pads, the slices' order, drums and rest by bar ---- */
+.bk-smp { display: grid; gap: 7px; }
+.bk-smp .bk-tools { row-gap: 5px; }
+.bk-slc { display: inline-flex; align-items: center; gap: 5px; }
+.bk-slc .bk-barlbl { margin: 0; }
+.bk-smp .seg button { padding: 5px 9px; font-weight: 600; }
+.bk-smeta { margin-left: auto; min-width: 0; font-size: 11px; color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bk-smeta b { font: 600 11px/1 var(--f-code); color: var(--fg); }
+.bk-wv { position: relative; height: 76px; border-radius: var(--r-m); background: var(--scr); overflow: hidden; cursor: pointer; touch-action: manipulation; }
+.bk-wvc { display: block; width: 100%; height: 100%; }
+.bk-wph { position: absolute; top: 0; bottom: 0; left: 0; width: 2px; margin-left: -1px; background: var(--scr-fg); box-shadow: 0 0 6px var(--scr-fg); display: none; pointer-events: none; }
+.bk-wsl { position: absolute; top: 0; bottom: 0; left: 0; width: 0; background: color-mix(in srgb, var(--sc, var(--tc)) 34%, transparent); opacity: 0; transition: opacity .3s; pointer-events: none; }
+.bk-wsl.on { opacity: 1; transition: none; }
+.bk-pads { display: grid; grid-template-columns: repeat(var(--n), minmax(0, 1fr)); gap: 3px; }
+.bk-pad { height: 34px; min-width: 0; padding: 0; border: 1px solid color-mix(in srgb, var(--sc) 55%, var(--line)); border-radius: var(--r-s); background: color-mix(in srgb, var(--sc) 20%, var(--panel)); color: var(--fg); font: 700 11px/1 var(--f-code); cursor: pointer; box-shadow: 0 2px 0 color-mix(in srgb, var(--sc) 45%, var(--line)); }
+.bk-pad.idle { opacity: .6; }
+.bk-pad.pick { background: var(--sc); border-color: color-mix(in srgb, var(--sc) 65%, #000); color: var(--on-key); opacity: 1; outline: 2px solid var(--fg); outline-offset: 1px; }
+.bk-pad.hit, .bk-pad.cur { transform: translateY(2px); box-shadow: none; background: var(--sc); color: var(--on-key); filter: brightness(1.15); opacity: 1; }
+.bk-pad:focus-visible { outline: 2px solid var(--k-blue); outline-offset: 1px; }
+.bk-steps.sl .bk-cell { font: 700 10px/1 var(--f-code); color: var(--on-key); }
+.bk-steps.sl .bk-cell.on, .bk-steps.sl .bk-cell.on:nth-child(4n+1) { background: var(--sc); border-color: color-mix(in srgb, var(--sc) 70%, #000); }
+.bk-steps.sl .bk-cell.hold, .bk-steps.sl .bk-cell.hold:nth-child(4n+1) { background: color-mix(in srgb, var(--sc) 42%, var(--panel)); border-color: color-mix(in srgb, var(--sc) 45%, var(--line)); }
+.bk-stems { display: grid; gap: 3px; }
+.bk-stl { display: grid; grid-template-columns: 52px minmax(0, 1fr); align-items: center; gap: 6px; }
+.bk-stl > b { font-size: 11.5px; }
+.bk-stc { display: grid; grid-template-columns: repeat(var(--n), minmax(0, 1fr)); gap: 2px; }
+.bk-stc button { height: 22px; min-width: 0; padding: 0; border: 1px solid var(--line); border-radius: 3px; background: var(--panel); color: var(--faint); font: 600 9px/1 var(--f-code); cursor: pointer; }
+.bk-stc button.b { border-left-color: color-mix(in srgb, var(--fg) 35%, var(--line)); }
+.bk-stc button.on { background: color-mix(in srgb, var(--tc) calc(30% + 60% * var(--v)), var(--panel)); border-color: color-mix(in srgb, var(--tc) 60%, var(--line)); color: var(--on-key); }
+.bk-stc button.now { outline: 2px solid var(--fg); outline-offset: -1px; }
+body.mob .bk-wv { height: 64px; }
+body.mob .bk-pad { height: 38px; }
+body.mob .bk-smeta { flex-basis: 100%; margin-left: 0; }
 /* ---- voice to code ---- */
 .vxbox { display: grid; gap: 8px; }
 /* ---- the pedalboard (pedals.js): stompboxes in the order the sound goes through them ---- */

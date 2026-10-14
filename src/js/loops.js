@@ -398,7 +398,15 @@ function playChop(def, ev, time, dur, P) {
   f.type = 'lowpass'; f.frequency.value = Math.max(40, Math.min(20000, P.cut)); f.Q.value = Math.max(0.1, P.res);
   g.gain.value = Math.max(0, P.gain) * (audible(slot.name) ? 1 : 0);
   f.connect(g).connect(panTo(rt(def.name).input, P.pan));
-  playBuf(f, buf, time, within * bs, play, rate, true);
+  // a separated loop: its slices play the two stems at the line's drums and rest, as the whole loop does
+  const st = sepValid(slot) ? slot.stems : null, gd = Math.max(0, P.drums ?? 1), gr = Math.max(0, P.rest ?? 1);
+  if (st && (gd !== 1 || gr !== 1)) {
+    for (const [bufs, gv] of [[st.drums, gd], [st.rest, gr]]) {
+      if (gv <= 0) continue;
+      const gn = ctx.createGain(); gn.gain.value = gv; gn.connect(f);
+      playBuf(gn, bufs[bi], time, within * bs, play, rate, true);
+    }
+  } else playBuf(f, buf, time, within * bs, play, rate, true);
 }
 function resetLoops() {
   for (const s of LS.slots) { stopSlotSources(s, S.ctx ? S.ctx.currentTime : 0); s.cover = -Infinity; s.waiting = null; }
@@ -484,6 +492,7 @@ function loopApplyCode(files, bpm) {
     if (!slot || slot.url === f.url || (LS.loopFetch && LS.loopFetch.has(f.url))) continue;
     (LS.loopFetch = LS.loopFetch || new Set()).add(f.url);
     loopMsg(t('loopFetching', { name }), '', 20000);
+    if (typeof bkSlotsChanged === 'function') bkSlotsChanged();
     (async () => {
       try {
         const res = await fetch(f.url); if (!res.ok) throw new Error('HTTP ' + res.status);
@@ -491,7 +500,7 @@ function loopApplyCode(files, bpm) {
         bufIntoSlot(i, buf, (bpm || S.bpm || 120) / 240); slot.url = f.url; slot.prev = null;
         sepSlot(i);
       } catch (e) { loopMsg(t('sampleLoadFail', { n: name, e: e.message || e }), 'bad', 6000); }
-      finally { LS.loopFetch.delete(f.url); }
+      finally { LS.loopFetch.delete(f.url); if (typeof bkSlotsChanged === 'function') bkSlotsChanged(); }
     })();
   }
 }
