@@ -576,6 +576,18 @@ body.recording .editor { border-color: var(--c-err); }
 .bk-more:hover { color: var(--fg); border-color: var(--fg); }
 /* ---- voice to code ---- */
 .vxbox { display: grid; gap: 8px; }
+.lvfx { display: grid; gap: 6px; }
+.lvcoderow { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.lvcode { flex: 1; min-width: 0; font: 11.5px/1.35 var(--f-code); padding: 6px 8px; border-radius: var(--r-s); background: var(--scr); color: var(--scr-fg); white-space: pre-wrap; word-break: break-word; }
+.lvcode.none { color: var(--scr-dim); }
+.lvdsp { font: 10px/1 var(--f-code); color: var(--faint); white-space: nowrap; }
+#lvBypass[aria-pressed="true"] { background: var(--k-pink); color: var(--on-key); }
+.lvpatches { display: flex; flex-wrap: wrap; gap: 5px; }
+.lvpatches .chip { padding: 5px 9px; font-size: 12px; }
+.lvpatches .chip[aria-pressed="true"] { background: var(--k-green); color: var(--on-key); border-color: var(--k-green); }
+.lvtune { font: 13px/1 var(--f-code); color: var(--dim); display: flex; gap: 8px; align-items: baseline; }
+.lvtune b { font-size: 20px; color: var(--fg); min-width: 3ch; }
+.lvtune .ok { color: var(--k-green); }
 .lvbox { padding-bottom: 12px; border-bottom: 1px dashed var(--line); }
 .lvdev { flex: 1 1 160px; min-width: 0; font: inherit; font-size: 12.5px; padding: 6px 8px; border-radius: var(--r-s); border: 1px solid var(--line); background: var(--raised); color: var(--fg); }
 .vxrec.lvon::before { background: var(--k-green); }
@@ -1006,7 +1018,12 @@ body.mob.mland .pad { min-height: 60px; }
             <span class="seg" id="lvCh" role="group" data-i18n-aria="lvCh"><button data-ch="0">L+R</button><button data-ch="1">1</button><button data-ch="2">2</button></span>
             <button class="btn vxrec lvon" id="lvOn" aria-pressed="false"></button>
           </div>
+          <div class="lvfx">
+            <div class="lvcoderow"><code class="lvcode" id="lvCode"></code><button class="calbtn" id="lvBypass" aria-pressed="false" data-i18n="lvBypass" hidden></button><span class="lvdsp" id="lvDsp"></span></div>
+            <div class="chips lvpatches" id="lvPatches" role="group" data-i18n-aria="lvPatches"></div>
+          </div>
           <label class="lvgain"><span data-i18n="lvGain"></span><input type="range" id="lvGain" min="0" max="4" step="0.01"><code id="lvGainV"></code></label>
+          <div class="lvtune" id="lvTune" aria-live="off"><b>–</b></div>
           <div class="lvmeters" aria-hidden="true"><span data-i18n="lvIn"></span><span class="lvm"><i id="lvMi"></i></span><span data-i18n="lvOut"></span><span class="lvm"><i id="lvMo"></i></span></div>
           <div class="lvlat">
             <div><b data-i18n="lvMeasLbl"></b> <span id="lvMeas"></span> <button class="calbtn" id="lvMeasBtn" data-i18n="lvMeasBtn" data-i18n-title="calAutoTitle"></button></div>
@@ -1111,6 +1128,7 @@ body.mob.mland .pad { min-height: 60px; }
           <dt>ftype ladder fatk .2 fdec .4 fsus .3 · penv 12 pdec .05</dt><dd data-i18n="h61d"></dd>
           <dt>voices 5 detune 30 width .8 · noise .2 · vowel &lt;a o&gt;</dt><dd data-i18n="h62d"></dd>
           <dt>analog pw .3 sync 2 ring .5 · wt table growl scan .4 · fmsynth fm 3 ratio 2 feed .2</dt><dd data-i18n="h63d"></dd>
+          <dt>input | gate -55 drive .5 amp crunch delay .3 3/16 .4 pingpong verb .3</dt><dd data-i18n="h64d"></dd>
           <dt>master default loud warm open</dt><dd data-i18n="h37d"></dd>
           <dt>chop 0 3 x 2 | loop1</dt><dd data-i18n="h16d"></dd>
         </dl>

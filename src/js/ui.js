@@ -32,6 +32,7 @@ const onSharedLang = switchLang;
 function evaluate(mode = 'bar', opts = {}) {
   const r = compile(srcEl.value);
   sndApplyCode(r.samples);
+  lvApplyCode(r);
   S.errors = r.errors; S.lineNames = r.lineNames;
   S.progGen = r.progGen;
   { const sig = [...r.pads.values()].map(p => p.name + p.key + p.latch + p.src + r.autos.has(p.name)).join('|'); S.pads = r.pads; S.autoNames = new Set(r.autos.keys()); if (sig !== padSig) { padSig = sig; renderPads(); } }
@@ -1068,6 +1069,7 @@ function frame() {
     else { recCount.textContent = '●'; recText.textContent = t('vxRecBanner', { bar: Math.min(vt.bars, Math.floor(c - vt.startC) + 1), bars: vt.bars, m: t(vt.mode === 'beat' ? 'vxBeat' : 'vxHum') }); }
   } else if (!recbar.hidden) { recbar.hidden = true; document.body.classList.remove('recording'); }
   vxTick(now);
+  lvTick(now);
   if (st !== lastTakeState) { lastTakeState = st; renderLoops(); }
   drawWaves();
   drawArr(now);

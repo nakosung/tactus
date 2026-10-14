@@ -650,3 +650,297 @@ fn vs_sample(fr: u64, srd: f64, l: &mut f64, r: &mut f64) {
         if !v.gate && v.amp < 1e-5 && fr > v.off + 4800 { v.on = false }
     }
 }
+
+// ======================= live effects (mirrors class Fx in src/js/synth.js) =======================
+// One mono input, a fixed chain, stereo out; nothing looks ahead, so it adds no delay of its own. The order and the
+// arithmetic follow the JavaScript line by line, so the two sound the same. The long buffers (the delay's two seconds,
+// the reverb's lines) are taken from new memory pages only when fx_init runs, so the synth's own instances of this
+// module do not carry them.
+const FX_N: usize = 48;
+const FX_PR: usize = 8192;
+const FX_TB: usize = 512;
+const FX_FDN: [f64; 8] = [31.7, 37.1, 41.1, 43.7, 47.9, 53.3, 59.9, 67.1];
+const LOG2_10: f64 = 3.321_928_094_887_362;
+/// log2 for positive numbers: split off the exponent, then ln(m) = 2 atanh((m - 1) / (m + 1))
+fn log2d(x: f64) -> f64 {
+    if !(x > 0.0) { return -1074.0 }
+    let b = x.to_bits(); let e = ((b >> 52) & 0x7ff) as i64 - 1023;
+    let m = f64::from_bits((b & 0x000f_ffff_ffff_ffff) | 0x3ff0_0000_0000_0000);
+    let z = (m - 1.0) / (m + 1.0); let z2 = z * z;
+    let mut t = z; let mut s = 0.0; let mut k = 1.0;
+    while k < 40.0 { s += t / k; t *= z2; k += 2.0; }
+    e as f64 + 2.0 * s * core::f64::consts::LOG2_E
+}
+fn sqrtd(x: f64) -> f64 {
+    if !(x > 0.0) { return 0.0 }
+    let mut y = exp2p(0.5 * log2d(x));
+    y = 0.5 * (y + x / y); y = 0.5 * (y + x / y);
+    y
+}
+#[inline(always)]
+fn fxr(x: f64) -> f64 { floord(x + 0.5) }
+#[inline(always)]
+fn fxdb(db: f64) -> f64 { exp2p(db * 0.166_096_404_744_368_13) }
+type Bq = [f64; 9];
+fn fx_biq(b: &mut Bq, kind: u32, f: f64, q: f64, db: f64, sr: f64) {
+    let w = TAU_D * f / sr; let cw = sinp(w + PI_D / 2.0); let sw = sinp(w); let al = sw / (2.0 * q); let a = exp2p(db * 0.083_048_202_372_184_06);
+    let (b0, b1, b2, a0, a1, a2);
+    if kind == 0 { b0 = (1.0 - cw) / 2.0; b1 = 1.0 - cw; b2 = b0; a0 = 1.0 + al; a1 = -2.0 * cw; a2 = 1.0 - al; }
+    else if kind == 1 { b0 = (1.0 + cw) / 2.0; b1 = -(1.0 + cw); b2 = b0; a0 = 1.0 + al; a1 = -2.0 * cw; a2 = 1.0 - al; }
+    else if kind == 2 { b0 = 1.0 + al * a; b1 = -2.0 * cw; b2 = 1.0 - al * a; a0 = 1.0 + al / a; a1 = -2.0 * cw; a2 = 1.0 - al / a; }
+    else {
+        let s2 = 2.0 * sqrtd(a) * al; let sg = if kind == 3 { -1.0 } else { 1.0 };
+        b0 = a * ((a + 1.0) - sg * (a - 1.0) * cw + s2); b1 = 2.0 * sg * a * ((a - 1.0) - sg * (a + 1.0) * cw); b2 = a * ((a + 1.0) - sg * (a - 1.0) * cw - s2);
+        a0 = (a + 1.0) + sg * (a - 1.0) * cw + s2; a1 = -2.0 * sg * ((a - 1.0) + sg * (a + 1.0) * cw); a2 = (a + 1.0) + sg * (a - 1.0) * cw - s2;
+    }
+    b[0] = b0 / a0; b[1] = b1 / a0; b[2] = b2 / a0; b[3] = a1 / a0; b[4] = a2 / a0;
+}
+#[inline(always)]
+fn fx_bq(b: &mut Bq, x: f64) -> f64 { let y = b[0] * x + b[1] * b[5] + b[2] * b[6] - b[3] * b[7] - b[4] * b[8]; b[6] = b[5]; b[5] = x; b[8] = b[7]; b[7] = y; y }
+#[inline(always)]
+fn fx_read(buf: &[f32], mask: i64, w: i64, d: f64) -> f64 {
+    let p = w as f64 - d; let i = floord(p); let f = p - i; let i = i as i64;
+    buf[((i - 1) & mask) as usize] as f64 * (1.0 - f) + buf[(i & mask) as usize] as f64 * f
+}
+struct Fx {
+    sr: f64, dl: usize, rl: usize,
+    genv: f64, gg: f64, gopen: bool, ce: f64, cg: f64,
+    prw: i64, ps: [f64; 3], tbw: i64, dacc: f64, dn: i64, tk: i64, tf: f64, hs: f64,
+    we: f64, ws: [f64; 2], xp: f64, hp: f64,
+    cw: i64, fw: i64, phl: [f64; 6], phr: [f64; 6], pfl: f64, pfr: f64,
+    dw: i64, dt: f64, lpl: f64, lpr: f64,
+    rw: i64, rz: [f64; 8], rlen: [i64; 8], rsize: f64, rg: [f64; 8], apw: i64,
+    bq: [Bq; 12], dd: [f64; 448],
+}
+const FX0: Fx = Fx { sr: 48000.0, dl: 0, rl: 0, genv: 0.0, gg: 0.0, gopen: false, ce: 0.0, cg: 0.0, prw: 0, ps: [0.0, 0.33, 0.66], tbw: 0, dacc: 0.0, dn: 0, tk: 0, tf: 0.0, hs: 0.0,
+    we: 0.0, ws: [0.0; 2], xp: 0.0, hp: 0.0, cw: 0, fw: 0, phl: [0.0; 6], phr: [0.0; 6], pfl: 0.0, pfr: 0.0, dw: 0, dt: -1.0, lpl: 0.0, lpr: 0.0,
+    rw: 0, rz: [0.0; 8], rlen: [0; 8], rsize: -1.0, rg: [0.0; 8], apw: 0, bq: [[0.0; 9]; 12], dd: [0.0; 448] };
+static mut FX: Fx = FX0;
+static mut FP: [f32; FX_N] = [0.0; FX_N];
+static mut FX_IN: [f32; BLOCK] = [0.0; BLOCK];
+static mut FX_OL: [f32; BLOCK] = [0.0; BLOCK];
+static mut FX_OR: [f32; BLOCK] = [0.0; BLOCK];
+static mut FX_CL: [f32; 4096] = [0.0; 4096];
+static mut FX_CR: [f32; 4096] = [0.0; 4096];
+static mut FX_FL: [f32; 2048] = [0.0; 2048];
+static mut FX_FR: [f32; 2048] = [0.0; 2048];
+static mut FX_PRB: [f32; FX_PR] = [0.0; FX_PR];
+static mut FX_TBB: [f32; FX_TB] = [0.0; FX_TB];
+static mut FX_AP: [[f32; 1024]; 2] = [[0.0; 1024]; 2];
+static mut FX_BIG: *mut f32 = core::ptr::null_mut();
+#[inline(always)]
+fn fx() -> &'static mut Fx { unsafe { &mut *core::ptr::addr_of_mut!(FX) } }
+macro_rules! st { ($n:ident) => { unsafe { &mut *core::ptr::addr_of_mut!($n) } } }
+/// the delay's two sides, then the reverb's eight lines, in the pages fx_init took
+fn fx_big(off: usize, len: usize) -> &'static mut [f32] { unsafe { core::slice::from_raw_parts_mut(FX_BIG.add(off), len) } }
+#[unsafe(no_mangle)]
+pub extern "C" fn fx_params() -> *mut f32 { st!(FP).as_mut_ptr() }
+#[unsafe(no_mangle)]
+pub extern "C" fn fx_in() -> *mut f32 { st!(FX_IN).as_mut_ptr() }
+#[unsafe(no_mangle)]
+pub extern "C" fn fx_out_l() -> *const f32 { st!(FX_OL).as_ptr() }
+#[unsafe(no_mangle)]
+pub extern "C" fn fx_out_r() -> *const f32 { st!(FX_OR).as_ptr() }
+#[unsafe(no_mangle)]
+pub extern "C" fn fx_tuner() -> f32 { fx().tf as f32 }
+#[unsafe(no_mangle)]
+pub extern "C" fn fx_init(sr: f32) -> u32 {
+    let f = fx(); *f = FX0; f.sr = sr as f64;
+    let mut dl = 1usize; while (dl as f64) < f.sr * 2.0 + 8.0 { dl <<= 1 }
+    let mut rl = 1usize; while (rl as f64) < f.sr * 0.075 { rl <<= 1 }
+    f.dl = dl; f.rl = rl;
+    let need = (2 * dl + 8 * rl) * 4;
+    #[cfg(target_arch = "wasm32")]
+    unsafe {
+        if FX_BIG.is_null() {
+            let pages = (need + 65535) / 65536;
+            let prev = core::arch::wasm32::memory_grow(0, pages);
+            if prev == usize::MAX { return 0 }
+            FX_BIG = (prev * 65536) as *mut f32;
+        }
+    }
+    fx_reset();
+    1
+}
+#[unsafe(no_mangle)]
+pub extern "C" fn fx_reset() {
+    let f = fx(); let (sr, dl, rl) = (f.sr, f.dl, f.rl);
+    *f = FX0; f.sr = sr; f.dl = dl; f.rl = rl;
+    if !unsafe { FX_BIG.is_null() } { for v in fx_big(0, 2 * dl + 8 * rl).iter_mut() { *v = 0.0 } }
+    for v in st!(FX_CL).iter_mut().chain(st!(FX_CR).iter_mut()).chain(st!(FX_FL).iter_mut()).chain(st!(FX_FR).iter_mut()).chain(st!(FX_PRB).iter_mut()).chain(st!(FX_TBB).iter_mut()) { *v = 0.0 }
+    for a in st!(FX_AP).iter_mut() { for v in a.iter_mut() { *v = 0.0 } }
+}
+// the pitch of the input, every 256 samples, on a copy taken down to about 12 kHz (a small YIN)
+fn fx_track(f: &mut Fx, p: &[f32; FX_N]) {
+    let tb = st!(FX_TBB);
+    let d_ = 1.0f64.max(fxr(f.sr / 12000.0)); let dsr = f.sr / d_;
+    let tmin = 2i64.max(floord(dsr / 900.0) as i64); let tmax = 220i64.min(floord(dsr / 55.0) as i64); let w = 256i64;
+    let m = (FX_TB - 1) as i64; let w0 = f.tbw - w - tmax;
+    let mut e = 0.0; for j in 0..w { let v = tb[((w0 + j) & m) as usize] as f64; e += v * v; }
+    if e < w as f64 * 1e-6 { f.tf = 0.0; return }
+    let mut sum = 0.0; let mut best = -1i64;
+    for t in 1..=tmax + 1 {
+        let mut s = 0.0; for j in 0..w { let a = tb[((w0 + j) & m) as usize] as f64 - tb[((w0 + j + t) & m) as usize] as f64; s += a * a; }
+        sum += s; f.dd[t as usize] = if sum > 0.0 { s * t as f64 / sum } else { 1.0 };
+    }
+    let mut t = tmin; while t <= tmax { if f.dd[t as usize] < 0.15 && f.dd[t as usize] <= f.dd[t as usize + 1] { best = t; break } t += 1 }
+    if best < 0 { f.tf = 0.0; return }
+    let (a, b, c) = (f.dd[best as usize - 1], f.dd[best as usize], f.dd[best as usize + 1]); let den = a - 2.0 * b + c;
+    let sh = if den != 0.0 { 0.5 * (a - c) / den } else { 0.0 };
+    f.tf = dsr / (best as f64 + sh.clamp(-0.5, 0.5));
+    // a harmony in the key: the heard note's place in the scale, moved by the asked number of scale steps
+    let h = fxr(p[27] as f64) as i64;
+    if h != 0 {
+        let root = fxr(p[30] as f64) as i64; let mut mask = fxr(p[31] as f64) as i64; if mask == 0 { mask = 2741 }
+        let mm = 69.0 + 12.0 * log2d(f.tf / 440.0); let n = fxr(mm) as i64;
+        let mut sc = [0i64; 12]; let mut l = 0usize; for k in 0..12 { if mask & (1 << k) != 0 { sc[l] = k; l += 1 } }
+        let pc = ((n - root) % 12 + 12) % 12; let mut k = l - 1; for j in 0..l { if sc[j] <= pc { k = j } }
+        let li = l as i64; let kt = k as i64 + h; let o = floord(kt as f64 / li as f64) as i64;
+        f.hs = (sc[(((kt % li) + li) % li) as usize] + 12 * o - sc[k]) as f64;
+    }
+}
+// a voice shifted by r (a ratio) from the pitch ring: two taps sweeping a 40 ms window, crossfaded
+#[inline(always)]
+fn fx_shift(f: &mut Fx, i: usize, r: f64, w: f64) -> f64 {
+    let mut ph = f.ps[i] + (1.0 - r) / w; ph -= floord(ph); f.ps[i] = ph;
+    let mut p2 = ph + 0.5; p2 -= floord(p2);
+    let pr = st!(FX_PRB); let m = (FX_PR - 1) as i64;
+    let a = fx_read(pr, m, f.prw, ph * w + 1.0); let b = fx_read(pr, m, f.prw, p2 * w + 1.0);
+    a * (1.0 - (2.0 * ph - 1.0).abs()) + b * (1.0 - (2.0 * p2 - 1.0).abs())
+}
+#[unsafe(no_mangle)]
+pub extern "C" fn fx_process(n: u32, c0: f64, cps: f64) {
+    let f = fx(); let p = st!(FP); let sr = f.sr;
+    let pv = |i: usize| p[i] as f64;
+    let ka1 = 1.0 - expp(-1.0 / (0.001 * sr)); let kr80 = 1.0 - expp(-1.0 / (0.08 * sr)); let grel = expp(-1.0 / (0.05 * sr)); let kd = 1.0 - expp(-1.0 / (0.01 * sr));
+    let ka3 = 1.0 - expp(-1.0 / (0.003 * sr)); let kr120 = 1.0 - expp(-1.0 / (0.12 * sr)); let ka2 = 1.0 - expp(-1.0 / (0.002 * sr)); let kr60 = 1.0 - expp(-1.0 / (0.06 * sr));
+    let gate = pv(0) < 0.0; let thr = fxdb(pv(0));
+    let ca = pv(1); let cthr = -10.0 - 30.0 * ca; let crat = 1.0 + 7.0 * ca; let cmk = -cthr * (1.0 - 1.0 / crat) * 0.5;
+    let w = fxr(0.04 * sr).min((FX_PR - 8) as f64);
+    let r0 = exp2p(pv(24) / 12.0); let r1 = 0.5; let track = pv(27) != 0.0 || pv(32) > 0.0;
+    let drive = pv(4); let at = fxr(pv(5)).clamp(0.0, 3.0) as usize;
+    let gk = [4.0, 18.0, 60.0, 160.0][at]; let g_ = 1.0 + drive * gk; let dgain = [1.0, 0.9, 0.6, 0.4][at] * exp2p(-[0.85, 0.75, 0.6, 0.45][at] * log2d(g_));
+    let hpk = 1.0 - expp(-TAU_D * [20.0, 90.0, 150.0, 40.0][at] / sr);
+    let tone = pv(6) != 0.0 || pv(7) != 0.0 || pv(8) != 0.0; let cab = pv(9) > 0.5 || (pv(9) < 0.0 && drive > 0.0);
+    if drive > 0.0 { fx_biq(&mut f.bq[0], 0, 0.11 * 4.0 * sr, 0.54, 0.0, 4.0 * sr); fx_biq(&mut f.bq[1], 0, 0.11 * 4.0 * sr, 1.31, 0.0, 4.0 * sr); }
+    if tone { fx_biq(&mut f.bq[2], 3, 120.0, 0.707, pv(6), sr); fx_biq(&mut f.bq[3], 2, 750.0, 0.8, pv(7), sr); fx_biq(&mut f.bq[4], 4, 3200.0, 0.707, pv(8), sr); }
+    if cab { fx_biq(&mut f.bq[5], 1, 80.0, 0.707, 0.0, sr); fx_biq(&mut f.bq[6], 2, 2000.0, 1.0, 4.0, sr); fx_biq(&mut f.bq[7], 0, 5000.0, 0.9, 0.0, sr); fx_biq(&mut f.bq[8], 0, 6500.0, 0.6, 0.0, sr); }
+    let dc = if cps > 0.0 { cps } else { 0.5 }; let dtt = (pv(19) / dc * sr).min((f.dl - 8) as f64).max(1.0);
+    let dfb = pv(20).clamp(0.0, 0.95); let dmode = fxr(pv(21)) as i64;
+    let dlk = 1.0 - expp(-TAU_D * (if dmode == 2 { 2800.0 } else { 7000.0 }) / sr);
+    if f.dt < 0.0 { f.dt = dtt }
+    if pv(22) > 0.0 && pv(23) != f.rsize {
+        f.rsize = pv(23); let rt = 0.5 + 4.5 * pv(23);
+        for i in 0..8 { f.rlen[i] = ((f.rl - 2) as f64).min(fxr(FX_FDN[i] * (0.35 + 0.65 * pv(23)) * sr / 1000.0)) as i64; f.rg[i] = exp2p(-3.0 * f.rlen[i] as f64 / (rt * sr) * LOG2_10); }
+    }
+    let rdk = 1.0 - expp(-TAU_D * 4500.0 / sr); let ap1 = fxr(142.0 * sr / 48000.0) as i64; let ap2 = fxr(379.0 * sr / 48000.0) as i64;
+    let lvl = fxdb(pv(29)); let dcb = cps / sr;
+    let dsub = 1.0f64.max(fxr(sr / 12000.0)) as i64;
+    let big = !unsafe { FX_BIG.is_null() };
+    let (dl, rl) = (f.dl, f.rl);
+    let mut cb = c0;
+    let inp = st!(FX_IN); let ol = st!(FX_OL); let or_ = st!(FX_OR);
+    for k in 0..n as usize {
+        let mut x = inp[k] as f64;
+        // gate: opens above the threshold, closes 6 dB under it
+        if gate {
+            let ax = x.abs(); f.genv = if ax > f.genv { ax } else { f.genv * grel };
+            if f.genv > thr { f.gopen = true } else if f.genv < thr * 0.5 { f.gopen = false }
+            let tg = if f.gopen { 1.0 } else { 0.0 }; f.gg += (tg - f.gg) * (if tg > f.gg { ka1 } else { kr80 }); x *= f.gg;
+        }
+        // compressor: an RMS detector, the gain worked out in dB, half the reduction given back
+        if ca > 0.0 {
+            f.ce += (x * x - f.ce) * kd;
+            let lev = 3.010_299_956_639_811_6 * log2d(f.ce + 1e-12); let gr = if lev > cthr { (cthr - lev) * (1.0 - 1.0 / crat) } else { 0.0 };
+            f.cg += (gr - f.cg) * (if gr < f.cg { ka3 } else { kr120 }); x *= fxdb(f.cg + cmk);
+        }
+        // pitch voices, from a ring of what came in
+        st!(FX_PRB)[(f.prw & (FX_PR as i64 - 1)) as usize] = x as f32; f.prw += 1;
+        if track {
+            f.dacc += x; f.dn += 1;
+            if f.dn >= dsub { st!(FX_TBB)[(f.tbw & (FX_TB as i64 - 1)) as usize] = (f.dacc / f.dn as f64) as f32; f.tbw += 1; f.dacc = 0.0; f.dn = 0; f.tk += 1; if f.tk >= 64 { f.tk = 0; fx_track(f, p); } }
+        }
+        let mut s = x;
+        if pv(25) > 0.0 { s += fx_shift(f, 0, r0, w) * pv(25); }
+        if pv(26) > 0.0 { s += fx_shift(f, 1, r1, w) * pv(26); }
+        if pv(27) != 0.0 && pv(28) > 0.0 { let r2 = exp2p(f.hs / 12.0); s += fx_shift(f, 2, r2, w) * pv(28); }
+        // wah: a band-pass swept by how loud it is, or by the song's beat
+        if pv(2) > 0.0 {
+            let ctl;
+            if pv(3) > 0.0 { let ph = cb / pv(3); ctl = 0.5 - 0.5 * sinp(TAU_D * (ph - floord(ph)) + PI_D / 2.0); }
+            else { let a_ = s.abs(); f.we += (a_ - f.we) * (if a_ > f.we { ka2 } else { kr60 }); ctl = (f.we * 8.0).min(1.0); }
+            let g = tanp(PI_D * 350.0 * exp2p(2.6 * ctl) / sr); let kk = 0.25; let a1 = 1.0 / (1.0 + g * (g + kk)); let a2 = g * a1; let a3 = g * a2;
+            let v3 = s - f.ws[1]; let v1 = a1 * f.ws[0] + a2 * v3; let v2 = f.ws[1] + a2 * f.ws[0] + a3 * v3;
+            f.ws[0] = 2.0 * v1 - f.ws[0]; f.ws[1] = 2.0 * v2 - f.ws[1];
+            s += (v1 * 1.8 - s) * pv(2);
+        }
+        // drive: four times the rate through the curve, so the overtones it makes do not fold back down
+        if drive > 0.0 {
+            f.hp += (s - f.hp) * hpk; let xin = s - f.hp;
+            let mut y = 0.0;
+            for j in 1..=4 {
+                let v = (f.xp + (xin - f.xp) * j as f64 / 4.0) * g_;
+                let sh = match at { 0 => thd(v), 1 => thd(v + 0.3) - thd(0.3), 2 => thd(1.5 * thd(v)), _ => v.clamp(-1.0, 1.0) };
+                let u = fx_bq(&mut f.bq[0], sh); y = fx_bq(&mut f.bq[1], u);
+            }
+            f.xp = xin; s = y * dgain;
+        }
+        if tone { let a = fx_bq(&mut f.bq[2], s); let b = fx_bq(&mut f.bq[3], a); s = fx_bq(&mut f.bq[4], b); }
+        if cab { let a = fx_bq(&mut f.bq[5], s); let b = fx_bq(&mut f.bq[6], a); let c = fx_bq(&mut f.bq[7], b); s = fx_bq(&mut f.bq[8], c); }
+        let (mut l, mut r) = (s, s);
+        // chorus: two voices 6 to 18 ms behind, swaying in opposite directions
+        if pv(10) > 0.0 {
+            st!(FX_CL)[(f.cw & 4095) as usize] = l as f32; st!(FX_CR)[(f.cw & 4095) as usize] = r as f32; f.cw += 1;
+            let per = if pv(11) != 0.0 { pv(11) } else { 2.0 }; let ph = cb / per; let u = TAU_D * (ph - floord(ph));
+            let dl_ = (0.012 + 0.006 * sinp(u)) * sr; let dr_ = (0.012 + 0.006 * sinp(u + PI_D)) * sr;
+            let wl = fx_read(st!(FX_CL), 4095, f.cw, dl_); let wr = fx_read(st!(FX_CR), 4095, f.cw, dr_); let m = pv(10);
+            l = l * (1.0 - 0.3 * m) + wl * 0.7 * m; r = r * (1.0 - 0.3 * m) + wr * 0.7 * m;
+        }
+        // flanger: a short delay with feedback, swept from under a millisecond to about five
+        if pv(12) > 0.0 {
+            let per = if pv(13) != 0.0 { pv(13) } else { 4.0 }; let ph = cb / per; let u = TAU_D * (ph - floord(ph));
+            let d = (0.0006 + 0.004 * (0.5 - 0.5 * sinp(u + PI_D / 2.0))) * sr;
+            let wl = fx_read(st!(FX_FL), 2047, f.fw, d); let wr = fx_read(st!(FX_FR), 2047, f.fw, d * 1.07);
+            st!(FX_FL)[(f.fw & 2047) as usize] = (l + wl * 0.6) as f32; st!(FX_FR)[(f.fw & 2047) as usize] = (r + wr * 0.6) as f32; f.fw += 1;
+            let m = pv(12); l = (l + wl * m) / (1.0 + 0.5 * m); r = (r + wr * m) / (1.0 + 0.5 * m);
+        }
+        // phaser: six all-passes swept between 300 Hz and 2 kHz, a quarter turn apart on each side
+        if pv(14) > 0.0 {
+            let per = if pv(15) != 0.0 { pv(15) } else { 2.0 }; let ph = cb / per; let u = TAU_D * (ph - floord(ph)); let m = pv(14);
+            for side in 0..2 {
+                let ctl = 0.5 - 0.5 * sinp(u + (if side == 1 { PI_D } else { PI_D / 2.0 })); let t = tanp(PI_D * 300.0 * exp2p(2.7 * ctl) / sr); let a = (t - 1.0) / (t + 1.0);
+                let mut v = (if side == 1 { r } else { l }) + 0.5 * (if side == 1 { f.pfr } else { f.pfl });
+                let st_ = if side == 1 { &mut f.phr } else { &mut f.phl };
+                for j in 0..6 { let y = a * v + st_[j]; st_[j] = v - a * y; v = y; }
+                if side == 1 { f.pfr = v; r = (r * (1.0 - 0.5 * m) + v * 0.5 * m) * (1.0 + 0.35 * m); } else { f.pfl = v; l = (l * (1.0 - 0.5 * m) + v * 0.5 * m) * (1.0 + 0.35 * m); }
+            }
+        }
+        // tremolo, on the beat
+        if pv(16) > 0.0 { let per = if pv(17) != 0.0 { pv(17) } else { 0.125 }; let ph = cb / per; let g = 1.0 - pv(16) * (0.5 - 0.5 * sinp(TAU_D * (ph - floord(ph)) + PI_D / 2.0)); l *= g; r *= g; }
+        // delay: the time in bars of the song; a tempo change slides the time over about a tenth of a second
+        if pv(18) > 0.0 && big {
+            f.dt += (dtt - f.dt) * 0.0002;
+            let m = (dl - 1) as i64; let (bl, br) = (fx_big(0, dl), fx_big(dl, dl));
+            let wl = fx_read(bl, m, f.dw, f.dt); let wr = fx_read(br, m, f.dw, f.dt);
+            f.lpl += (wl - f.lpl) * dlk; f.lpr += (wr - f.lpr) * dlk;
+            let (mut fl, mut fr) = (f.lpl, f.lpr); if dmode == 2 { fl = thd(fl * 1.2) / 1.2; fr = thd(fr * 1.2) / 1.2; }
+            let wi = (f.dw & m) as usize;
+            if dmode == 1 { bl[wi] = ((l + r) * 0.5 + fr * dfb) as f32; br[wi] = (fl * dfb) as f32; }
+            else { bl[wi] = (l + fl * dfb) as f32; br[wi] = (r + fr * dfb) as f32; }
+            f.dw += 1; l += wl * pv(18); r += wr * pv(18);
+        } else { f.dt = dtt }
+        // reverb: two all-passes to smear the attack, then eight delay lines mixed back into each other
+        if pv(22) > 0.0 && big {
+            let mut v = (l + r) * 0.15;
+            for q in 0..2 { let b = &mut st!(FX_AP)[q]; let ln = if q == 1 { ap2 } else { ap1 }; let y = b[((f.apw - ln) & 1023) as usize] as f64; let u = v + 0.6 * y; b[(f.apw & 1023) as usize] = u as f32; v = y - 0.6 * u; }
+            f.apw += 1;
+            let mk = (rl - 1) as i64; let mut sum = 0.0;
+            for i in 0..8 { let line = fx_big(2 * dl + i * rl, rl); let y = line[((f.rw - f.rlen[i]) & mk) as usize] as f64; f.rz[i] += (y - f.rz[i]) * rdk; sum += f.rz[i]; }
+            for i in 0..8 { let line = fx_big(2 * dl + i * rl, rl); line[(f.rw & mk) as usize] = (v + (f.rz[i] - 0.25 * sum) * f.rg[i]) as f32; }
+            f.rw += 1;
+            let z = &f.rz; l += (z[0] + z[2] + z[4] + z[6]) * 0.6 * pv(22); r += (z[1] + z[3] + z[5] + z[7]) * 0.6 * pv(22);
+        }
+        ol[k] = (l * lvl) as f32; or_[k] = (r * lvl) as f32;
+        cb += dcb;
+    }
+}

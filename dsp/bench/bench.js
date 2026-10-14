@@ -7,7 +7,8 @@ const src = fs.readFileSync(path.join(__dirname, '../../src/js/synth.js'), 'utf8
 const code = /const SYN_CODE = `([\s\S]*?)`;/.exec(src)[1];
 globalThis.sampleRate = SR; globalThis.currentFrame = 0;
 globalThis.AudioWorkletProcessor = class { constructor() { this.port = {}; } };
-let Syn; globalThis.registerProcessor = (n, c) => { if (n === 'pulse-synth') Syn = c; };
+let Syn, Live; globalThis.registerProcessor = (n, c) => { if (n === 'pulse-synth') Syn = c; if (n === 'tactus-live') Live = c; };
+globalThis.currentTime = 0;
 new Function(code)();
 // the engine's wavetables, made by the same code the app uses
 const WT = require('../../src/js/wavetables.js').wtBuild();
@@ -93,3 +94,31 @@ console.log(`acid max abs difference ${err.toExponential(2)} (peak ${pk.toFixed(
 // and the engine (whose unison phases and noise come from the same seeded generator on both sides)
 { const mj = runJS('vs').out, mw = runWasm('vs').out; let e2 = 0, p2 = 0; for (let i = 0; i < mj.length; i++) { e2 = Math.max(e2, Math.abs(mj[i] - mw[i])); p2 = Math.max(p2, Math.abs(mj[i])); } console.log(`engine max abs difference ${e2.toExponential(2)} (peak ${p2.toFixed(3)})`); }
 for (const k of ["ks", "acid", "mono", "vs"]) { const a = best(() => runJS(k)), b = best(() => runWasm(k)); console.log(k, "JS", a.ms.toFixed(0), "WASM", b.ms.toFixed(0)); }
+
+// the live effects: a plucked guitar-like tone through every effect at once, with the song at 120 BPM, through the
+// JavaScript class and through the module; the chain is deterministic, so the two must agree sample for sample
+function fxSig(i) { const t = i / SR; let v = 0; for (let h = 1; h < 12; h++) v += Math.sin(2 * Math.PI * 196 * h * t) / h; return 0.2 * v * Math.exp(-((t % 0.75) * 2)); }
+const FXP = { 0: -55, 1: 0.4, 2: 0.5, 3: 0.25, 4: 0.5, 5: 1, 6: 2, 7: -1, 8: 3, 9: -1, 10: 0.4, 11: 2, 12: 0.3, 13: 4, 14: 0.4, 15: 2, 16: 0.3, 17: 0.125,
+  18: 0.3, 19: 0.1875, 20: 0.45, 21: 1, 22: 0.3, 23: 0.6, 24: 7, 25: 0.3, 26: 0.3, 27: 2, 28: 0.4, 29: 0, 30: 7, 31: 2741, 32: 1 };
+function fxRun(useWasm, secs) {
+  const N = SR * secs, out = new Float32Array(N * 2), inb = new Float32Array(BLOCK), cps = 120 / 240;
+  let x, fx, pi, pl, pr, pp;
+  if (useWasm) {
+    x = new WebAssembly.Instance(new WebAssembly.Module(fs.readFileSync(path.join(__dirname, '../tactus_dsp.wasm'))), {}).exports; x.fx_init(SR);
+    pp = new Float32Array(x.memory.buffer, x.fx_params(), 48); for (const k in FXP) pp[k] = FXP[k];
+    pi = new Float32Array(x.memory.buffer, x.fx_in(), BLOCK); pl = new Float32Array(x.memory.buffer, x.fx_out_l(), BLOCK); pr = new Float32Array(x.memory.buffer, x.fx_out_r(), BLOCK);
+  } else { fx = new Live().fx; for (const k in FXP) fx.p[k] = FXP[k]; pl = new Float32Array(BLOCK); pr = new Float32Array(BLOCK); }
+  const t0 = process.hrtime.bigint();
+  for (let f = 0; f + BLOCK <= N; f += BLOCK) {
+    for (let k = 0; k < BLOCK; k++) inb[k] = fxSig(f + k);
+    const c = f * cps / SR;
+    if (useWasm) { pi.set(inb); x.fx_process(BLOCK, c, cps); } else fx.process(inb, pl, pr, BLOCK, c, cps);
+    for (let k = 0; k < BLOCK; k++) { out[2 * (f + k)] = pl[k]; out[2 * (f + k) + 1] = pr[k]; }
+  }
+  return { ms: Number(process.hrtime.bigint() - t0) / 1e6, out };
+}
+{
+  const fs_ = Math.min(SECS, 10), a = fxRun(false, fs_), b = fxRun(true, fs_);
+  let e = 0, pk = 0; for (let i = 0; i < a.out.length; i++) { e = Math.max(e, Math.abs(a.out[i] - b.out[i])); pk = Math.max(pk, Math.abs(a.out[i])); }
+  console.log(`live effects max abs difference ${e.toExponential(2)} (peak ${pk.toFixed(3)}) · ${fs_}s, every effect on: JS ${a.ms.toFixed(0)} ms, WASM ${b.ms.toFixed(0)} ms (${(fs_ * 1000 / b.ms).toFixed(0)}x realtime)`);
+}

@@ -399,7 +399,7 @@ const WORD_VALS = {
 const LFO_TARGETS = ['cut', 'res', 'pitch', 'scan', 'pw', 'fm', 'vowel', 'sync', 'noise', 'gain', 'pan', 'lpf', 'hpf'];
 const LFO_SHAPES = ['sine', 'tri', 'saw', 'ramp', 'square', 'rand'];
 const LFO_DEPTH = { cut: 600, res: 2, pitch: 30, scan: 0.3, pw: 0.2, fm: 2, vowel: 2, sync: 1, noise: 0.2, gain: 0.5, pan: 0.8, lpf: 2000, hpf: 300 };
-const GLOBALS = new Set(['bpm', 'key', 'scale', 'swing', 'prog', 'scene', 'song', 'master', 'seed', 'fx', 'auto', 'let', 'sample', 'space', 'viz', 'shader', 'bus']);
+const GLOBALS = new Set(['bpm', 'key', 'scale', 'swing', 'prog', 'scene', 'song', 'master', 'input', 'seed', 'fx', 'auto', 'let', 'sample', 'space', 'viz', 'shader', 'bus']);
 // generator parameters shape the notes, so they are part of the pattern rather than the sound
 const GEN_PARAMS = ['seed', 'dens', 'evolve', 'bars'];
 let GEN_SEED = 0;
@@ -633,6 +633,31 @@ function stripComment(text) {
 }
 
 const HEAD_RE = /^(\s*)([a-zA-Z][\w]*):?/;
+// the live input's effects: input | gate -50 comp .4 drive .5 amp crunch delay .3 3/16 .4 verb .3
+// Each effect takes up to n numbers (a fraction like 3/16 is a length in bars) and maybe one of its words.
+const INPUT_FX = {
+  gate: { n: 1, d: [-50] }, comp: { n: 1, d: [0.5] }, wah: { n: 2, d: [0.7, 0] },
+  drive: { n: 1, d: [0.5] }, amp: { n: 0, w: ['clean', 'crunch', 'lead', 'fuzz'] }, low: { n: 1, d: [0] }, mid: { n: 1, d: [0] }, high: { n: 1, d: [0] }, cab: { n: 0, w: ['on', 'off'] },
+  chorus: { n: 2, d: [0.5, 2] }, flanger: { n: 2, d: [0.5, 4] }, phaser: { n: 2, d: [0.5, 2] }, trem: { n: 2, d: [0.6, 1 / 8] },
+  delay: { n: 3, d: [0.3, 3 / 16, 0.4], w: ['pingpong', 'tape'] }, verb: { n: 2, d: [0.3, 0.5] },
+  pitch: { n: 2, d: [12, 0.5] }, oct: { n: 1, d: [0.5] }, harm: { n: 2, d: [2, 0.5] }, level: { n: 1, d: [0] },
+};
+function inputParams(src, base) {
+  const out = {}, re = /\S+/g; let m, cur = null;
+  while ((m = re.exec(src))) {
+    const tok = m[0], col = base + m.index;
+    if (INPUT_FX[tok]) { cur = { k: tok, v: [], w: null }; out[tok] = cur; continue; }
+    if (!cur) throw new PErr(t('inputFmt', { w: tok, list: Object.keys(INPUT_FX).join(' ') }), col);
+    const spec = INPUT_FX[cur.k], fr = /^(-?\d+)\/(\d+)$/.exec(tok);
+    if (fr || /^-?(\d+\.?\d*|\.\d+)$/.test(tok)) {
+      if (cur.v.length >= spec.n) throw new PErr(t('inputMany', { k: cur.k, n: spec.n }), col);
+      cur.v.push(fr ? +fr[1] / +fr[2] : +tok);
+    } else if (spec.w && spec.w.includes(tok) && !cur.w) cur.w = tok;
+    else throw new PErr(t('inputFmt', { w: tok, list: Object.keys(INPUT_FX).join(' ') }), col);
+  }
+  for (const k in out) { const p = out[k], d = INPUT_FX[k].d || []; for (let i = p.v.length; i < d.length; i++) p.v.push(d[i]); }
+  return out;
+}
 function parseLine(text) {
   const code = stripComment(text);
   if (!code.trim()) return null;
@@ -641,6 +666,7 @@ function parseLine(text) {
   const name = m[2];
   const restBase = m[0].length;
   const rest = code.slice(restBase);
+  if (name === 'input') { const s2 = rest.replace(/^\s*\|/, m2 => ' '.repeat(m2.length)); return { type: 'input', params: inputParams(s2, restBase) }; }
   // master warm   ·   master loud | thr -20 ratio 3 low 1 high 1.5 width 1.2 limit -1
   if (name === 'master') {
     const bar = rest.indexOf('|'), v = (bar >= 0 ? rest.slice(0, bar) : rest).trim();
@@ -868,7 +894,7 @@ const DEFAULT_PADS = DEFAULT_PAD_SRC.map(l => { const r = parseLine(l); r.pad.bu
 function compile(text) {
   { const sm = /^\s*seed\s+(-?\d+)\s*(?:\/\/.*)?$/m.exec(text); GEN_SEED = sm ? +sm[1] : 0; }
   const lines = text.split('\n');
-  const out = { pads: new Map(), autos: new Map(), samples: new Map(), seed: GEN_SEED, master: null, bpm: null, key: null, scale: null, swing: null, prog: null, progSrc: '', scenes: new Map(), song: null, arrSrc: '', tracks: new Map(), order: [], errors: new Map(), lineNames: new Map(), space: null, viz: null, shaders: new Map(), buses: new Map(), masterParams: {} };
+  const out = { pads: new Map(), autos: new Map(), samples: new Map(), seed: GEN_SEED, master: null, bpm: null, key: null, scale: null, swing: null, prog: null, progSrc: '', scenes: new Map(), song: null, arrSrc: '', tracks: new Map(), order: [], errors: new Map(), lineNames: new Map(), space: null, viz: null, shaders: new Map(), buses: new Map(), masterParams: {}, input: null };
   // bus names first, so track lines anywhere in the code can send to them
   BUS_NAMES = new Set();
   VARS = new Map();
@@ -887,6 +913,7 @@ function compile(text) {
       if (!r) return;
       if (r.type === 'bpm') out.bpm = r.v;
       else if (r.type === 'master') { out.master = r.v; out.masterParams = r.params; }
+      else if (r.type === 'input') { r.line = i; out.input = r; }
       else if (r.type === 'bus') { if (out.buses.has(r.name)) throw new PErr(t('dup', { n: r.name }), 0); r.line = i; out.buses.set(r.name, r); }
       else if (r.type === 'space') out.space = r.v;
       else if (r.type === 'viz') { r.line = i; out.viz = r; }

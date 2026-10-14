@@ -6,6 +6,7 @@ The audio-thread voices of [Tactus](../), written in Rust and compiled to a smal
 - **A TB-303 style acid voice.** A polyBLEP saw or square feeds a saturating 4-pole ladder filter, with slide and accent.
 - **An analog mono bass.** Two polyBLEP saws a few cents apart (or squares, or a blend) and a square sub an octave down feed the same kind of ladder, with a filter envelope that snaps open on each note, an ADSR that restarts from where it is, and glide. It was tuned against a recorded monosynth bassline.
 - **The synth engine.** Twelve polyphonic voices per track, each up to seven unison copies spread in pitch and stereo, in three kinds: analog (a polyBLEP saw and pulse blend with pulse width, hard sync and ring modulation), wavetable (eight 16-frame tables, band-limited by octave, scanned smoothly) and two-operator FM (ratio, depth, feedback and a decaying index). Each voice has a sub, noise, amp, filter and pitch envelopes, two LFOs, and a choice of filters: 12 and 24 dB state-variable low-pass, a ladder, high-pass, band-pass, notch, and a vowel filter of three formant band-passes. With `glide` it plays mono and slides. The tables are built in `src/js/wavetables.js` and copied into the module's memory once.
+- **Live effects.** One mono input and a fixed chain to stereo: gate, compressor, pitch voices (a shift, an octave down, and a harmony that tracks the pitch with a small YIN and moves it by steps of the song's scale), wah (by level or on the beat), drive at four times the rate into a tone stack and a cabinet, chorus, flanger, phaser, tremolo, delay (normal, ping-pong, tape) and an eight-line feedback-delay reverb. Nothing looks ahead, so the chain adds no delay of its own; the pitch voices sound about 20 ms after the dry signal, as any shifter of this kind does. Rates and delay times are in bars of the song. The long buffers are taken from new memory pages by `fx_init`, so the synth's instances do not carry them.
 
 The crate is `no_std` and never allocates, so the audio thread never pauses for garbage collection. The worklet passes each note event in at its exact sample frame and calls `render(n)` for the samples between events, so timing stays sample-accurate. If WebAssembly is unavailable, Tactus falls back to the original JavaScript voices; add `?dsp=js` to the URL to force that path. The build stamp in the app shows `· Rust DSP` when this module is running.
 
@@ -13,8 +14,8 @@ The crate is `no_std` and never allocates, so the audio thread never pauses for 
 
 | File | Purpose |
 |---|---|
-| `src/lib.rs` | The voices: `init`, `ks_on`, `acid_on`, `mono_on`, the engine (`vs_params` for the 96-value parameter block, `vs_on`, `vs_seed`, `wt_ptr`/`wt_len` for the tables), `live`, `render`, `out_l`, `out_r` |
-| `tactus_dsp.wasm` | The compiled module (46 KB). `embed.py` writes it into `src/js/dsp_wasm.js`, which the build inlines |
+| `src/lib.rs` | The voices: `init`, `ks_on`, `acid_on`, `mono_on`, the engine (`vs_params` for the 96-value parameter block, `vs_on`, `vs_seed`, `wt_ptr`/`wt_len` for the tables), `live`, `render`, `out_l`, `out_r`; the live effects (`fx_init`, `fx_params` for the 48-value block, `fx_in`, `fx_process`, `fx_out_l`/`fx_out_r`, `fx_tuner`, `fx_reset`) |
+| `tactus_dsp.wasm` | The compiled module (79 KB). `embed.py` writes it into `src/js/dsp_wasm.js`, which the build inlines |
 | `bench/bench.js` | Renders the same events through the JavaScript voices (from `src/js/synth.js`) and through the module, then compares speed and output |
 
 ## Build
@@ -56,5 +57,5 @@ Both paths render the same workload in 128-sample blocks: 16 ringing strings, a 
 
 That makes Rust about 1.85× faster on the same load; on the mono bass and on the engine alone it is a little over 2×.
 
-The acid and mono voices have no randomness, so their two outputs can be compared sample by sample: both match within 0.8% of peak. The engine's noise comes from the same seeded generator on both sides, and its two outputs are identical. The strings start from random noise, so for them only the overall level is compared, and it matches.
+The acid and mono voices have no randomness, so their two outputs can be compared sample by sample: both match within 0.8% of peak. The engine's noise comes from the same seeded generator on both sides, and its two outputs are identical. The live effects, with every effect on at once, match within 1e-7, and run at about 15× realtime in WASM. The strings start from random noise, so for them only the overall level is compared, and it matches.
 

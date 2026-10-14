@@ -48,6 +48,16 @@ for (const w of ['scramble 4', 'shuffle 4']) assert.strictEqual(evs('lead c4 d4 
   assert.deepStrictEqual(JSON.parse(kinds('d x . | mykick')), [[], ['mykick:drum']], 'a dropped file plays by its name');
   assert.deepStrictEqual(JSON.parse(kinds('sample mykick c2\nd 0 2 | mykick')), [[], ['mykick:synth']], 'code can re-pitch a dropped file');
   run('USER_SOUNDS.clear()'); }
+// the live input's effects line
+{ const inp = code => JSON.parse(run(`(() => { const r = compile(${JSON.stringify(code)}); return JSON.stringify({ input: r.input && r.input.params, err: [...r.errors].map(e => e[1].msg), tracks: [...r.tracks.keys()] }); })()`));
+  let x = inp('bpm 120\ninput | gate -50 drive .5 amp crunch delay .3 3/16 pingpong verb\nkick x x x x');
+  assert.deepStrictEqual(x.err, [], 'input line compiles');
+  assert.deepStrictEqual(x.tracks, ['kick'], 'input is not a track');
+  assert.deepStrictEqual(x.input.delay, { k: 'delay', v: [0.3, 0.1875, 0.4], w: 'pingpong' }, 'a fraction is bars, a missing number takes its default, a word is kept');
+  assert.deepStrictEqual(x.input.verb.v, [0.3, 0.5], 'defaults');
+  assert.strictEqual(x.input.amp.w, 'crunch');
+  for (const bad of ['input | wobble 3', 'input | drive 1 2', 'input | 3 drive', 'input | amp metal']) assert.ok(inp(bad).err.length, 'should be an error: ' + bad);
+}
 // the synth engine's words and lfos
 { const info = code => JSON.parse(run(`(() => { const r = compile(${JSON.stringify(code)}); const d = r.tracks.get('a'); return JSON.stringify({ err: [...r.errors].map(e => e[1].msg), inst: d && d.inst, p: d && Object.fromEntries(Object.entries(d.params).map(([k, v]) => [k, v.k === 'num' ? v.v : v.k])), lfos: d && d.lfos }); })()`));
   let x = info('a 0 _ | analog voices 5 detune 30 ftype ladder table growl vowel o lfo cut 1/8 tri 800 lfo pan 2');
