@@ -338,6 +338,33 @@ class Guard extends AudioWorkletProcessor {
   }
 }
 registerProcessor('tactus-guard', Guard);
+// live input: the mic or an instrument through the audio thread and straight out, inside the same 128-sample block it
+// came in (so it adds no delay of its own). Picks a channel (an interface's input 1 or 2), sets the level, and keeps
+// what goes out under 0 dBFS with a soft curve. Sends the peaks in and out about 40 times a second for the meters.
+class Live extends AudioWorkletProcessor {
+  constructor() {
+    super(); this.ch = 0; this.gain = 1; this.g = 1; this.on = true; this.pi = 0; this.po = 0; this.n = 0;
+    this.port.onmessage = e => { const d = e.data; if (d.ch != null) this.ch = d.ch; if (d.gain != null) this.gain = d.gain; if (d.on != null) this.on = d.on; };
+  }
+  process(ins, outs) {
+    const i = ins[0], o = outs[0];
+    if (!o || !o.length) return true;
+    const n = o[0].length, L = i && i[0], R = i && (i[1] || i[0]);
+    for (let k = 0; k < n; k++) {
+      // the level glides, so a slider never clicks
+      this.g += ((this.on ? this.gain : 0) - this.g) * 0.002;
+      const a = L ? L[k] : 0, b = R ? R[k] : 0, x = this.ch === 1 ? a : this.ch === 2 ? b : (L && R && L !== R ? (a + b) * 0.5 : a);
+      const ax = x < 0 ? -x : x; if (ax > this.pi) this.pi = ax;
+      let y = x * this.g; if (y - y !== 0) y = 0;
+      y = y > 1.5 ? 1 : y < -1.5 ? -1 : y - (4 / 27) * y * y * y;
+      const ay = y < 0 ? -y : y; if (ay > this.po) this.po = ay;
+      for (let c = 0; c < o.length; c++) o[c][k] = y;
+    }
+    if ((this.n += n) >= 1152) { this.port.postMessage({ i: this.pi, o: this.po }); this.pi = this.po = 0; this.n = 0; }
+    return true;
+  }
+}
+registerProcessor('tactus-live', Live);
 `;
 const WK = { ok: null, loading: null, mod: null, dsp: 'js' };
 // decode the Rust DSP once; each worklet node compiles its own instance from these bytes

@@ -576,6 +576,22 @@ body.recording .editor { border-color: var(--c-err); }
 .bk-more:hover { color: var(--fg); border-color: var(--fg); }
 /* ---- voice to code ---- */
 .vxbox { display: grid; gap: 8px; }
+.lvbox { padding-bottom: 12px; border-bottom: 1px dashed var(--line); }
+.lvdev { flex: 1 1 160px; min-width: 0; font: inherit; font-size: 12.5px; padding: 6px 8px; border-radius: var(--r-s); border: 1px solid var(--line); background: var(--raised); color: var(--fg); }
+.vxrec.lvon::before { background: var(--k-green); }
+.vxrec.lvon.on { background: var(--k-green); border-color: var(--k-green); color: var(--on-key); }
+.vxrec.lvon.on::before { background: var(--on-key); border-radius: 2px; }
+.lvgain { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+.lvgain input { flex: 1; accent-color: var(--k-green); }
+.lvgain code, .lvlat code { font: 11px/1 var(--f-code); color: var(--dim); min-width: 6ch; text-align: right; }
+.lvmeters { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 4px 8px; font-size: 11px; color: var(--dim); }
+.lvm { height: 6px; border-radius: 3px; background: color-mix(in srgb, var(--fg) 10%, transparent); overflow: hidden; }
+.lvm i { display: block; height: 100%; background: var(--k-green); transform-origin: left; transform: scaleX(0); }
+.lvm.hot i { background: var(--k-pink); }
+.lvlat { display: grid; gap: 4px; font-size: 12.5px; }
+.lvlat #lvMeas b { font-family: var(--f-code); font-size: 15px; }
+.lvlat #lvMeas span { color: var(--dim); }
+
 .smbox { margin-bottom: 14px; padding-bottom: 12px; border-bottom: 1px dashed var(--line); }
 .smbox.drop { outline: 2px dashed var(--k-blue); outline-offset: 4px; border-radius: var(--r-m); }
 .smfile { cursor: pointer; }
@@ -982,6 +998,22 @@ body.mob.mland .pad { min-height: 60px; }
             <span class="calinfo" id="calInfo"></span>
           </div>
         </div>
+        <div class="vxbox lvbox" id="lvBox">
+          <h2 class="sec-h"><span data-i18n="lvTitle"></span></h2>
+          <p class="note" data-i18n="lvIntro"></p>
+          <div class="vxrow">
+            <select class="lvdev" id="lvDev" data-i18n-aria="lvDev"><option value="" data-i18n="lvDevDefault"></option></select>
+            <span class="seg" id="lvCh" role="group" data-i18n-aria="lvCh"><button data-ch="0">L+R</button><button data-ch="1">1</button><button data-ch="2">2</button></span>
+            <button class="btn vxrec lvon" id="lvOn" aria-pressed="false"></button>
+          </div>
+          <label class="lvgain"><span data-i18n="lvGain"></span><input type="range" id="lvGain" min="0" max="4" step="0.01"><code id="lvGainV"></code></label>
+          <div class="lvmeters" aria-hidden="true"><span data-i18n="lvIn"></span><span class="lvm"><i id="lvMi"></i></span><span data-i18n="lvOut"></span><span class="lvm"><i id="lvMo"></i></span></div>
+          <div class="lvlat">
+            <div><b data-i18n="lvMeasLbl"></b> <span id="lvMeas"></span> <button class="calbtn" id="lvMeasBtn" data-i18n="lvMeasBtn" data-i18n-title="calAutoTitle"></button></div>
+            <div class="calinfo" id="lvRep"></div>
+          </div>
+          <p class="note vxmsg" id="lvMsg" aria-live="polite"></p>
+        </div>
         <div class="vxbox" id="vxBox">
           <h2 class="sec-h"><span data-i18n="vxTitle"></span></h2>
           <p class="note" data-i18n="vxIntro"></p>
@@ -1198,6 +1230,7 @@ body.mob.mland .pad { min-height: 60px; }
 /*VXDSP*/
 /*MATCH*/
 /*VOICE*/
+/*LIVE*/
 /*BLOCKS*/
 /*VIZ*/
 /*MOBILE*/

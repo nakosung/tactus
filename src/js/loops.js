@@ -61,11 +61,18 @@ function micAllowedByPage() {
   const pp = document.permissionsPolicy || document.featurePolicy;
   try { return pp && pp.allowsFeature ? pp.allowsFeature('microphone') : true; } catch (e) { return true; }
 }
+// no voice processing (each adds delay and changes the sound), the lowest latency the device offers, and the input the
+// live panel picked (an audio interface rather than the built-in mic)
+function micConstraints() {
+  const c = { echoCancellation: false, noiseSuppression: false, autoGainControl: false, latency: 0, channelCount: { ideal: 2 } };
+  if (LS.dev) c.deviceId = { exact: LS.dev };
+  return c;
+}
 async function ensureMic() {
   if (LS.micNode) return 'ok';
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || !micAllowedByPage()) return 'blocked';
   try {
-    LS.mic = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
+    LS.mic = await navigator.mediaDevices.getUserMedia({ audio: micConstraints() });
   } catch (e) {
     return e && (e.name === 'SecurityError' || /policy|not allowed by/i.test(e.message || '')) ? 'blocked' : 'denied';
   }
