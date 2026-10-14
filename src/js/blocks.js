@@ -653,6 +653,7 @@ function bkRender() {
     </div>
     <div class="bk-chords"><b>${esc(t('bkChords'))}</b>${chordRow}</div>${mob ? '</details>' : ''}
     <div class="bk-cards">${cards.join('') || `<p class="bk-empty">${esc(t('bkEmpty'))}</p>`}</div>
+    <section class="bk-fx"><h3>${esc(t('pdTitle'))}</h3><p class="bk-why">${esc(t('pdHint'))}</p><div data-pd-host="blocks">${pdHTML('blocks')}</div></section>
     <div class="bk-pal"><b>${esc(t('bkAdd'))}</b>${BK_PALETTE.map(([n]) => `<button class="bk-add" data-add="${n}"><span aria-hidden="true">${BK_ICON(n)}</span>${esc(bkName(n))}</button>`).join('')}</div>
     ${songBox}
     ${other ? `<p class="bk-other">${esc(t('bkOther', { n: other }))}</p>` : ''}`;

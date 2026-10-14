@@ -16,13 +16,13 @@ REPO = 'https://github.com/nakosung/tactus'
 SITE = 'https://nakosung.github.io/tactus/'
 # order matters: later scripts use what earlier ones define
 APP_JS = ['i18n', 'skin', 'pwa', 'kit', 'engine', 'gen', 'presets', 'audio', 'mix', 'dsp_wasm', 'wavetables', 'synth', 'samples', 'musical',
-          'nsax_net', 'gpu', 'loops', 'preview', 'sounds', 'hand', 'ui', 'share', 'vxdsp', 'match', 'voice', 'live', 'blocks', 'viz', 'mobile']
+          'nsax_net', 'gpu', 'loops', 'preview', 'sounds', 'hand', 'ui', 'share', 'vxdsp', 'match', 'voice', 'live', 'pedals', 'blocks', 'viz', 'mobile']
 PLACEHOLDER = {'dsp_wasm': 'DSPWASM', 'nsax_net': 'NSAXNET'}
 
 
 MANIFEST = {
     'name': 'Tactus', 'short_name': 'Tactus', 'lang': 'ko', 'dir': 'ltr',
-    'description': '코드로 연주하는 라이브 코딩 악기. A live-coding music instrument.',
+    'description': '코드와 블록으로 연주하는 브라우저 악기: 신스, 이펙터, 루프까지. A live-coding instrument in the browser, with synths, live effects and loops.',
     'id': './play/', 'start_url': './play/', 'scope': './', 'display': 'standalone', 'display_override': ['window-controls-overlay', 'standalone'],
     'background_color': '#e2e3df', 'theme_color': '#e2e3df', 'categories': ['music', 'entertainment', 'education'],
     'icons': [{'src': 'icon-192.png', 'sizes': '192x192', 'type': 'image/png'},

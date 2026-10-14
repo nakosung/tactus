@@ -425,7 +425,7 @@ class Fx {
     const kA1 = 1 - expp(-1 / (0.001 * sr)), kR80 = 1 - expp(-1 / (0.08 * sr)), gRel = expp(-1 / (0.05 * sr)), kD = 1 - expp(-1 / (0.01 * sr));
     const kA3 = 1 - expp(-1 / (0.003 * sr)), kR120 = 1 - expp(-1 / (0.12 * sr)), kA2 = 1 - expp(-1 / (0.002 * sr)), kR60 = 1 - expp(-1 / (0.06 * sr));
     const gate = P[0] < 0, thr = fxDb(P[0]);
-    const ca = P[1], cthr = -10 - 30 * ca, crat = 1 + 7 * ca, cmk = -cthr * (1 - 1 / crat) * 0.5;
+    const ca = P[1], cthr = -10 - 30 * ca, crat = 1 + 7 * ca, cmk = -cthr * (1 - 1 / crat) * 0.25;
     const W = Math.min(fxR(0.04 * sr), FX_PR - 8);
     const r0 = exp2p(P[24] / 12), r1 = 0.5, track = P[27] !== 0 || P[32] > 0;
     const drive = P[4], at = Math.max(0, Math.min(3, fxR(P[5]))), G = 1 + drive * [4, 18, 60, 160][at] , dgain = [1, 0.9, 0.6, 0.4][at] * exp2p(-[0.85, 0.75, 0.6, 0.45][at] * Math.log2(G));
@@ -452,7 +452,7 @@ class Fx {
         if (this.genv > thr) this.gopen = true; else if (this.genv < thr * 0.5) this.gopen = false;
         const tg = this.gopen ? 1 : 0; this.gg += (tg - this.gg) * (tg > this.gg ? kA1 : kR80); x *= this.gg;
       }
-      // compressor: an RMS detector, the gain worked out in dB, half the reduction given back
+      // compressor: an RMS detector, the gain worked out in dB, a quarter of the reduction at full level given back (an input at -20 dB is not made louder than it went in)
       if (ca > 0) {
         this.ce += (x * x - this.ce) * kD;
         const lev = 3.0102999566398116 * Math.log2(this.ce + 1e-12), gr = lev > cthr ? (cthr - lev) * (1 - 1 / crat) : 0;

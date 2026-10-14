@@ -1,6 +1,6 @@
 # Tactus
 
-A live-coding music instrument for the browser. One line of code is one track, and every edit is heard on the next bar. You can play it with pads, compose a whole piece from a seed, shape the mix in code, and conduct it with your hands in front of a camera.
+A live-coding music instrument for the browser. One line of code is one track, and every edit is heard on the next bar. Play it with pads, compose a whole piece from a seed, tap it together as blocks, shape synth sounds by hand, plug in a guitar or a mic and use it as an effects box, and conduct it with your hands in front of a camera. Nothing to install; it opens on a phone too.
 
 **Try it:** https://nakosung.github.io/tactus/ (desktop Chrome or Edge, sound on)
 
@@ -16,7 +16,12 @@ sax    <[0 _ 2 _ 4 _ _ 2] [5 _ 4 2]>   | nsax gain .7 vib .3 wash .4
 bus wash | chorus .5 verb .7
 ```
 
-Tactus was built live in conversation with an AI coding agent (Claude). The author set the direction, listened, and said what sounded wrong; the agent wrote the code. The project shows how far that way of working goes for audio software, including the parts usually written by specialists: a Rust DSP core, GPU synthesis, physical models and a small neural voice.
+- **Write.** `kick x x x x`: one line per track, scenes and a song order, chords by name, values that move with patterns, LFOs and knobs. Edits land on the bar, so the music never stops.
+- **Tap.** The same piece as cards: drum steps, a piano roll in the song's scale, chords, scenes and an effects board. Every change is written back into the code.
+- **Shape.** Analog, wavetable and FM synths with unison, six filter types, a vowel filter, envelopes and tempo-synced LFOs. Drag the envelope and the filter curve, or play one note and get the closest sound.
+- **Plug in.** A mic or a guitar through fourteen effects (amp and cabinet, wah, modulation, delay, reverb, octaver, a harmonizer that follows the song's key, tuner) that add no delay of their own.
+- **Sing.** Beatbox or hum and it becomes code; a loop station records in time with the bar.
+- **Under the hood.** The audio thread runs no_std Rust as WebAssembly, with a matching JavaScript fallback; WebGPU adds instruments of thousands of sines, modal reverb, a wave-equation drum and a neural sax.
 
 ## What is inside
 
@@ -35,7 +40,7 @@ Tactus was built live in conversation with an AI coding agent (Claude). The auth
 | UI | `src/app.html`, `src/js/ui.js`, `src/js/viz.js` | Editor with highlighting and autocomplete, pads, macros, visualizations, three skins (Studio, Field, Pop, shared with the welcome page) with keys that travel when pressed, an armed state that blinks on the beat and counts down to the bar where a change lands, Korean and English |
 | Landing page | `src/landing.html` | The page at /tactus/ with the playable demos |
 | Block view | `src/js/blocks.js` | The same song as cards, for children and anyone who would rather tap: drum steps (on, off or now and then), melody lanes as a piano roll in the song's scale (notes of any length that may overlap, a box or Shift to choose several, Alt-drag to copy, a velocity lane written as `vel`; a chord written as one value, like 3^ or Am7, moves as one, and a chord brush puts one in with a tap), bar pages, sound stickers, rule blocks (every few bars, sometimes, left and right, echo, faster), phrases as variables, a chord progression row, scenes and a song train, tempo, key and scale. Stopped, an edit plays what it made; buttons tick in the skin's voice. A synth track's sound shape can be dragged: the amp envelope, the filter curve and type, with a live scope. Code and blocks edit each other; patterns the grid cannot hold stay as code |
-| Live effects | `src/js/live.js`, `dsp/` | A mic or an instrument through an audio interface, through an effects chain in Rust and straight out, with nothing that looks ahead: gate, compressor, pitch shift, octave down, a harmony that follows the song's key, wah, drive (clean, crunch, lead, fuzz) with a tone stack and a cabinet, chorus, flanger, phaser, tremolo, delay, reverb and a tuner. Set by an `input` line in the code, so the rates and delay times are in bars of the song; the panel measures the round-trip delay on the device |
+| Live effects | `src/js/live.js`, `dsp/` | A mic or an instrument through an audio interface, through an effects chain in Rust and straight out, with nothing that looks ahead: gate, compressor, pitch shift, octave down, a harmony that follows the song's key, wah, drive (clean, crunch, lead, fuzz) with a tone stack and a cabinet, chorus, flanger, phaser, tremolo, delay, reverb and a tuner. Set by an `input` line in the code (or as stompboxes in the block view), so the rates and delay times are in bars of the song; a demo guitar lets you hear them without an instrument, and the panel measures the round-trip delay on the device |
 | Phones | `src/js/mobile.js` | One module at a time: a top bar that stays put, tabs for code, blocks, pads, song, record, sounds and guide, code or blocks beside the pads when held sideways; on a desktop, ⤢ fills the window with one panel |
 | Voice to code | `src/js/vxdsp.js`, `src/js/voice.js` | Beatbox or hum into the mic in time with the bar: hits become kick, snare and hat lines on a 16th grid; humming is pitch-tracked (YIN), tuned, fitted to the song's key and written as a melody line |
 | Sharing | `src/js/share.js` | A song as a link (the code, compressed, after the #) or as a recording of a few bars or the whole song; on phones both go through the share sheet (KakaoTalk, Messages…) |
@@ -72,9 +77,14 @@ The name "Tactus" and its logo are not covered by the code license. If you publi
 
 ## 한국어
 
-브라우저에서 바로 여는 라이브 코딩 악기입니다. 코드 한 줄이 한 트랙이고, 고치면 다음 마디에 바로 들립니다. 패드로 연주하고, 시드 하나로 곡을 만들고, 믹스까지 코드로 다듬고, 카메라 앞에서 손으로 지휘할 수 있습니다.
+브라우저에서 바로 여는 라이브 코딩 악기입니다. 코드 한 줄이 한 트랙이고, 고치면 다음 마디에 바로 들립니다. 설치할 것 없이 폰에서도 열립니다.
 
-AI 코딩 에이전트(Claude)와 대화하며 만들었습니다. 사람은 방향을 정하고, 듣고, 어색한 부분을 짚었고, 코드는 에이전트가 썼습니다. 보통 전문가가 맡는 Rust DSP, GPU 합성, 물리 모델, 작은 신경망 음원까지 포함합니다.
+- **쓰기:** `kick x x x x` 한 줄이 한 트랙. 장면과 곡 순서, 코드 이름, 패턴·LFO·노브로 움직이는 값. 고친 것은 마디에 맞춰 반영돼 음악이 끊기지 않습니다.
+- **누르기:** 같은 곡을 카드로. 드럼 칸, 곡의 음계로 된 피아노 롤, 코드 진행, 장면, 이펙터 보드. 바꾼 것은 그대로 코드에 써집니다.
+- **빚기:** 아날로그·웨이브테이블·FM 신스, 유니즌, 필터 여섯 가지, 모음 필터, 박자에 맞춘 LFO. 엔벨로프와 필터 곡선을 끌어서 바꾸고, 한 음을 들려주면 가장 비슷한 소리를 찾아 줍니다.
+- **꽂기:** 마이크나 기타를 이펙터 14개(앰프와 캐비닛, 와우, 모듈레이션, 딜레이, 리버브, 옥타버, 곡의 키를 따르는 하모나이저, 튜너)로. 이펙터가 지연을 더하지 않습니다.
+- **부르기:** 비트박스와 허밍이 코드가 되고, 루프 스테이션은 마디에 맞춰 녹음합니다.
+- **속:** 오디오 스레드는 no_std Rust를 WebAssembly로 돌리고, 같은 계산을 하는 JavaScript가 대신할 수 있습니다. WebGPU로 사인파 수천 개 악기, 모달 리버브, 파동 방정식 북, 신경망 색소폰을 만듭니다.
 
 - 직접 써 보기: https://nakosung.github.io/tactus/
 - 빌드: `python3 build.py` → `dist/`

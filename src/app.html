@@ -576,6 +576,47 @@ body.recording .editor { border-color: var(--c-err); }
 .bk-more:hover { color: var(--fg); border-color: var(--fg); }
 /* ---- voice to code ---- */
 .vxbox { display: grid; gap: 8px; }
+/* ---- the pedalboard (pedals.js): stompboxes in the order the sound goes through them ---- */
+.bk-fx { display: grid; gap: 6px; }
+.bk-fx h3 { margin: 0; font-size: 14px; }
+.pd-board { display: grid; gap: 8px; }
+.pd-chain { display: flex; flex-wrap: wrap; align-items: stretch; gap: 6px; }
+.pd-io { align-self: center; font: 700 11px/1 var(--f-code); color: var(--dim); padding: 6px 8px; border: 1px dashed var(--line); border-radius: 999px; }
+.pd-arrow { align-self: center; width: 12px; height: 2px; background: var(--line); position: relative; }
+.pd-arrow::after { content: ''; position: absolute; right: -1px; top: -3px; border: 4px solid transparent; border-left: 5px solid var(--line); border-right: 0; }
+.pd { --pc: var(--k-blue); box-sizing: border-box; position: relative; display: grid; grid-template-rows: auto 1fr auto; gap: 6px; width: 150px; padding: 8px 9px 6px; border-radius: 12px 12px 16px 16px;
+  background: color-mix(in srgb, var(--pc) 16%, var(--raised)); border: 1.5px solid color-mix(in srgb, var(--pc) 55%, var(--line)); box-shadow: var(--shadow), 0 3px 0 color-mix(in srgb, var(--pc) 45%, var(--line)); }
+.pd[data-cat="dyn"] { --pc: var(--k-blue); } .pd[data-cat="pitch"] { --pc: var(--k-pink); } .pd[data-cat="filter"] { --pc: var(--k-yellow); }
+.pd[data-cat="drive"] { --pc: var(--k-orange); } .pd[data-cat="mod"] { --pc: var(--k-green); } .pd[data-cat="time"] { --pc: #8a7cf0; }
+.pd[data-pd="amp"] { width: 230px; }
+.pd.off { opacity: .55; width: 110px; }
+.pd-offn { margin: 0; font-size: 11px; color: var(--dim); }
+.pd-top { display: flex; align-items: center; gap: 6px; }
+.pd-top b { font-size: 13px; flex: 1; }
+.pd-led { width: 8px; height: 8px; border-radius: 50%; background: color-mix(in srgb, var(--pc) 25%, var(--line)); }
+.pd-led.on { background: #ff3b3b; box-shadow: 0 0 6px #ff3b3b; }
+.pd-x { border: 0; background: transparent; color: var(--dim); font-size: 14px; cursor: pointer; padding: 0 2px; }
+.pd-ctls { display: grid; gap: 5px; align-content: start; }
+.pd[data-pd="amp"] .pd-ctls { grid-template-columns: 1fr 1fr; }
+.pd[data-pd="amp"] .pd-words { grid-column: 1 / -1; }
+.pd-knob, .pd-sel { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 0 6px; font-size: 11px; color: var(--dim); }
+.pd-knob input { grid-column: 1 / -1; width: 100%; accent-color: var(--pc); margin: 0; }
+.pd-knob output { font: 10.5px/1 var(--f-code); color: var(--fg); grid-row: 1; grid-column: 2; }
+.pd-sel select { font: inherit; font-size: 11.5px; padding: 3px 4px; border-radius: 6px; border: 1px solid var(--line); background: var(--raised); color: var(--fg); min-width: 0; }
+.pd-words { display: flex; flex-wrap: wrap; }
+.pd-words button { font-size: 10.5px; padding: 3px 6px; }
+.pd-foot { justify-self: center; width: 34px; height: 18px; border-radius: 9px; border: 1.5px solid color-mix(in srgb, var(--fg) 30%, var(--line)); background: radial-gradient(circle at 50% 40%, var(--raised), color-mix(in srgb, var(--fg) 12%, var(--raised))); cursor: pointer; }
+.pd-foot:active { transform: translateY(1px); }
+.pd-add { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; font-size: 12px; }
+.pd-board.compact { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.pd-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 4px; }
+.pd-chip { --pc: var(--k-blue); display: inline-flex; align-items: center; gap: 5px; font: inherit; font-size: 11.5px; font-weight: 600; padding: 4px 8px; border-radius: 999px; cursor: pointer;
+  background: color-mix(in srgb, var(--pc) 16%, var(--raised)); border: 1px solid color-mix(in srgb, var(--pc) 50%, var(--line)); color: var(--fg); }
+.pd-chip[aria-pressed="false"] { opacity: .5; text-decoration: line-through; }
+.pd-chip[data-cat="pitch"] { --pc: var(--k-pink); } .pd-chip[data-cat="filter"] { --pc: var(--k-yellow); } .pd-chip[data-cat="drive"] { --pc: var(--k-orange); } .pd-chip[data-cat="mod"] { --pc: var(--k-green); } .pd-chip[data-cat="time"] { --pc: #8a7cf0; }
+.pd-chips .pd-arrow { width: 6px; }
+.pd-words button { flex: 1 1 auto; }
+@media (max-width: 760px) { .pd { width: calc(50% - 3px); } .pd[data-pd="amp"] { width: 100%; } .pd-chain > .pd-arrow, .pd-io { display: none; } }
 .lvfx { display: grid; gap: 6px; }
 .lvcoderow { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .lvcode { flex: 1; min-width: 0; font: 11.5px/1.35 var(--f-code); padding: 6px 8px; border-radius: var(--r-s); background: var(--scr); color: var(--scr-fg); white-space: pre-wrap; word-break: break-word; }
@@ -590,6 +631,7 @@ body.recording .editor { border-color: var(--c-err); }
 .lvtune .ok { color: var(--k-green); }
 .lvbox { padding-bottom: 12px; border-bottom: 1px dashed var(--line); }
 .lvdev { flex: 1 1 160px; min-width: 0; font: inherit; font-size: 12.5px; padding: 6px 8px; border-radius: var(--r-s); border: 1px solid var(--line); background: var(--raised); color: var(--fg); }
+.lvdemo[aria-pressed="true"] { background: var(--k-green); color: var(--on-key); border-color: var(--k-green); }
 .vxrec.lvon::before { background: var(--k-green); }
 .vxrec.lvon.on { background: var(--k-green); border-color: var(--k-green); color: var(--on-key); }
 .vxrec.lvon.on::before { background: var(--on-key); border-radius: 2px; }
@@ -1016,11 +1058,13 @@ body.mob.mland .pad { min-height: 60px; }
           <div class="vxrow">
             <select class="lvdev" id="lvDev" data-i18n-aria="lvDev"><option value="" data-i18n="lvDevDefault"></option></select>
             <span class="seg" id="lvCh" role="group" data-i18n-aria="lvCh"><button data-ch="0">L+R</button><button data-ch="1">1</button><button data-ch="2">2</button></span>
+            <button class="btn ghost lvdemo" id="lvDemo" aria-pressed="false"></button>
             <button class="btn vxrec lvon" id="lvOn" aria-pressed="false"></button>
           </div>
           <div class="lvfx">
             <div class="lvcoderow"><code class="lvcode" id="lvCode"></code><button class="calbtn" id="lvBypass" aria-pressed="false" data-i18n="lvBypass" hidden></button><span class="lvdsp" id="lvDsp"></span></div>
             <div class="chips lvpatches" id="lvPatches" role="group" data-i18n-aria="lvPatches"></div>
+            <div class="lvboard" data-pd-host="live"></div>
           </div>
           <label class="lvgain"><span data-i18n="lvGain"></span><input type="range" id="lvGain" min="0" max="4" step="0.01"><code id="lvGainV"></code></label>
           <div class="lvtune" id="lvTune" aria-live="off"><b>–</b></div>
@@ -1249,6 +1293,7 @@ body.mob.mland .pad { min-height: 60px; }
 /*MATCH*/
 /*VOICE*/
 /*LIVE*/
+/*PEDALS*/
 /*BLOCKS*/
 /*VIZ*/
 /*MOBILE*/

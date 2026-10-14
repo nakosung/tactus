@@ -815,7 +815,7 @@ pub extern "C" fn fx_process(n: u32, c0: f64, cps: f64) {
     let ka1 = 1.0 - expp(-1.0 / (0.001 * sr)); let kr80 = 1.0 - expp(-1.0 / (0.08 * sr)); let grel = expp(-1.0 / (0.05 * sr)); let kd = 1.0 - expp(-1.0 / (0.01 * sr));
     let ka3 = 1.0 - expp(-1.0 / (0.003 * sr)); let kr120 = 1.0 - expp(-1.0 / (0.12 * sr)); let ka2 = 1.0 - expp(-1.0 / (0.002 * sr)); let kr60 = 1.0 - expp(-1.0 / (0.06 * sr));
     let gate = pv(0) < 0.0; let thr = fxdb(pv(0));
-    let ca = pv(1); let cthr = -10.0 - 30.0 * ca; let crat = 1.0 + 7.0 * ca; let cmk = -cthr * (1.0 - 1.0 / crat) * 0.5;
+    let ca = pv(1); let cthr = -10.0 - 30.0 * ca; let crat = 1.0 + 7.0 * ca; let cmk = -cthr * (1.0 - 1.0 / crat) * 0.25;
     let w = fxr(0.04 * sr).min((FX_PR - 8) as f64);
     let r0 = exp2p(pv(24) / 12.0); let r1 = 0.5; let track = pv(27) != 0.0 || pv(32) > 0.0;
     let drive = pv(4); let at = fxr(pv(5)).clamp(0.0, 3.0) as usize;
@@ -848,7 +848,7 @@ pub extern "C" fn fx_process(n: u32, c0: f64, cps: f64) {
             if f.genv > thr { f.gopen = true } else if f.genv < thr * 0.5 { f.gopen = false }
             let tg = if f.gopen { 1.0 } else { 0.0 }; f.gg += (tg - f.gg) * (if tg > f.gg { ka1 } else { kr80 }); x *= f.gg;
         }
-        // compressor: an RMS detector, the gain worked out in dB, half the reduction given back
+        // compressor: an RMS detector, the gain worked out in dB, a quarter of the reduction at full level given back (an input at -20 dB is not made louder than it went in)
         if ca > 0.0 {
             f.ce += (x * x - f.ce) * kd;
             let lev = 3.010_299_956_639_811_6 * log2d(f.ce + 1e-12); let gr = if lev > cthr { (cthr - lev) * (1.0 - 1.0 / crat) } else { 0.0 };

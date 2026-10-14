@@ -15,10 +15,9 @@ try { Object.assign(LV, JSON.parse(localStorage.getItem('tactus-live') || '{}'),
 function lvSave() { try { localStorage.setItem('tactus-live', JSON.stringify({ gain: LV.gain, ch: LV.ch, dev: LS.dev || null })); } catch (e) { } }
 const lvEl = id => document.getElementById(id);
 
-async function lvStart() {
+async function lvStart(demo) {
   initAudio(); await S.ctx.resume();
-  const r = await ensureMic();
-  if (r !== 'ok') { lvSay(t(r === 'blocked' ? 'micBlocked' : 'micDenied'), 'bad'); return; }
+  if (!demo) { const r = await ensureMic(); if (r !== 'ok') { lvSay(t(r === 'blocked' ? 'micBlocked' : 'micDenied'), 'bad'); return; } }
   if (!(await ensureSynthWorklet())) { lvSay(t('lvNoWorklet'), 'bad'); return; }
   if (!LV.node) {
     LV.node = new AudioWorkletNode(S.ctx, 'tactus-live', { numberOfInputs: 1, numberOfOutputs: 1, outputChannelCount: [2], channelCount: 2, channelCountMode: 'explicit', channelInterpretation: 'discrete' });
@@ -32,16 +31,23 @@ async function lvStart() {
     // straight to the output: no strip, no master (see the top)
     LV.out = S.ctx.createGain(); LV.node.connect(LV.out); LV.out.connect(S.ctx.destination);
   }
-  LS.micNode.connect(LV.node); LV.src = LS.micNode;
+  if (LV.src) { try { LV.src.disconnect(LV.node); } catch (e) { } if (LV.src.stop) try { LV.src.stop(); } catch (e) { } }
+  if (demo) {
+    // a guitar riff made here, looped in time with the song, in place of the mic
+    const src = S.ctx.createBufferSource(); src.buffer = lvRiff(); src.loop = true;
+    const at = S.playing ? timeOf(Math.ceil(S.lastC - 1e-6)) : S.ctx.currentTime + 0.05;
+    src.connect(LV.node); src.start(at); LV.src = src;
+  } else { LS.micNode.connect(LV.node); LV.src = LS.micNode; }
+  LV.demo = !!demo;
   LV.node.port.postMessage({ ch: LV.ch, gain: LV.gain, on: true });
   LV.sig = ''; lvSend();
-  LV.on = true; lvDevices(); lvRender();
+  LV.on = true; if (!demo) lvDevices(); lvRender();
   // on speakers the mic hears what it plays, and it can howl: say so
-  lvSay(t(LS.speaker ? 'lvSpeakerWarn' : 'lvOn'), LS.speaker ? 'bad' : 'ok');
+  lvSay(t(demo ? 'lvDemoOn' : LS.speaker ? 'lvSpeakerWarn' : 'lvOn'), demo || !LS.speaker ? 'ok' : 'bad');
 }
 function lvStop() {
-  if (LV.node) { LV.node.port.postMessage({ on: false }); if (LV.src) { try { LV.src.disconnect(LV.node); } catch (e) { } } }
-  LV.on = false; LV.src = null; lvRender(); lvSay('', '');
+  if (LV.node) { LV.node.port.postMessage({ on: false }); if (LV.src) { try { LV.src.disconnect(LV.node); } catch (e) { } if (LV.src.stop) try { LV.src.stop(); } catch (e) { } } }
+  LV.on = false; LV.src = null; LV.demo = false; lvRender(); lvSay('', '');
 }
 // another input (an audio interface): reopen the mic on it, and move whatever was listening to the old one
 async function lvDevice(id) {
@@ -61,6 +67,27 @@ async function lvDevices() {
     LV.devs = all.filter(d => d.kind === 'audioinput');
   } catch (e) { LV.devs = []; }
   lvRender();
+}
+// two bars of a plucked guitar (Karplus-Strong) in the song's key and tempo: single notes, then a strummed chord,
+// so the effects can be heard, and stacked, without an instrument plugged in
+function lvRiff() {
+  const sr = S.ctx.sampleRate, bpm = S.bpm || 120, step = 60 / bpm / 4, n = Math.round(step * 32 * sr);
+  const buf = S.ctx.createBuffer(1, n, sr), x = buf.getChannelData(0), root = 36 + ((S.root || 0) % 12 + 12) % 12;
+  const sc = SCALES[S.scale] || SCALES.minor, deg = d => root + 12 * Math.floor(d / sc.length) + sc[((d % sc.length) + sc.length) % sc.length];
+  const notes = [[0, 7, 2], [2, 9, 2], [4, 11, 1], [6, 9, 1], [7, 7, 1], [8, 4, 2], [10, 5, 2], [12, 7, 4], [16, 0, 0], [16.15, 4, 0], [16.3, 7, 0], [16.45, 10, 0], [20, 7, 2], [22, 6, 2], [24, 4, 2], [26, 2, 2], [28, 0, 4]];
+  let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  for (const [s, d, len] of notes) {
+    const f = 440 * Math.pow(2, (deg(d) - 69) / 12), P = Math.max(2, Math.round(sr / f)), ring = new Float32Array(P);
+    for (let i = 0; i < P; i++) ring[i] = rnd() * 2 - 1;
+    const a = Math.round(s * step * sr), end = Math.min(n, a + Math.round((len ? len * step * 1.8 : 8 * step) * sr) + 2000);
+    let p = 0, prev = 0;
+    for (let i = a; i < end; i++) {
+      const v = ring[p], nv = 0.5 * (v + ring[(p + 1) % P]) * 0.996; ring[p] = nv; p = (p + 1) % P;
+      const fade = i > end - 2000 ? (end - i) / 2000 : 1, y = v - prev * 0.2; prev = v;
+      x[i] += y * 0.22 * fade;
+    }
+  }
+  return buf;
 }
 // the delay as the browser reports it, in ms: the input's, one block, the output's
 function lvReported() {
@@ -146,7 +173,8 @@ function lvMeter() {
 }
 function lvRender() {
   const btn = lvEl('lvOn'); if (!btn) return;
-  btn.textContent = t(LV.on ? 'lvStop' : 'lvStart'); btn.classList.toggle('on', LV.on); btn.setAttribute('aria-pressed', LV.on);
+  btn.textContent = t(LV.on && !LV.demo ? 'lvStop' : 'lvStart'); btn.classList.toggle('on', LV.on && !LV.demo); btn.setAttribute('aria-pressed', LV.on && !LV.demo);
+  const db = lvEl('lvDemo'); db.textContent = t(LV.on && LV.demo ? 'lvDemoStop' : 'lvDemo'); db.setAttribute('aria-pressed', !!(LV.on && LV.demo));
   lvEl('lvGain').value = LV.gain; lvEl('lvGainV').textContent = `${(20 * Math.log10(Math.max(1e-4, LV.gain))).toFixed(1)} dB`;
   document.querySelectorAll('#lvCh button').forEach(b => b.setAttribute('aria-pressed', +b.dataset.ch === LV.ch));
   const sel = lvEl('lvDev');
@@ -161,12 +189,14 @@ function lvRender() {
   c.textContent = line ? line.trim() : t('lvNoCode'); c.classList.toggle('none', !line);
   lvEl('lvBypass').setAttribute('aria-pressed', LV.bypass); lvEl('lvBypass').hidden = !line;
   lvEl('lvDsp').textContent = LV.on ? (LV.dsp === 'wasm' ? 'Rust DSP' : 'JS') : '';
+  pdRefresh();
   document.querySelectorAll('#lvPatches [data-p]').forEach(b => b.setAttribute('aria-pressed', !!line && line.trim() === 'input | ' + LV_PATCHES[b.dataset.p]));
 }
 function lvInit() {
   if (!lvEl('lvBox')) return;
   try { LV.code = compile(srcEl.value).input || null; } catch (e) { }
-  lvEl('lvOn').addEventListener('click', () => LV.on ? lvStop() : lvStart());
+  lvEl('lvOn').addEventListener('click', () => LV.on && !LV.demo ? lvStop() : lvStart());
+  lvEl('lvDemo').addEventListener('click', () => LV.on && LV.demo ? lvStop() : lvStart(true));
   lvEl('lvGain').addEventListener('input', e => { LV.gain = +e.target.value; if (LV.node) LV.node.port.postMessage({ gain: LV.gain }); lvSave(); lvRender(); });
   lvEl('lvCh').addEventListener('click', e => { const b = e.target.closest('[data-ch]'); if (!b) return; LV.ch = +b.dataset.ch; if (LV.node) LV.node.port.postMessage({ ch: LV.ch }); lvSave(); lvRender(); });
   lvEl('lvDev').addEventListener('focus', lvDevices);
