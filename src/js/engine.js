@@ -832,6 +832,11 @@ function parseSample(rest, restBase) {
   const ch = splitChunks(rest, restBase);
   if (!ch.length || !/^[a-zA-Z]\w*$/.test(ch[0].s)) throw new PErr(t('sampleFmt'), restBase);
   const name = ch[0].s;
+  // sample loop1 github:… : a loop slot filled from an address (the bars come from the length and the song's tempo)
+  if (LOOPS.includes(name)) {
+    const u = ch.slice(1).find(c => URL_RE.test(c.s)); if (!u || ch.length !== 2) throw new PErr(t('sampleLoopFmt', { n: name }), ch[0].c0);
+    return { type: 'sample', name, loop: true, url: u.s.startsWith('github:') ? 'https://raw.githubusercontent.com/' + u.s.slice(7) : u.s };
+  }
   if (RESERVED().has(name)) throw new PErr(t('sampleName', { n: name }), ch[0].c0);
   const out = { type: 'sample', name, mode: null, root: null, url: null };
   for (const c of ch.slice(1)) {
@@ -894,13 +899,13 @@ const DEFAULT_PADS = DEFAULT_PAD_SRC.map(l => { const r = parseLine(l); r.pad.bu
 function compile(text) {
   { const sm = /^\s*seed\s+(-?\d+)\s*(?:\/\/.*)?$/m.exec(text); GEN_SEED = sm ? +sm[1] : 0; }
   const lines = text.split('\n');
-  const out = { pads: new Map(), autos: new Map(), samples: new Map(), seed: GEN_SEED, master: null, bpm: null, key: null, scale: null, swing: null, prog: null, progSrc: '', scenes: new Map(), song: null, arrSrc: '', tracks: new Map(), order: [], errors: new Map(), lineNames: new Map(), space: null, viz: null, shaders: new Map(), buses: new Map(), masterParams: {}, input: null };
+  const out = { pads: new Map(), autos: new Map(), samples: new Map(), seed: GEN_SEED, master: null, bpm: null, key: null, scale: null, swing: null, prog: null, progSrc: '', scenes: new Map(), song: null, arrSrc: '', tracks: new Map(), order: [], errors: new Map(), lineNames: new Map(), space: null, viz: null, shaders: new Map(), buses: new Map(), masterParams: {}, input: null, loopFiles: new Map() };
   // bus names first, so track lines anywhere in the code can send to them
   BUS_NAMES = new Set();
   VARS = new Map();
   // sample lines first too, so a track above one can already play it
   CODE_SOUNDS = new Map();
-  lines.forEach(ln => { if (!/^\s*sample\s/.test(stripComment(ln))) return; try { const r = parseLine(ln); const u = USER_SOUNDS.get(r.name); CODE_SOUNDS.set(r.name, { mode: r.mode || (u ? u.mode : 'hit'), root: r.root ?? (u ? u.root : 60), url: r.url }); } catch (e) { } });
+  lines.forEach(ln => { if (!/^\s*sample\s/.test(stripComment(ln))) return; try { const r = parseLine(ln); if (r.loop) return; const u = USER_SOUNDS.get(r.name); CODE_SOUNDS.set(r.name, { mode: r.mode || (u ? u.mode : 'hit'), root: r.root ?? (u ? u.root : 60), url: r.url }); } catch (e) { } });
   lines.forEach((ln, i) => { const m = /^(\s*let\s+([a-zA-Z_]\w*)\s*=\s*)(.*)$/.exec(stripComment(ln)); if (m && !VARS.has(m[2]) && m[3].trim()) VARS.set(m[2], { src: m[3], base: m[1].length, line: i }); });
   for (const ln of lines) { const m = /^\s*bus\s+([a-zA-Z]\w*)/.exec(stripComment(ln)); if (m && m[1] !== 'verb' && m[1] !== 'delay' && !PARAMS.includes(m[1]) && !TF_WORDS.includes(m[1])) BUS_NAMES.add(m[1]); }
   const sceneLines = [];
@@ -920,6 +925,7 @@ function compile(text) {
       else if (r.type === 'shader') { if (out.shaders.has(r.name)) throw new PErr(t('dup', { n: r.name }), 0); r.line = i; out.shaders.set(r.name, r); }
       else if (r.type === 'seed') out.seed = r.v;
       else if (r.type === 'pad') { r.pad.line = i; if (out.pads.has(r.pad.name)) throw new PErr(t('dup', { n: r.pad.name }), 0); out.pads.set(r.pad.name, r.pad); }
+      else if (r.type === 'sample' && r.loop) { if (out.loopFiles.has(r.name)) throw new PErr(t('dup', { n: r.name }), 0); out.loopFiles.set(r.name, { url: r.url, line: i }); }
       else if (r.type === 'sample') { if (out.samples.has(r.name)) throw new PErr(t('dup', { n: r.name }), 0); out.samples.set(r.name, { ...CODE_SOUNDS.get(r.name), line: i }); }
       else if (r.type === 'let') { if (VARS.get(r.name).line !== i) throw new PErr(t('dup', { n: r.name }), 0); }
       else if (r.type === 'auto') { if (out.autos.has(r.name)) throw new PErr(t('dup', { n: r.name }), 0); r.line = i; r.cache = new Map(); out.autos.set(r.name, r); }

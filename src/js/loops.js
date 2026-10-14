@@ -411,12 +411,12 @@ function sepSlot(i) {
   const slot = LS.slots[i]; if (!slot.bufs || !slot.bufs.every(Boolean) || slot.sepBusy) return;
   const fr = slot.bufs[0].length, n = fr * slot.bufs.length, L = new Float32Array(n), R = new Float32Array(n);
   slot.bufs.forEach((b, k) => { L.set(b.getChannelData(0), k * fr); R.set(b.getChannelData(b.numberOfChannels > 1 ? 1 : 0), k * fr); });
-  const msg = { L, R, sr: S.ctx.sampleRate, bars: slot.bars, barSec: 1 / slot.cps }, of = slot.bufs.slice();
+  const msg = { L, R, sr: slot.bufs[0].sampleRate, bars: slot.bars, barSec: 1 / slot.cps }, of = slot.bufs.slice();
   slot.sepBusy = true; loopMsg(t('sepWorking', { name: slot.name }), '', 60000); renderLoops();
   const done = d => {
     slot.sepBusy = false;
     if (slot.bufs.length !== of.length || !of.every((b, k) => b === slot.bufs[k])) { renderLoops(); return; }
-    const cut = (ch, k) => ch.subarray(k * fr, (k + 1) * fr), mk = arr => of.map((_, k) => makeBuf(cut(arr[0], k), cut(arr[1] || arr[0], k), 0, fr));
+    const cut = (ch, k) => ch.subarray(k * fr, (k + 1) * fr), mk = arr => of.map((_, k) => { const b = new AudioBuffer({ length: fr, numberOfChannels: 2, sampleRate: msg.sr }); b.copyToChannel(cut(arr[0], k), 0); b.copyToChannel(cut(arr[1] || arr[0], k), 1); return b; });
     slot.stems = { of, drums: mk(d.drums), rest: mk(d.rest), lines: d.lines, peaks: null };
     const nk = Object.keys(d.lines).length;
     loopMsg(t('sepDone', { name: slot.name, kinds: nk ? Object.keys(d.lines).join(', ') : '—' }), 'ok', 6000); renderLoops();
@@ -455,19 +455,45 @@ function sepUndo() { if (LS.sepUndo == null) return; srcEl.value = LS.sepUndo; L
 // ---------- import ----------
 async function loadIntoSlot(i, file) {
   initAudio();
-  const slot = LS.slots[i];
   let buf;
   try { buf = await S.ctx.decodeAudioData(await file.arrayBuffer()); } catch (e) { loopMsg(t('decodeFail'), 'bad'); return; }
-  const dur = buf.duration, bars = Math.max(1, Math.round(dur * S.cps));
+  bufIntoSlot(i, buf, S.cps);
+  LS.slots[i].url = null;
+}
+// a decoded file into a slot, cut into bars at the given tempo (bars per second)
+function bufIntoSlot(i, buf, cps) {
+  const slot = LS.slots[i], dur = buf.duration, bars = Math.max(1, Math.round(dur * cps));
   const fr = Math.floor(buf.length / bars), L = buf.getChannelData(0), R = buf.getChannelData(buf.numberOfChannels > 1 ? 1 : 0);
   if (LS.take && LS.take.slot === slot) cancelTake();
   if (slot.bufs) slot.prev = { bufs: slot.bufs, startC: slot.startC, bars: slot.bars, cps: slot.cps };
-  slot.bufs = []; for (let k = 0; k < bars; k++) slot.bufs.push(makeBuf(L, R, k * fr, fr));
+  // made without the audio context, so a song can load its loops before anything is played
+  const mk = off => { const b = new AudioBuffer({ length: fr, numberOfChannels: 2, sampleRate: buf.sampleRate }); b.copyToChannel(L.subarray(off, off + fr), 0); b.copyToChannel(R.subarray(off, off + fr), 1); return b; };
+  slot.bufs = []; for (let k = 0; k < bars; k++) slot.bufs.push(mk(k * fr));
   slot.bars = bars; slot.cps = buf.sampleRate / fr; slot.startC = 0; slot.peaks = null;
-  stopSlotSources(slot, S.ctx.currentTime);
+  if (S.ctx) stopSlotSources(slot, S.ctx.currentTime);
   slot.cover = S.playing ? Math.ceil(S.lastC - 1e-6) : -Infinity;
   loopMsg(t('loaded', { name: slot.name, bars }), 'ok');
   renderLoops();
+}
+// sample loop1 github:… lines: fetch each loop once, cut it at the song's tempo, and split its drums right away,
+// so the line's drums and rest work from the start
+function loopApplyCode(files, bpm) {
+  if (!files) return;
+  for (const [name, f] of files) {
+    const i = +name.slice(4) - 1, slot = LS.slots[i];
+    if (!slot || slot.url === f.url || (LS.loopFetch && LS.loopFetch.has(f.url))) continue;
+    (LS.loopFetch = LS.loopFetch || new Set()).add(f.url);
+    loopMsg(t('loopFetching', { name }), '', 20000);
+    (async () => {
+      try {
+        const res = await fetch(f.url); if (!res.ok) throw new Error('HTTP ' + res.status);
+        const buf = await sndDecoder().decodeAudioData(await res.arrayBuffer());
+        bufIntoSlot(i, buf, (bpm || S.bpm || 120) / 240); slot.url = f.url; slot.prev = null;
+        sepSlot(i);
+      } catch (e) { loopMsg(t('sampleLoadFail', { n: name, e: e.message || e }), 'bad', 6000); }
+      finally { LS.loopFetch.delete(f.url); }
+    })();
+  }
 }
 
 // ---------- export (.zip of WAVs + code) ----------

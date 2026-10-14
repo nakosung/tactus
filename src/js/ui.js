@@ -32,6 +32,7 @@ const onSharedLang = switchLang;
 function evaluate(mode = 'bar', opts = {}) {
   const r = compile(srcEl.value);
   sndApplyCode(r.samples);
+  loopApplyCode(r.loopFiles, r.bpm);
   lvApplyCode(r);
   S.errors = r.errors; S.lineNames = r.lineNames;
   S.progGen = r.progGen;

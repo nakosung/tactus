@@ -291,6 +291,35 @@ song night:8 run:8 chase:16 run:8 chase:16
 `,
   },
   {
+    id: 'calmstreets', name: 'Calm Streets (a CC0 loop, taken apart)',
+    head: {
+      ko: '// Calm Streets — 75 BPM 로파이. 퍼블릭 도메인(CC0) 루프 한 개를 불러와 드럼과 나머지로 나눠 가지고 노는 곡이에요\n// 루프: Ben Burnes (Abstraction), 2 Hour Track Challenge Samples Vol 4 의 "Streets of Calm - I Love This Loop", CC0\n// sample loop1 줄이 GitHub 에서 루프를 받아 loop1 칸에 넣고 드럼을 바로 나눠요 (녹음 탭에서 보여요)\n// loop1 의 drums 와 rest 가 마디마다 바뀌어요: 처음엔 드럼 없이, 다음엔 원래대로, 그다음엔 루프 드럼 대신 Tactus 킷이 같은 비트를 치고, 마지막엔 루프 드럼 위에 새 화음과 베이스가 올라가요',
+      en: '// Calm Streets — 75 BPM lo-fi, built around one public-domain (CC0) loop, split into its drums and the rest\n// Loop: "Streets of Calm - I Love This Loop" from 2 Hour Track Challenge Samples Vol 4 by Ben Burnes (Abstraction), CC0\n// The sample loop1 line fetches the loop from GitHub into slot loop1 and separates its drums right away (see the Record tab)\n// loop1\'s drums and rest change by the bar: first without its drums, then as it is, then with the Tactus kit playing its beat instead, and last its drums alone under new chords and bass',
+    },
+    body: `bpm 75
+key D minor
+prog <0 5 3 4>          // Dm Bb Gm A
+master warm
+space room
+
+sample loop1 github:nakosung/tactus/main/assets/loops/streets-of-calm.wav
+loop1  | drums <0 0 0 0 1 1 1 1 0 0 0 0 1 1 1 1> rest <1 1 1 1 1 1 1 1 1 1 1 1 0 0 0 0> gain 1.15
+
+kick   <[x . . . . . x . . . . . . . . .] [x . . x . . x . . . . . . . . .]> | gain .85 tune .9
+snare  . . . . x . . . . . . . x . . .   | asnare gain .6 human .2
+hat    [. . x .]*4                       | ahat gain .35 human .3
+vibes  <[4' . . 2' . . 0' .] . [. . 5 . 4 . 2 .] .> | oct 5 gain .3 delay .3 verb .3
+keys   [0^7 _ _ _ . . . .]               | epiano gain .28 verb .3
+bass   [0 _ _ . . 0 4 .]                 | sine oct 2 gain .5
+
+scene street loop1 vibes
+scene groove loop1
+scene kit    loop1 kick snare hat
+scene dub    loop1 keys bass vibes
+song street:4 groove:4 kit:4 dub:4
+`,
+  },
+  {
     id: 'gdchip', name: 'Neon Steps (GD style)',
     head: {
       ko: '// Neon Steps — 138 BPM 칩 하우스. Geometry Dash 같은 리듬 게임 음악 스타일로 새로 쓴 곡이에요 (원곡 없음)\n// 사각파 아르페지오, 오프비트 베이스, 사이드체인 슈퍼소 훅. 마지막 드롭에선 사각파가 한 옥타브 위에서 훅을 겹쳐요\n// auto 줄은 FX 시퀀스예요: 패드를 패턴대로 자동으로 눌러요 (스터터, 에코 아웃)',

@@ -42,6 +42,10 @@ The other game-style example songs (Pipe Hopper, Hero's Field, Steel Stage, Puff
 | Fonts: Instrument Sans, Spline Sans Mono, IBM Plex Sans KR | Google Fonts | SIL Open Font License 1.1 |
 | Hand tracking: MediaPipe Tasks Vision and the hand landmarker model, used only when hand control is turned on | cdn.jsdelivr.net, storage.googleapis.com | Apache-2.0 |
 
+## Loops
+
+- `assets/loops/streets-of-calm.wav`: "Streets of Calm - I Love This Loop" from *2 Hour Track Challenge Samples Vol 4* by Ben Burnes (Abstraction Music), recorded with Mark Powers. Released into the public domain (CC0 1.0) by the author: "These sounds are public domain (Creative Commons 0). You are free to enhance, reuse, remix, or do whatever with these files." Found in the collection [lavenderdotpet/CC0-Public-Domain-Sounds](https://github.com/lavenderdotpet/CC0-Public-Domain-Sounds). Used unchanged by the example song Calm Streets, which loads it from this repository.
+
 ## Adding data
 
 New samples, impulse responses, weights or other data must come with a license that allows redistribution and modification (CC0, CC-BY or a permissive software license). Add a row to this file in the same pull request. If a license requires attribution, put the credit here.
