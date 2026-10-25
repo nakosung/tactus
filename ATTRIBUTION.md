@@ -27,7 +27,7 @@ The transcribed example songs take their notes from scores of the [Mutopia Proje
 
 Korobeiniki (falling-block chip) uses the melody of the Russian folk song "Korobeiniki" (19th century, traditional, public domain), written down from the folk tune itself; its harmony line, bass and drums are new. It takes nothing from the Tetris soundtrack arrangements.
 
-The other game-style example songs (Pipe Hopper, Hero's Field, Steel Stage, Puffball Parade and the rest) are originals written for Tactus in the spirit of a genre; they do not quote any game's music.
+The other game-style example songs (Pipe Hopper, Hero's Field, Steel Stage, Puffball Parade and the rest) are originals written for Tactus in the spirit of a genre; they do not quote any game's music. So are the two piano pieces in the style of Japanese café and healing piano, Little Forest Bistro and Rain on the Window: new melodies and progressions, not taken from any song.
 
 ## Trained weights
 
